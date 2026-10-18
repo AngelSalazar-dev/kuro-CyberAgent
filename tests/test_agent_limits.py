@@ -556,6 +556,157 @@ def test_window_lookup_never_raises(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 429s: a burst is retried, a window is not
+# ---------------------------------------------------------------------------
+
+def _rate_limited(message: str, headers: dict | None = None):
+    """A 429 shaped the way the SDK builds one, headers and all."""
+    import httpx2
+
+    req = httpx2.Request("POST", "https://tokenharbor.ai/v1/messages")
+    resp = httpx2.Response(
+        429, request=req, headers=headers or {},
+        json={"type": "error",
+              "error": {"type": "rate_limit_error", "message": message}})
+    return anthropic.RateLimitError(
+        message, response=resp,
+        body={"type": "error",
+              "error": {"type": "rate_limit_error", "message": message}})
+
+
+def test_rate_limit_classification() -> None:
+    """Which 429s mean "wait a moment" and which mean "this window is spent".
+
+    The distinction is the whole point: retrying a burst is right, retrying an
+    hourly or 7-day allowance burns the window being waited for and ends in a
+    retry storm instead of an explanation. Measured on TokenHarbour, which
+    answers both from the same endpoint.
+    """
+    from zimzilla.agent import _rate_limit_detail, _rate_limit_is_a_window
+
+    check("429: a per-minute limit is a window",
+          _rate_limit_is_a_window(
+              _rate_limited("Per-minute rate limit reached — slow down a bit.")))
+    check("429: an hourly limit is a window",
+          _rate_limit_is_a_window(
+              _rate_limited("Hourly rate limit reached — come back in a little while.")))
+    check("429: an allowance message is a window",
+          _rate_limit_is_a_window(
+              _rate_limited("Free-tier allowance exhausted for this period.")))
+    check("429: a bare burst 429 is NOT a window",
+          not _rate_limit_is_a_window(_rate_limited("Too many requests.")))
+    check("429: a long retry-after makes it a window",
+          _rate_limit_is_a_window(
+              _rate_limited("Too many requests.", {"retry-after": "3600"})))
+    check("429: a short retry-after is still a burst",
+          not _rate_limit_is_a_window(
+              _rate_limited("Too many requests.", {"retry-after": "2"})))
+    check("429: an ISO reset header makes it a window",
+          _rate_limit_is_a_window(
+              _rate_limited("Too many requests.",
+                            {"x-th-free-resets": "2026-10-25T12:52:37+00:00"})))
+
+    detail = _rate_limit_detail(_rate_limited(
+        "Hourly rate limit reached.",
+        {"x-th-plan": "free", "x-th-free-used-pct": "71",
+         "x-th-free-resets": "2026-10-25T12:52:37+00:00"}))
+    check("429: the provider's own numbers are reported",
+          "free" in detail and "71%" in detail and "2026-10-25" in detail, detail)
+    check("429: no headers means no invented detail",
+          _rate_limit_detail(_rate_limited("Too many requests.")) == "")
+
+    msg = Agent._friendly_error(_rate_limited(
+        "Hourly rate limit reached.", {"x-th-free-used-pct": "71"}))
+    check("429: a window error does not send the operator to another model",
+          "Another free model" not in msg, msg)
+    check("429: a window error names the way out",
+          "/zim-openrouter" in msg and "71%" in msg, msg)
+
+
+class _FailingStream:
+    """A client whose one streaming call raises *error* the first *fail_times*.
+
+    ``_stream_once`` cannot be stubbed for these tests: the retry policy being
+    asserted *is* ``_stream_once``. So the client is faked instead, one level
+    down, and the real retry loop runs against it.
+    """
+
+    def __init__(self, error, fail_times: int = 10**9):
+        self.error = error
+        self.fail_times = fail_times
+        self.calls = 0
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise self.error
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+    async def get_final_message(self):
+        return _done()
+
+
+class _FakeClient:
+    def __init__(self, stream: _FailingStream):
+        self.messages = self
+        self._stream = stream
+
+    def stream(self, **kw):
+        return self._stream()
+
+
+async def test_window_429_is_not_retried(tmp: Path) -> None:
+    """The retry storm this pins: a window 429 must surface on the first hit.
+
+    Five exponential retries against TokenHarbour's hourly cap spent ~30s and
+    returned the same 429; the operator saw "retry 1/5 … 2/5" and then
+    interrupted. What they needed was the reason, immediately.
+    """
+    agent = Agent(_cfg(tmp))
+    failing = _FailingStream(
+        _rate_limited("Hourly rate limit reached — come back in a little while."))
+    agent._client = _FakeClient(failing)
+    events = await _drive(agent, "Hi")
+
+    check("429: a window 429 is attempted exactly once", failing.calls == 1,
+          str(failing.calls))
+    check("429: no retry event is emitted",
+          not [e for e in events if e.get("type") == "retry"],
+          str([e.get("type") for e in events]))
+    errors = [e for e in events if e.get("type") == "error"]
+    check("429: the operator gets the reason", bool(errors), str(events)[-300:])
+    if errors:
+        check("429: the reason names the allowance",
+              "allowance" in errors[0]["message"], errors[0]["message"])
+
+    # And the burst case still retries — the fix must not have removed the
+    # backoff that a genuinely transient 429 needs. Two failures then success.
+    agent2 = Agent(_cfg(tmp))
+    burst = _FailingStream(_rate_limited("Too many requests."), fail_times=2)
+    agent2._client = _FakeClient(burst)
+    events2 = await _drive(agent2, "Hi")
+    check("429: a burst 429 still retries", burst.calls == 3, str(burst.calls))
+    check("429: the burst is reported as a retry",
+          len([e for e in events2 if e.get("type") == "retry"]) == 2,
+          str([e.get("type") for e in events2]))
+    check("429: the burst still finishes the turn",
+          any(e.get("type") == "turn_end" for e in events2),
+          str([e.get("type") for e in events2]))
+
+
+# ---------------------------------------------------------------------------
 
 async def main() -> int:
     with tempfile.TemporaryDirectory() as td:
@@ -576,6 +727,8 @@ async def main() -> int:
         await test_overflow_without_auto_compact_is_not_retried(tmp)
         test_window_prefers_the_catalog(tmp)
         test_window_lookup_never_raises(tmp)
+        test_rate_limit_classification()
+        await test_window_429_is_not_retried(tmp)
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

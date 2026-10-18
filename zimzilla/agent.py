@@ -59,6 +59,83 @@ ToolHook = Callable[[str, dict], AsyncContextManager[None]]
 #: envelope rather than on its edge.
 MAX_OUTPUT_CEILING = 131072
 
+#: Words in a 429 body that mean "this is a window, not a burst".
+#: A burst limit clears in seconds and backing off is the right answer; a
+#: window does not, and retrying into it spends the window being waited for.
+#: Measured on TokenHarbour's free tier, which answers both — "Per-minute rate
+#: limit reached" and "Hourly rate limit reached" — and whose allowance is a
+#: rolling 7 days (``x-th-free-used-pct: 71``, resetting ``x-th-free-resets``).
+#: Five exponential retries against the hourly one cost ~30s of wall clock and
+#: returned the same 429, which is why the operator saw a retry storm and then
+#: an interrupt rather than the reason.
+_WINDOW_WORDS = (
+    "per-minute", "per minute", "hourly", "per hour", "daily", "per day",
+    "weekly", "per week", "allowance", "quota", "come back",
+)
+
+
+def _rate_limit_is_a_window(e: Exception) -> bool:
+    """Whether a 429 describes a time window rather than a momentary burst.
+
+    Read from the response body and headers, never guessed from the status
+    alone: a provider's burst limiter and its quota limiter both answer 429,
+    and they want opposite responses — back off briefly, versus stop and say
+    when it clears.
+    """
+    text = ""
+    body = getattr(e, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict):
+            text = str(err.get("message") or "")
+        text += " " + str(body.get("message") or "")
+    text = text.lower()
+    if any(w in text for w in _WINDOW_WORDS):
+        return True
+    # A reset header at least a minute out is a window by construction.
+    resp = getattr(e, "response", None)
+    headers = getattr(resp, "headers", None) or {}
+    for name in ("retry-after", "x-th-free-resets", "anthropic-ratelimit-requests-reset"):
+        value = headers.get(name) if hasattr(headers, "get") else None
+        if not value:
+            continue
+        try:
+            if float(value) >= 60:
+                return True
+        except (TypeError, ValueError):
+            # An ISO timestamp: a date is always further out than a burst.
+            if "-" in str(value):
+                return True
+    return False
+
+
+def _rate_limit_detail(e: Exception) -> str:
+    """The provider's own account of the limit, for the transcript.
+
+    TokenHarbour publishes its free-tier state in headers and ZimZilla was
+    reading none of them, so an exhausted allowance and a one-second burst
+    looked identical. Returns ``""`` when there is nothing to add.
+    """
+    resp = getattr(e, "response", None)
+    headers = getattr(resp, "headers", None) or {}
+    get = getattr(headers, "get", None)
+    if get is None:
+        return ""
+    bits = []
+    plan = get("x-th-plan")
+    pct = get("x-th-free-used-pct")
+    resets = get("x-th-free-resets")
+    if plan:
+        bits.append(f"plan {plan}")
+    if pct:
+        bits.append(f"{pct}% of the free allowance used")
+    if resets:
+        bits.append(f"resets {str(resets)[:10]}")
+    retry_after = get("retry-after")
+    if retry_after and not resets:
+        bits.append(f"retry after {retry_after}s")
+    return ", ".join(bits)
+
 
 def _has_visible_content(content) -> bool:
     """Whether a reply carried anything the operator can see or act on.
@@ -1089,6 +1166,13 @@ class Agent:
                 anthropic.InternalServerError,
                 anthropic.APITimeoutError,
             ) as e:
+                # A 429 that names a window is not retried. Backing off into a
+                # per-hour or per-week limit burns the very window it is waiting
+                # for and reports nothing useful at the end of it; the honest
+                # move is to surface it now with the provider's own numbers.
+                # A burst 429 still retries — that one does clear in seconds.
+                if isinstance(e, anthropic.RateLimitError) and _rate_limit_is_a_window(e):
+                    raise
                 attempt += 1
                 if attempt >= max_attempts:
                     raise
@@ -1178,9 +1262,28 @@ class Agent:
             # usually a different free model rather than waiting — measured on
             # OpenRouter, where three free models answered 429 while the other
             # eleven on the same key answered fine in the same minute.
+            #
+            # That is not universal, and saying it universally was wrong: on
+            # TokenHarbour the cap is the account's rolling 7-day allowance, so
+            # "pick another free model" sends the operator to a list where every
+            # row will refuse them. The provider says which it is in the body
+            # ("Per-minute" vs "Hourly" vs the catalog's "rolling 7-day
+            # allowance") and in its headers, so the wording follows the
+            # evidence rather than a provider it was first written against.
+            detail = _rate_limit_detail(e)
+            suffix = f" ({detail})" if detail else ""
+            if _rate_limit_is_a_window(e):
+                return (
+                    "rate limit reached for this key's allowance"
+                    f"{suffix} — this is a time window, not a momentary burst, "
+                    "so retrying now will not clear it. Switch source with "
+                    "/zim-openrouter, /zim-unorouter or /zim-aihubmix, or wait "
+                    "for the reset."
+                )
             return (
                 "rate limited (429) — this model's free tier is throttled. "
                 "Another free model from /models will usually answer now."
+                + suffix
             )
         # 403. On OpenRouter a free model can be gated to an allowlist of
         # "agentic harnesses" — measured: ``thinkingmachines/inkling:free``
