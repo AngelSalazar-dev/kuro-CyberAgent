@@ -285,6 +285,25 @@ class Config:
     def api_key_present(self) -> bool:
         return bool(self.auth_token or self.api_key)
 
+    @property
+    def display_model(self) -> str:
+        """The model name to SHOW, which is not always the one sent.
+
+        ``model`` is the alias that goes on the wire — the only name the local
+        LiteLLM proxy registers, so it is what every request must carry. It is
+        not the name worth reading: Token Juice forwards that alias upstream as
+        a snapshot-suffixed id, and showing the alias hides which snapshot is
+        answering, which is the one fact that explains a 404 once the suffix
+        rotates again.
+
+        Derived rather than stored, so switching route (``/zim-logfare``,
+        ``/zim-tokenjuice``, a hosted gateway) or a rotated suffix is reflected
+        on the next render without the alias being copied into a second place.
+        See ``sources.display_model`` — total, and falls back to ``model``.
+        """
+        from . import sources as sources_mod
+        return sources_mod.display_model(self.base_url, self.model)
+
     @classmethod
     def from_env(cls, **overrides) -> "Config":
         """Build a config from the environment, with explicit overrides winning."""

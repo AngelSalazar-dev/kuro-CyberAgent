@@ -301,6 +301,71 @@ def source_for_port(port: int) -> str | None:
     return None
 
 
+#: Memo for ``_upstream_id``: (config path, mtime) -> upstream model id. The
+#: config is read on the render path, so it is parsed once per change rather
+#: than once per frame.
+_UPSTREAM_ID_CACHE: dict[tuple[str, float], str] = {}
+
+
+def _upstream_id(config: Path) -> str:
+    """The upstream model id a LiteLLM config forwards to, or ``""``.
+
+    Read from the config rather than declared here, for the same reason the
+    alias is: that file is the one place the upstream name belongs, and the
+    snapshot suffix in it rotates. Deriving the display name from it means the
+    suffix cannot go stale in a second location.
+    """
+    try:
+        mtime = config.stat().st_mtime
+    except OSError:
+        return ""
+    key = (str(config), mtime)
+    if key in _UPSTREAM_ID_CACHE:
+        return _UPSTREAM_ID_CACHE[key]
+    try:
+        text = config.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    m = re.search(r"^\s*model:\s*openai/(\S+)", text, re.MULTILINE)
+    found = m.group(1) if m else ""
+    _UPSTREAM_ID_CACHE[key] = found
+    return found
+
+
+def display_model(base_url: str, model: str) -> str:
+    """The model name to SHOW for *model* on this endpoint.
+
+    The name sent and the name worth showing are not always the same string.
+    Token Juice's LiteLLM config registers a stable alias
+    (``deepseek-v4.1-flash``) and forwards it upstream as a snapshot-suffixed id
+    (``deepseek-ai/DeepSeek-V4.1-Flash-1017``). The alias is what must go on the
+    wire — it is the only name the proxy knows — but it is also the one name
+    that does not say which snapshot is actually answering.
+
+    So the display name is the alias with the upstream snapshot suffix
+    appended, lifted from the config rather than hardcoded: the suffix rotates,
+    and a literal here would be wrong the next time it does.
+
+    Falls back to *model* unchanged when the endpoint is not Token Juice, the
+    config cannot be read, or the upstream id is not simply the alias plus a
+    suffix — a different model entirely is shown as-is rather than mangled.
+    Never fetches: this is called on the render path.
+    """
+    if active_key(base_url) != "tokenjuice":
+        return model
+    src = discover().get("tokenjuice")
+    if src is None:
+        return model
+    upstream = _upstream_id(src.config)
+    if not upstream:
+        return model
+    # `deepseek-ai/DeepSeek-V4.1-Flash-1017` -> `deepseek-v4.1-flash-1017`
+    leaf = upstream.rsplit("/", 1)[-1].lower()
+    if leaf.startswith(model) and leaf != model:
+        return leaf
+    return model
+
+
 # ---------------------------------------------------------------------------
 # current selection (persisted so a restart keeps the working source)
 # ---------------------------------------------------------------------------

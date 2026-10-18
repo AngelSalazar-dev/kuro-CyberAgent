@@ -1032,7 +1032,7 @@ class ZimZillaApp(App):
         # RainRichLog) — Textual's compositor does not blend widgets across
         # layers, so a widget on a lower layer would be hidden by the panes.
         # The rails are deliberately crisp: no rain, so the numbers stay legible.
-        yield HeaderBar(self.palette, self.cfg.model, str(self.cfg.workdir),
+        yield HeaderBar(self.palette, self.cfg.display_model, str(self.cfg.workdir),
                         self.cfg.unsafe, self.theme_name, mode=self.cfg.mode)
         with Horizontal(id="main"):
             yield LoopRail(self.palette)
@@ -1105,7 +1105,7 @@ class ZimZillaApp(App):
         checks: list[tuple[str, str, bool]] = [
             ("API KEY", "present" if cfg.api_key_present else "MISSING", cfg.api_key_present),
             ("ENDPOINT", cfg.redacted_endpoint(), True),
-            ("MODEL", cfg.model, True),
+            ("MODEL", cfg.display_model, True),
             ("CWD", str(cfg.workdir), True),
         ]
         scope = self.agent.scope
@@ -1146,7 +1146,7 @@ class ZimZillaApp(App):
         self._apply_palette()
         # Seed the status bar so it reflects the configured model from the start.
         bar = self.query_one(StatusBar)
-        bar.model = self.cfg.model
+        bar.model = self.cfg.display_model
         bar.render_bar()
         self.query_one(HeaderBar).set_scope(
             self.agent.scope.badge(),
@@ -1305,7 +1305,7 @@ class ZimZillaApp(App):
         from rich.align import Align
         from .banner import splash_mark
 
-        mark = splash_mark(self.palette, model=self.cfg.model,
+        mark = splash_mark(self.palette, model=self.cfg.display_model,
                            base_url=self.cfg.base_url)
         self.query_one(ChatPane).write_block(Align.center(mark))
 
@@ -1531,7 +1531,7 @@ class ZimZillaApp(App):
             bar.output_tokens = self.agent.session_output_tokens
             bar.cost = self.agent.session_cost
             bar.turns = self.agent.turn_count
-            bar.model = self.cfg.model
+            bar.model = self.cfg.display_model
             bar.render_bar()
             loop = self._loop_rail()
             if loop is not None:
@@ -2256,7 +2256,7 @@ class ZimZillaApp(App):
         if not args:
             t = Text()
             t.append("  current model: ", style=p.dim)
-            t.append(self.cfg.model + "\n", style=f"bold {p.accent}")
+            t.append(self.cfg.display_model + "\n", style=f"bold {p.accent}")
             if active:
                 src = sources_mod.discover().get(active)
                 hosted = {"tokenharbour": "TokenHarbour", "openrouter": "OpenRouter",
@@ -2423,8 +2423,8 @@ class ZimZillaApp(App):
             return
         self.cfg.model = name
         self.agent.set_model(name)
-        self.query_one(HeaderBar).set_model(name)
-        self.query_one(StatusBar).model = name
+        self.query_one(HeaderBar).set_model(self.cfg.display_model)
+        self.query_one(StatusBar).model = self.cfg.display_model
         self.query_one(StatusBar).render_bar()
         # Remember the choice when it is an AntSeed pin. Nothing else in the
         # TUI persists a model, because every other source's model name is a
@@ -2531,7 +2531,7 @@ class ZimZillaApp(App):
         t = Text()
         t.append("  SESSION ACCOUNTING\n\n", style=f"bold {p.accent}")
         for label, value in [
-            ("model", self.cfg.model),
+            ("model", self.cfg.display_model),
             ("turns", str(a.turn_count)),
             ("input tokens", f"{a.session_input_tokens:,}"),
             ("output tokens", f"{a.session_output_tokens:,}"),
@@ -2564,7 +2564,7 @@ class ZimZillaApp(App):
         rows = [
             ("context window", f"{window:,}",
              "from this model's catalog entry" if from_catalog
-             else f"fallback (catalog has no figure for {self.cfg.model})"),
+             else f"fallback (catalog has no figure for {self.cfg.display_model})"),
             ("last prompt", f"{used:,}" if used else "not measured yet",
              f"{used / window * 100:.1f}% of the window" if used else ""),
             ("auto-compact", "on" if self.cfg.auto_compact else "off",
@@ -3636,8 +3636,8 @@ class ZimZillaApp(App):
         """
         p = self.palette
         # Same refresh _cmd_model does — HeaderBar + StatusBar carry the model.
-        self.query_one(HeaderBar).set_model(self.cfg.model)
-        self.query_one(StatusBar).model = self.cfg.model
+        self.query_one(HeaderBar).set_model(self.cfg.display_model)
+        self.query_one(StatusBar).model = self.cfg.display_model
         self.query_one(StatusBar).render_bar()
         # The popup offers this endpoint's catalog on `/model <TAB>`, so it has
         # to learn the new host at the same moment the client does.
@@ -3648,7 +3648,7 @@ class ZimZillaApp(App):
         self._sys_line(f"source switched to {label} ({detail})", ok=True)
         t = Text()
         t.append("  ↳ ", style=p.dim)
-        t.append(f"model {self.cfg.model}", style=p.primary)
+        t.append(f"model {self.cfg.display_model}", style=p.primary)
         t.append("   ·   ", style=p.dim)
         t.append(self.cfg.base_url, style=p.dim)
         t.append("   ·   saved for next launch\n", style=p.dim)
@@ -3950,8 +3950,8 @@ class ZimZillaApp(App):
             return
         ok, msg = session_mod.load(self.cfg, self.agent, args[0])
         if ok:
-            self.query_one(HeaderBar).set_model(self.cfg.model)
-            self.query_one(StatusBar).model = self.cfg.model
+            self.query_one(HeaderBar).set_model(self.cfg.display_model)
+            self.query_one(StatusBar).model = self.cfg.display_model
             self._sys_line(msg, ok=True)
         else:
             self._sys_line(msg, warn=True)
@@ -4132,7 +4132,7 @@ class ZimZillaApp(App):
             self._stream_buf = ""
             bar.set_activity("idle", busy=False)
             bar.turns = self.agent.turn_count
-            bar.model = self.cfg.model
+            bar.model = self.cfg.display_model
             bar.render_bar()
             self._sync_rails()
             self._set_rain(self.rain_on)
@@ -5885,7 +5885,7 @@ class ZimZillaApp(App):
             bar.output_tokens = self.agent.session_output_tokens + self._hunt_tokens[1]
             bar.cost = self.agent.session_cost + self._hunt_tokens[2]
             bar.turns = self.agent.turn_count
-            bar.model = self.cfg.model
+            bar.model = self.cfg.display_model
             bar.render_bar()
             # Hand the rail back to the main agent. Three separate calls
             # because each owns one thing: set_hunt drops the campaign
