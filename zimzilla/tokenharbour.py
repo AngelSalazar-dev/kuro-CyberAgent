@@ -119,6 +119,14 @@ def is_tokenharbour(base_url: str | None) -> bool:
     return HOST in (base_url or "")
 
 
+#: The name every gateway module exposes for the same test, so a caller that
+#: iterates the gateways uniformly can call ``mod.active_endpoint(url)`` without
+#: knowing which one it holds. TokenHarbour was the one module missing it, which
+#: is why the launch-time re-apply could not ask "is this session already on the
+#: gateway whose key I am about to apply?".
+active_endpoint = is_tokenharbour
+
+
 def _read_exports(path: Path) -> dict[str, str]:
     """Parse ``export VAR="value"`` lines from a profile, without a shell.
 
@@ -170,31 +178,68 @@ def _key_from_claude_source() -> tuple[str, str, str] | None:
     return None
 
 
+#: The key ``/tokenharbour-api-setup`` wrote *this session*, if it wrote one.
+#:
+#: The environment is normally the winning source — ``source ~/claude-source/x
+#: && zimzilla`` is the idiom, and it must keep working. But an operator who sets
+#: a key from inside the TUI has just overridden that choice explicitly, and the
+#: environment they are overriding is a snapshot of the shell that launched the
+#: process. Without this, the new key was written to disk and then never used:
+#: every later lookup found the stale environment token first, so switching
+#: providers, changing models and retrying all ran on the old credential, and
+#: the only way to apply a new key was to quit and relaunch.
+#:
+#: In-memory on purpose. It is a correction to *this* process's stale
+#: environment, not a permanent precedence rule — the next launch reads the
+#: environment afresh, which by then is whatever the operator meant it to be.
+_SESSION_KEY: str | None = None
+
+
+def remember_session_key(token: str) -> None:
+    """Make *token* win for the rest of this process. See ``_SESSION_KEY``."""
+    global _SESSION_KEY
+    _SESSION_KEY = token
+
+
 def load_credentials() -> tuple[str, str, str] | None:
     """The TokenHarbour key, however the operator supplied it.
 
     Resolved in order, first hit wins:
 
-      1. ``ANTHROPIC_AUTH_TOKEN``/``ANTHROPIC_API_KEY`` **in the environment**,
+      1. A key set **in this session** with ``/tokenharbour-api-setup``. The
+         operator typed it, so it beats an environment snapshot taken before
+         they did. See ``_SESSION_KEY``.
+      2. ZimZilla's own profile, written by ``/tokenharbour-api-setup``. This
+         is the operator's explicit in-app choice, so it beats a token the
+         shell exported before launch — otherwise a key changed here works once
+         and then silently reverts on the next launch, which is the failure this
+         ordering was corrected for.
+      3. ``ANTHROPIC_AUTH_TOKEN``/``ANTHROPIC_API_KEY`` **in the environment**,
          when ``ANTHROPIC_BASE_URL`` points at TokenHarbour — i.e. the operator
          sourced a profile before launching. This is the case the feature exists
          for: ``source ~/claude-source/haiku-5.5 && zimzilla`` should just work.
-      2. ZimZilla's own profile, written by ``/tokenharbour-api-setup``.
-      3. Any TokenHarbour profile under ``~/claude-source``.
+         It is consulted when no key has been saved here; delete the profile to
+         fall back to it.
+      4. Any TokenHarbour profile under ``~/claude-source``.
 
     Returns ``(token, model, origin)`` or ``None``. The token is never logged or
     returned to the transcript — only ``origin`` (a path, or "environment") is.
     """
-    if is_tokenharbour(os.environ.get("ANTHROPIC_BASE_URL")):
-        token = (os.environ.get("ANTHROPIC_AUTH_TOKEN")
-                 or os.environ.get("ANTHROPIC_API_KEY") or "")
-        if token:
-            return token, os.environ.get("ANTHROPIC_MODEL", ""), "environment"
+    if _SESSION_KEY:
+        exports = _read_exports(PROFILE)
+        return (_SESSION_KEY, exports.get("ANTHROPIC_MODEL", ""),
+                f"{PROFILE} (set this session)")
 
     exports = _read_exports(PROFILE)
     token = exports.get("ANTHROPIC_AUTH_TOKEN") or exports.get("ANTHROPIC_API_KEY")
     if token:
         return token, exports.get("ANTHROPIC_MODEL", ""), str(PROFILE)
+
+    if is_tokenharbour(os.environ.get("ANTHROPIC_BASE_URL")):
+        token = (os.environ.get("ANTHROPIC_AUTH_TOKEN")
+                 or os.environ.get("ANTHROPIC_API_KEY") or "")
+        if token:
+            return token, os.environ.get("ANTHROPIC_MODEL", ""), "environment"
 
     found = _key_from_claude_source()
     if found:

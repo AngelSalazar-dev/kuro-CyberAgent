@@ -265,7 +265,16 @@ def test_active_key_recognises_host() -> None:
 
 
 def test_credential_precedence(tmp: Path) -> None:
-    """Environment beats the profile; the profile beats ~/claude-source."""
+    """A key saved in-app beats a stale environment; the environment is the fallback.
+
+    This ordering was wrong and the symptom was expensive: ``/tokenharbour-api-
+    setup`` wrote the new key, printed "key saved", and every lookup then
+    returned the token the launching shell had exported instead. The operator
+    created a second TokenHarbour account, set its key, and kept getting the
+    first account's rate limit — because the first account's key was still the
+    one on the wire. The saved profile is the explicit in-app choice and must
+    win; the environment is consulted when nothing has been saved.
+    """
     from zimzilla import tokenharbour as th
 
     claude_source = tmp / "claude-source"
@@ -277,44 +286,72 @@ def test_credential_precedence(tmp: Path) -> None:
     try:
         for k in saved:
             os.environ.pop(k, None)
-
-        with mock.patch.object(th, "CLAUDE_SOURCE", claude_source), \
-             mock.patch.object(th, "PROFILE", tmp / "nonexistent" / "source"):
-            creds = th.load_credentials()
-            check("creds: falls back to ~/claude-source",
-                  creds is not None and creds[2].endswith("haiku-5.5"),
-                  str(creds and creds[2]))
-            check("creds: the model comes from that profile",
-                  creds is not None and creds[1] == "mimo-v2.5:free")
-
-            # Now give it a profile of its own: that must win.
-            own = tmp / "own" / "source"
-            own.parent.mkdir(parents=True, exist_ok=True)
-            own.write_text('export ANTHROPIC_AUTH_TOKEN="thk_live_ownprofile000000000"\n')
-            with mock.patch.object(th, "PROFILE", own):
+        # The session memo is process-wide; a leftover from another test would
+        # mask the file ordering being asserted here.
+        with mock.patch.object(th, "_SESSION_KEY", None):
+            with mock.patch.object(th, "CLAUDE_SOURCE", claude_source), \
+                 mock.patch.object(th, "PROFILE", tmp / "nonexistent" / "source"):
                 creds = th.load_credentials()
-                check("creds: ZimZilla's own profile beats ~/claude-source",
-                      creds is not None and creds[2] == str(own),
+                check("creds: falls back to ~/claude-source",
+                      creds is not None and creds[2].endswith("haiku-5.5"),
                       str(creds and creds[2]))
+                check("creds: the model comes from that profile",
+                      creds is not None and creds[1] == "mimo-v2.5:free")
 
-                # And the environment beats both.
-                os.environ["ANTHROPIC_BASE_URL"] = "https://tokenharbor.ai/"
-                os.environ["ANTHROPIC_AUTH_TOKEN"] = "thk_live_fromenv00000000000000"
-                os.environ["ANTHROPIC_MODEL"] = "claude-haiku-5.5:free"
-                creds = th.load_credentials()
-                check("creds: the environment beats every file",
-                      creds is not None and creds[2] == "environment"
-                      and creds[0] == "thk_live_fromenv00000000000000",
-                      str(creds and creds[2]))
-                check("creds: the environment's model is used",
-                      creds is not None and creds[1] == "claude-haiku-5.5:free")
+                # Now give it a profile of its own: that must win.
+                own = tmp / "own" / "source"
+                own.parent.mkdir(parents=True, exist_ok=True)
+                own.write_text('export ANTHROPIC_AUTH_TOKEN="thk_live_ownprofile000000000"\n')
+                with mock.patch.object(th, "PROFILE", own):
+                    creds = th.load_credentials()
+                    check("creds: ZimZilla's own profile beats ~/claude-source",
+                          creds is not None and creds[2] == str(own),
+                          str(creds and creds[2]))
 
-                # An env key pointed at ANOTHER host must not be mistaken for ours.
-                os.environ["ANTHROPIC_BASE_URL"] = "https://elsewhere.example.com"
-                creds = th.load_credentials()
-                check("creds: an env key for another host is ignored",
-                      creds is not None and creds[2] == str(own),
-                      str(creds and creds[2]))
+                    # And the profile beats the environment — the fix.
+                    os.environ["ANTHROPIC_BASE_URL"] = "https://tokenharbor.ai/"
+                    os.environ["ANTHROPIC_AUTH_TOKEN"] = "thk_live_fromenv00000000000000"
+                    os.environ["ANTHROPIC_MODEL"] = "claude-haiku-5.5:free"
+                    creds = th.load_credentials()
+                    check("creds: a saved profile beats a stale environment key",
+                          creds is not None and creds[0] == "thk_live_ownprofile000000000",
+                          str(creds and creds[0][:14]))
+                    check("creds: the saved profile's model is used, not the env's",
+                          creds is not None and creds[1] != "claude-haiku-5.5:free",
+                          str(creds and creds[1]))
+
+                    # A key typed THIS session beats the profile on disk, even
+                    # when the profile was rewritten moments ago.
+                    with mock.patch.object(th, "_SESSION_KEY",
+                                           "thk_live_typedthissession0000"):
+                        creds = th.load_credentials()
+                        check("creds: a key set this session beats the file",
+                              creds is not None
+                              and creds[0] == "thk_live_typedthissession0000",
+                              str(creds and creds[0][:14]))
+                        check("creds: and it says it was set this session",
+                              creds is not None and "this session" in creds[2],
+                              str(creds and creds[2]))
+
+                    # With no profile, the environment is the answer again.
+                    own.unlink()
+                    creds = th.load_credentials()
+                    check("creds: the environment answers when nothing is saved",
+                          creds is not None and creds[2] == "environment"
+                          and creds[0] == "thk_live_fromenv00000000000000",
+                          str(creds and creds[2]))
+                    check("creds: the environment's model is used",
+                          creds is not None and creds[1] == "claude-haiku-5.5:free")
+
+                    # An env key pointed at ANOTHER host must not be mistaken
+                    # for ours — and the profile still answers.
+                    own.write_text(
+                        'export ANTHROPIC_AUTH_TOKEN="thk_live_ownprofile000000000"\n')
+                    os.environ["ANTHROPIC_BASE_URL"] = "https://elsewhere.example.com"
+                    creds = th.load_credentials()
+                    check("creds: an env key for another host is ignored",
+                          creds is not None and creds[2] == str(own),
+                          str(creds and creds[2]))
     finally:
         for k, v in saved.items():
             if v is None:

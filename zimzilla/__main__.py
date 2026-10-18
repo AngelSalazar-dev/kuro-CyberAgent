@@ -240,11 +240,21 @@ def main(argv: list[str] | None = None) -> int:
     # Guarded by applies_to_default_endpoint: an endpoint the operator pointed
     # somewhere deliberate — the gateway itself, or any other host — is left
     # exactly as they set it, so a stale selection file cannot hijack it.
+    #
+    # The exception is the gateway that is ALREADY the endpoint: being on it
+    # says nothing about which credential is live. A key saved from inside the
+    # TUI is the operator's explicit choice and lives in ZimZilla's profile,
+    # while the environment still holds whatever the launching shell exported —
+    # and skipping the re-apply there meant a key changed in-app worked once and
+    # then silently reverted on the next launch.
     _remembered = sources_mod.current_key()
     for _key, _mod in (("tokenharbour", th_mod), ("openrouter", or_mod),
                        ("unorouter", uno_mod), ("antseed", as_mod),
                        ("aihubmix", ah_mod)):
-        if _remembered == _key and _mod.applies_to_default_endpoint(cfg.base_url):
+        if _remembered != _key:
+            continue
+        if _mod.applies_to_default_endpoint(cfg.base_url) or \
+                _mod.active_endpoint(cfg.base_url):
             _mod.apply_to(cfg)
             break
 

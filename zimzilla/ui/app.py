@@ -2968,9 +2968,26 @@ class ZimZillaApp(App):
         current = self.cfg.model if th_mod.is_tokenharbour(self.cfg.base_url) else ""
         path = th_mod.save_key(key, current)
         th_mod.clear_cache()          # a new key invalidates the old catalog
+        # The key has to take effect in THIS process, not just on disk. The
+        # environment holds whatever the shell that launched ZimZilla exported,
+        # and it was winning every lookup — so a key set here was written,
+        # confirmed, and then never sent, leaving the session on the previous
+        # credential until it was restarted. remember_session_key makes the
+        # typed key beat that stale snapshot.
+        th_mod.remember_session_key(key)
+        # ...and if the session is already on TokenHarbour, the live client and
+        # cfg still hold the old credential. Rebuilding them here is the
+        # difference between "saved" and "working".
+        on_tokenharbour = th_mod.is_tokenharbour(self.cfg.base_url)
+        if on_tokenharbour:
+            th_mod.apply_to(self.cfg)
+            self.agent._client = None
         tail = key[-4:]
         self._sys_line(f"TokenHarbour key saved (…{tail}) to {path}", ok=True)
-        self._sys_line("switch to it with /zim-tokenharbour", )
+        if on_tokenharbour:
+            self._sys_line("live session now uses the new key", ok=True)
+        else:
+            self._sys_line("switch to it with /zim-tokenharbour", )
 
     def _cmd_tokenharbour_models(self, args) -> None:
         """/tokenharbour-models — fetch the catalog and show what is free, now.
@@ -3098,6 +3115,15 @@ class ZimZillaApp(App):
             # before launch. Record it anyway: the environment does not survive
             # the next launch, and the whole point of the selection file is that
             # the choice does.
+            #
+            # Re-apply rather than just record. "Already on the host" says
+            # nothing about *which credential* is live: a key saved with
+            # /tokenharbour-api-setup since launch, or a profile sourced before
+            # it, leaves cfg holding the older token, and this branch used to
+            # return here leaving the session on it. Applying is idempotent
+            # when nothing changed, so it costs nothing in the common case.
+            th_mod.apply_to(self.cfg)
+            self.agent._client = None
             th_mod.set_current("tokenharbour")
             self._sys_line(f"already on TokenHarbour ({origin})", ok=True)
             return
