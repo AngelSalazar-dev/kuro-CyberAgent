@@ -63,6 +63,8 @@ SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/scope-validator", "paste a programme overview → scope files + ranked targets"),
     ("/bug-hunt", "recon, then one wave of 10 agents"),
     ("/ad", "Active Directory campaign — gated and interlocked"),
+    ("/reverse-engineer", "map an artifact, then choose what to change"),
+    ("/reverse-engineer-tools", "RE tooling: what is here, what is missing"),
     ("/crack", "crack hashes offline — CPU only, budgeted"),
     ("/stop-hunt", "end a running hunt"),
     ("/summary-hunt", "the hunt report — what each wave did"),

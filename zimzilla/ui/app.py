@@ -37,6 +37,7 @@ from .. import osint as osint_mod
 from .. import openrouter as or_mod
 from .. import osint_tree as osint_tree_mod
 from .. import phish as phish_mod
+from .. import reverse as reverse_mod
 from .. import session as session_mod
 from .. import sources as sources_mod
 from .. import team as team_mod
@@ -2002,6 +2003,13 @@ class ZimZillaApp(App):
         # while this one works. The TUI is suspended and restored around it, so
         # the running turn resumes exactly where it was.
         "zim-opencode",
+        # The tooling probe is a `shutil.which` sweep that starts no turn, and
+        # `/reverse-engineer <path> --map` is a local read of a file on this
+        # disk that also starts no turn — both are worth being able to run
+        # while a turn is cooking. `/reverse-engineer <path>` *does* start a
+        # turn, so `_cmd_reverse_engineer` refuses itself when busy, the same
+        # way `/ad` does.
+        "reverse-engineer", "reverse-engineer-tools",
     })
 
     def _handle_command(self, text: str) -> None:
@@ -2035,6 +2043,8 @@ class ZimZillaApp(App):
             "findings": lambda a: self._cmd_findings(a),
             "report-bug-hunt": lambda a: self._cmd_report_bug_hunt(a),
             "panes": lambda a: self._cmd_panes(a),
+            "reverse-engineer": lambda a: self._cmd_reverse_engineer(a),
+            "reverse-engineer-tools": lambda a: self._cmd_reverse_engineer_tools(a),
             "zim-opencode": lambda a: self._cmd_zim_opencode(a),
             "zim-logfare": lambda a: self._cmd_zim_source("logfare"),
             "zim-tokenjuice": lambda a: self._cmd_zim_source("tokenjuice"),
@@ -2102,6 +2112,9 @@ class ZimZillaApp(App):
             ("/logfare-models", "fetch the live catalog; show what is up"),
             ("/ldxhub-api-setup [key]", "store your LDXHub API key (document jobs)"),
             ("/ldxhub-models [service]", "LDXHub models/engines — pick the default per service"),
+            ("/reverse-engineer <file>", "map an artifact, then choose what to change"),
+            ("/reverse-engineer <file> --map", "map it only — no model turn, nothing sent"),
+            ("/reverse-engineer-tools [kind]", "RE tooling: what is here, what is missing"),
             ("/panes", "re-open this session under tmux — ctrl+b h/v split"),
             ("/zim-opencode", "open opencode behind a fresh rotating IP"),
             ("/save [name]", "write the session to disk"),
@@ -5146,6 +5159,262 @@ class ZimZillaApp(App):
 
         self._run_ad(domain, probes=probes, fresh=fresh,
                      wave_number=wave_number, lockout=lockout, armed=armed)
+
+    # ---- /reverse-engineer -------------------------------------------------
+
+    def _cmd_reverse_engineer(self, args) -> None:
+        """`/reverse-engineer <path>` — map an artifact, then ask what to change.
+
+        Read-only up to the last step. The map is built here, on this machine,
+        from the file's own bytes: no model, no network, and the artifact is
+        neither executed nor modified. What the agent receives is that map — so
+        the turn that follows starts from evidence rather than from a guess
+        about what the file probably is.
+
+        The turn's job is to work out what the artifact *is* and then ask the
+        operator what they want from it. It is deliberately not asked to make
+        the change: the preference is the point, and an agent that patches a
+        binary before asking has produced exactly what was not wanted. The
+        option menu is product-specific on purpose — a Flappy Bird clone is
+        offered unlimited coins and no ad breaks, and nothing in this file
+        knows what Flappy Bird is.
+
+        `--map` stops before the turn entirely. The map alone is often the
+        whole answer, and it is the version that is safe to run against a file
+        whose provenance you are unsure of — nothing leaves the process.
+        """
+        p = self.palette
+        map_only = any(a in ("--map", "-m") for a in args)
+        rest = [a for a in args if a not in ("--map", "-m")]
+
+        if not rest:
+            self._reverse_usage()
+            return
+
+        # Quoted paths are stripped so `/reverse-engineer "My App.apk"` means
+        # what it reads as; a path with spaces has to be quoted to survive the
+        # command splitter, and leaving the quotes on would look for a file
+        # whose name starts with a quote mark.
+        raw = " ".join(rest)
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+            raw = raw[1:-1]
+
+        # Resolved against the session workdir, through the jail, like every
+        # other path this harness is handed. A bare `app.apk` has to mean
+        # `<workdir>/app.apk` — resolving it against the process cwd would make
+        # the same command mean a different file depending on where `zimzilla`
+        # happened to be launched from, which is the bug the jail exists for.
+        from ..sandbox import SandboxError, resolve_in_jail
+        try:
+            path = resolve_in_jail(self.cfg.workdir, raw, self.cfg.unsafe,
+                                   must_exist=True)
+        except SandboxError as exc:
+            self._sys_line(f"refused: {exc}", warn=True)
+            return
+
+        # `/reverse-engineer` is in BUSY_OK so `--map` stays typeable mid-turn;
+        # the full run would interleave a second turn into the live one.
+        if self.busy and not map_only:
+            self._sys_line("harness is busy — Ctrl+C to interrupt", warn=True)
+            return
+
+        # `identify` and `inventory` are documented never to raise: an
+        # unreadable artifact is described, not thrown. No handler here,
+        # because one would only hide the day that stops being true.
+        artifact = reverse_mod.identify(path)
+
+        inv = reverse_mod.inventory(artifact)
+        probes = reverse_mod.probe_tools()
+        self.query_one(ChatPane).write_block(
+            self._render_artifact_map(artifact, inv, probes))
+
+        if map_only:
+            self._sys_line(
+                "--map — nothing was sent to the model, nothing was written",
+                ok=True)
+            return
+
+        self._run_turn(
+            reverse_mod.build_prompt(artifact, inv, probes),
+            display=f"⌬ /reverse-engineer {path.name}",
+        )
+
+    def _render_artifact_map(self, art, inv, probes) -> Text:
+        """The map, for the transcript. Rendering only — no probing here."""
+        p = self.palette
+        t = Text()
+        t.append("  ARTIFACT   ", style=f"bold {p.accent}")
+        t.append(f"{art.path.name}\n", style=f"bold {p.primary}")
+        t.append("  KIND       ", style=f"bold {p.accent}")
+        t.append(f"{art.label}", style=p.primary)
+        t.append(f"  ({art.kind})\n", style=p.dim)
+        t.append("  SIZE       ", style=f"bold {p.accent}")
+        t.append(reverse_mod.human_size(art.size) + "\n", style=p.dim)
+        if art.sha256:
+            t.append("  SHA256     ", style=f"bold {p.accent}")
+            t.append(art.sha256[:32] + "…\n", style=p.dim)
+        if art.magic:
+            t.append("  HEADER     ", style=f"bold {p.accent}")
+            t.append(art.magic + "\n", style=p.dim)
+
+        if inv.facts:
+            t.append("\n  FACTS\n", style=f"bold {p.accent}")
+            for k, v in inv.facts:
+                t.append(f"  {k:<16}", style=p.primary)
+                t.append(f"{v}\n", style=p.dim)
+
+        if inv.members:
+            t.append(f"\n  {reverse_mod.member_heading(art.kind)}\n",
+                     style=f"bold {p.accent}")
+            for name, size in inv.members:
+                t.append(f"  {reverse_mod.human_size(size):>10}  ",
+                         style=p.dim)
+                t.append(f"{name}\n", style=p.primary)
+
+        if inv.signals:
+            t.append("\n  STRINGS WORTH NOTING\n", style=f"bold {p.accent}")
+            for category, value in inv.signals:
+                t.append(f"  {category:<10}", style=p.amber)
+                t.append(f"{value}\n", style=p.dim)
+
+        if inv.notes:
+            t.append("\n  NOTES\n", style=f"bold {p.accent}")
+            for note in inv.notes:
+                t.append("  · ", style=p.accent)
+                t.append(f"{note}\n", style=p.dim)
+
+        covered, total, missing = self._reverse_coverage(art.kind, probes)
+        t.append("\n  TOOLING    ", style=f"bold {p.accent}")
+        t.append(f"{covered}/{total} capabilities covered by this host\n",
+                 style=p.primary)
+        if missing:
+            t.append("  MISSING    ", style=f"bold {p.amber}")
+            t.append(", ".join(reverse_mod.CAPABILITY_LABELS.get(c, c)
+                               for c in missing) + "\n", style=p.dim)
+            t.append("  ", style=p.dim)
+            t.append(f"/reverse-engineer-tools {art.kind}",
+                     style=f"bold {p.primary}")
+            t.append("  for what to install\n", style=p.dim)
+        return t
+
+    def _reverse_coverage(self, kind, probes):
+        """(covered, total, missing capabilities) for one artifact kind."""
+        status = reverse_mod.capability_status(kind, probes)
+        have = [c for c, h, _ in status if h]
+        miss = [c for c, h, _ in status if not h]
+        return len(have), len(status), miss
+
+    def _reverse_usage(self) -> None:
+        p = self.palette
+        t = Text()
+        t.append("  REVERSE ENGINEER\n\n", style=f"bold {p.accent}")
+        for command, blurb in reverse_mod.USAGE_LINES:
+            t.append(f"  {command:<34}", style=f"bold {p.primary}")
+            t.append(blurb + "\n", style=p.dim)
+        t.append("\n  Works on ", style=p.dim)
+        t.append(".apk · .jar · .zip · .exe · .dll · .so · ELF · Mach-O · "
+                 ".dex · .sh and other scripts", style=p.primary)
+        t.append("\n  — and on a directory, which it triages first.\n", style=p.dim)
+        # Say this here rather than only in the refusal: a path outside the
+        # session directory is the single most likely way this command gets
+        # used wrongly, and the message it gets back should not be the first
+        # time the operator learns there is a boundary.
+        t.append(f"\n  Paths resolve against the session directory "
+                 f"({self.cfg.workdir}).\n", style=p.dim)
+        t.append("\n  The map is built locally from the file's own bytes. "
+                 "Nothing is\n  executed, nothing is modified, and with "
+                 "--map nothing is sent anywhere.\n", style=p.dim)
+        t.append("\n  Point it at artifacts you own or are authorised to take "
+                 "apart.\n", style=p.amber)
+        self.query_one(ChatPane).write_block(t)
+
+    def _cmd_reverse_engineer_tools(self, args) -> None:
+        """`/reverse-engineer-tools [kind]` — what this host has, and what it lacks.
+
+        The whole catalogue, or one artifact type's slice of it. Grouped by
+        capability rather than by program because the question is "can I do
+        this work here", and three decompilers with none of them installed is
+        a gap while one working disassembler out of four is not.
+
+        Answers while the harness is busy: it is a `shutil.which` sweep that
+        starts no turn, and "what does this box have" is worth asking mid-run.
+        """
+        p = self.palette
+        probes = reverse_mod.probe_tools()
+        present = [q for q in probes if q.present]
+        absent = [q for q in probes if not q.present]
+
+        kind = ""
+        if args:
+            kind = args[0].lower()
+            if kind not in reverse_mod.KIND_ORDER:
+                self._sys_line(
+                    f"unknown artifact kind: {kind} — try "
+                    + " | ".join(reverse_mod.KIND_ORDER), warn=True)
+                return
+
+        t = Text()
+        t.append("  REVERSE ENGINEERING TOOLING", style=f"bold {p.accent}")
+        if kind:
+            t.append(f"  · {reverse_mod.KIND_LABELS[kind]}",
+                     style=f"bold {p.primary}")
+        t.append("\n\n")
+        t.append(f"  {len(present)}/{len(probes)} present\n", style=p.primary)
+
+        # The slice for this artifact type, if one was named. `rel` is the set
+        # of names it covers, so ABSENT can be filtered by the same slice
+        # rather than re-running `tools_for`.
+        relevant = reverse_mod.tools_for(kind, probes) if kind else None
+        shown_present = [q for q in (relevant if relevant is not None else present)
+                         if q.present]
+        rel = {q.name for q in relevant} if relevant is not None else None
+
+        t.append("\n  PRESENT\n", style=f"bold {p.accent}")
+        if shown_present:
+            for q in shown_present:
+                t.append(f"  ✔ {q.name:<22}", style=p.primary)
+                t.append(f"{reverse_mod.CAPABILITY_LABELS.get(q.capability, q.capability)}\n",
+                         style=p.dim)
+        else:
+            t.append("  (none relevant to this artifact type)\n", style=p.dim)
+
+        shown_absent = [q for q in absent if rel is None or q.name in rel]
+        if shown_absent:
+            t.append("\n  ABSENT\n", style=f"bold {p.accent}")
+            for q in shown_absent:
+                t.append(f"  ✘ {q.name:<22}", style=p.amber)
+                t.append(f"{q.hint}\n", style=p.dim)
+
+        # Coverage per artifact type: the one number that says whether an
+        # artifact can actually be worked on here, rather than whether one
+        # particular program happens to be installed.
+        kinds = [kind] if kind else [k for k in reverse_mod.KIND_ORDER
+                                     if k != "dir"]
+        t.append("\n  COVERAGE BY TYPE\n", style=f"bold {p.accent}")
+        for k in kinds:
+            covered, total, missing = self._reverse_coverage(k, probes)
+            label = reverse_mod.KIND_LABELS.get(k, k)
+            style = p.primary if missing else p.dim
+            t.append(f"  {label:<20}", style=style)
+            t.append(f"{covered}/{total}  ", style=p.dim)
+            t.append(("missing: " + ", ".join(
+                reverse_mod.CAPABILITY_LABELS.get(c, c) for c in missing)
+                + "\n") if missing else "complete\n", style=p.dim)
+
+        gaps = reverse_mod.missing_tools(probes)
+        t.append("\n  TO INSTALL\n", style=f"bold {p.accent}")
+        t.append("  Package names where a distro package exists, upstream "
+                 "project names\n  where the tool only ships as a release "
+                 "(jadx, Ghidra, apktool):\n", style=p.dim)
+        line = "  "
+        for hint, _name in gaps:
+            if len(line) + len(hint) > 74:
+                t.append(line.rstrip() + "\n", style=p.primary)
+                line = "  "
+            line += hint + "  "
+        if line.strip():
+            t.append(line.rstrip() + "\n", style=p.primary)
+        self.query_one(ChatPane).write_block(t)
 
     def _cmd_ad_tools(self) -> None:
         """`/ad tools` — what the AD toolchain looks like on this host.
