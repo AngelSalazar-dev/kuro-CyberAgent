@@ -937,6 +937,9 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/antseed-models` | list AntSeed's free models, each with the peer to pin |
 | `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `antseed` |
 | `/zim-source` | show every upstream and its status |
+| `/reverse-engineer <file>` | map an artifact (`.apk`, `.zip`, `.exe`, `.sh`, binary), then ask what you want changed |
+| `/reverse-engineer <file> --map` | map it only — no model turn, nothing sent |
+| `/reverse-engineer-tools [kind]` | reverse-engineering tooling: what is installed, what is missing |
 | `/scope-validator` | paste a programme overview → scope files + ranked targets |
 | `/bug-hunt [--fresh] [--wave N] <target>` | recon (reused if already done), then **one** wave of 10 agents |
 | `/ad [--fresh] [--wave N] [--lockout N] [--arm] <domain> --ack <domain>` | Active Directory campaign — gated and interlocked |
@@ -950,9 +953,15 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/exit` | leave |
 
 **Prompt affordances.** Type `/` and the command menu opens as you type; type
-`@` and a file picker opens, rooted at your working directory. Accepting a file
-mention attaches its contents to your message, so the agent can act on it
-immediately. `↑`/`↓` to move, `Tab` to accept, `Esc` to dismiss.
+`@` and a file picker opens, rooted at your working directory — the same `@`
+anywhere in the line, and it opens on the bare `@`, before you have typed a
+character of the path. Keep typing to narrow it: a name match ranks above a
+match that is only in the directory, and typing a directory (`@zimzilla/ui/`)
+descends into it rather than filtering the whole tree. Accepting a file mention
+attaches its contents to your message, so the agent can act on it immediately;
+accepting a directory keeps the picker open on what is inside it, so you can
+walk down a level at a time. `↑`/`↓` to move, `Tab` to accept, `Esc` to
+dismiss.
 
 **Keys.** `Ctrl+K` command palette · `Ctrl+C` interrupts the current turn ·
 `Ctrl+D` exits · `Ctrl+L` clears.

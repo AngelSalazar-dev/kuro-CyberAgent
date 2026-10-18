@@ -2,12 +2,17 @@
 
 Two triggers:
 
-* a leading ``/``  → slash-command menu (opens as soon as the slash is typed)
-* an ``@token``    → file / directory picker rooted at the working directory
+* a leading ``/``       → slash-command menu (opens as soon as the slash is typed)
+* ``@`` anywhere in the line → file / directory picker rooted at the working
+  directory, opened by the bare ``@`` and then narrowed as the path is typed
 
 The popup renders as a bordered panel docked just above the prompt, and never
 takes focus — the ``Input`` keeps it, so typing continues to work normally.
 Up/Down move the selection, Tab/Enter accept, Esc dismisses.
+
+The selection logic — what a query offers and in what order — is module-level
+and free of widget state, so it can be exercised without a running app; the
+class below is only the data holder and the renderer.
 """
 
 from __future__ import annotations
@@ -82,45 +87,179 @@ MODE_NAMES = ["auto", "edits", "plan", "zim", "danger", "uncensored"]
 MAX_ROWS = 8
 MAX_FILES = 200
 
+#: Never descended into. These are the directories whose contents are not what
+#: anyone means by "the files in this project", and on a real repo they are the
+#: bulk of it.
+_SKIP_DIRS = frozenset({
+    ".git", "__pycache__", "node_modules", ".venv", "venv", ".mypy_cache",
+    ".pytest_cache", ".ruff_cache", "dist", "build", ".tox", ".idea",
+})
 
-def _iter_files(root: Path, limit: int = MAX_FILES) -> list[str]:
-    """Up to *limit* relative paths under *root*, skipping heavy directories.
 
-    Walks with ``os.walk`` rather than ``sorted(root.rglob("*"))``: sorting a
+def _walk(base: Path, label: str = "", limit: int = MAX_FILES) -> list[str]:
+    """Up to *limit* entries under *base*, each prefixed with *label*.
+
+    Walks with ``os.walk`` rather than ``sorted(base.rglob("*"))``: sorting a
     generator materialises the WHOLE tree first, so the ``limit`` check could
     only ever run after every path had been visited — on a large repo that is a
     visible stall the first time the popup opens. os.walk prunes as it goes, so
     the work is genuinely bounded by *limit*.
 
     The result is still sorted for a stable display order, which sorts only the
-    (at most *limit*) entries actually collected.
+    (at most *limit*) entries actually collected. Directories carry a trailing
+    slash, which is how the rest of this module tells them from files.
     """
-    skip = {".git", "__pycache__", "node_modules", ".venv", "venv", ".mypy_cache",
-            ".pytest_cache", ".ruff_cache", "dist", "build", ".tox", ".idea"}
     out: list[str] = []
-    root = root.resolve()
     try:
-        for dirpath, dirnames, filenames in os.walk(root):
+        for dirpath, dirnames, filenames in os.walk(base):
             # Prune in place so os.walk never descends into heavy directories.
-            dirnames[:] = sorted(d for d in dirnames if d not in skip)
+            dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
             here = Path(dirpath)
             for name in dirnames:
                 if len(out) >= limit:
                     return sorted(out)
                 try:
-                    out.append(str((here / name).relative_to(root)) + "/")
+                    out.append(label + str((here / name).relative_to(base)) + "/")
                 except ValueError:
                     continue
             for name in sorted(filenames):
                 if len(out) >= limit:
                     return sorted(out)
                 try:
-                    out.append(str((here / name).relative_to(root)))
+                    out.append(label + str((here / name).relative_to(base)))
                 except ValueError:
                     continue
     except Exception:
         pass
     return sorted(out)
+
+
+def _iter_files(root: Path, limit: int = MAX_FILES) -> list[str]:
+    """Up to *limit* paths under *root*, relative to it, heavy directories skipped."""
+    return _walk(Path(root).resolve(), "", limit)
+
+
+def _iter_under(root: Path, prefix: str, limit: int = MAX_FILES) -> list[str]:
+    """Up to *limit* paths under ``root/prefix``, still relative to *root*.
+
+    This exists because the flat pool is capped. On a tree larger than
+    ``MAX_FILES`` the entries a typed path segment is aiming at can be missing
+    from that pool entirely, so ``@zimzilla/ui/app`` would offer nothing at all
+    — the one query where the operator knows exactly what they want. Walking
+    the named subtree is bounded by the same *limit*: it visits one directory
+    branch, not the tree.
+
+    Anything that is not a directory inside *root* returns ``[]``. The prefix is
+    operator-typed text, and ``/etc`` or ``../../..`` has to mean "no such
+    directory here" rather than "walk the filesystem". Resolving before the
+    containment check is what makes a symlink out of the tree read the same way.
+    """
+    root = Path(root).resolve()
+    segments = prefix.split("/")
+    # The skip list is a prune on the walk, and a prefix that names one of
+    # those directories is asking for exactly the thing the prune refuses —
+    # `.git/` would otherwise offer 168 object files, and `node_modules/` is
+    # worse. Refused here rather than filtered out later, so the walk that
+    # would have produced them never starts.
+    if (not prefix or prefix.startswith("/") or ".." in segments
+            or segments[0] in _SKIP_DIRS):
+        return []
+    try:
+        base = (root / prefix).resolve()
+    except OSError:
+        return []
+    if base == root or not base.is_dir() or not base.is_relative_to(root):
+        return []
+    return _walk(base, prefix + "/", limit)
+
+
+def _split(path: str) -> tuple[str, str]:
+    """``(name, parent)`` for display, keeping a directory's trailing slash.
+
+    Rows render as the name with its directory dimmed beside it. The row is the
+    same path either way, but a deep tree is unreadable when every entry opens
+    with the same four segments and the part that differs sits off the edge.
+    """
+    is_dir = path.endswith("/")
+    body = path[:-1] if is_dir else path
+    if "/" not in body:
+        return (path, "")
+    parent, _, name = body.rpartition("/")
+    return (name + ("/" if is_dir else ""), parent + "/")
+
+
+def _is_subsequence(needle: str, haystack: str) -> bool:
+    """Whether every character of *needle* appears in *haystack*, in order."""
+    it = iter(haystack)
+    # `ch in it` scans the iterator and consumes what it passes, so each
+    # character is only ever matched against what follows the previous one.
+    return all(ch in it for ch in needle)
+
+
+def _match_rank(path: str, query: str) -> tuple[int, int] | None:
+    """How well *path* answers a lowercased *query*. Lower is better.
+
+    Plain substring matching — what this did before — ranks every hit equally
+    and then falls back on walk order, so the file the operator is aiming at
+    can sit below the fold behind one they were not. The tiers are ordered by
+    how much of the typed text the *name* itself accounts for: a name starting
+    with it beats a name containing it, which beats a match anywhere in the
+    path. The second element breaks ties toward the shallower path.
+    """
+    name = path[:-1] if path.endswith("/") else path
+    base = name.rsplit("/", 1)[-1].lower()
+    low = path.lower()
+    if base.startswith(query):
+        return (0, len(path))
+    if query in base:
+        return (1, len(path))
+    if low.startswith(query):
+        return (2, len(path))
+    if query in low:
+        return (3, len(path))
+    # Last resort, and only for a query long enough to mean something: a single
+    # character is a subsequence of nearly every path, which fills the popup
+    # with noise instead of narrowing it.
+    if len(query) > 1 and _is_subsequence(query, low):
+        return (4, len(path))
+    return None
+
+
+def _at_token(text: str, cursor: int) -> int | None:
+    """Index of the ``@`` whose mention the cursor sits in, or ``None``.
+
+    Scans back from the cursor, not from the end of the line, so the popup
+    follows the mention being edited rather than whichever ``@`` happens to be
+    furthest right — and so editing the middle of a prompt still offers the
+    token under the caret.
+    """
+    for i in range(min(cursor, len(text)) - 1, -1, -1):
+        ch = text[i]
+        if ch == "@":
+            return i
+        if ch in " \t":
+            return None
+    return None
+
+
+def file_candidates(pool: list[str], root: Path,
+                    query: str) -> tuple[list[tuple[str, str]], str]:
+    """What to offer for a file *query*: ``(value, subject)`` pairs and what to score.
+
+    A query naming a real directory descends into it and scores only the rest,
+    so ``@zimzilla/ui/ap`` ranks ``.../app.py`` on ``ap`` rather than on the
+    whole typed string. That is what keeps the popup usable past the first
+    level. Anything else is scored against the flat pool exactly as typed, so a
+    partial path segment with no directory behind it (``@ui/comp``) still finds
+    its file.
+    """
+    if "/" in query:
+        head, _, tail = query.rpartition("/")
+        sub = _iter_under(root, head)
+        if sub:
+            cut = len(head) + 1
+            return ([(v, v[cut:]) for v in sub], tail)
+    return ([(v, v) for v in pool], query)
 
 
 class CompletionPopup(VerticalScroll):
@@ -165,8 +304,16 @@ class CompletionPopup(VerticalScroll):
             self._files = _iter_files(workdir)
         return self._files
 
-    def refresh_for(self, text: str, workdir: Path) -> bool:
-        """Recompute completions for the current prompt text. Returns visibility."""
+    def refresh_for(self, text: str, workdir: Path,
+                    cursor: int | None = None) -> bool:
+        """Recompute completions for the prompt text. Returns visibility.
+
+        *cursor* is where the caret is, which for a mention is the only place
+        that matters; ``None`` means "at the end", which is what a caller with
+        no Input to hand can honestly say.
+        """
+        if cursor is None or cursor < 0 or cursor > len(text):
+            cursor = len(text)
         kind = ""
         query = ""
         items: list[tuple[str, str]] = []
@@ -214,25 +361,27 @@ class CompletionPopup(VerticalScroll):
             else:
                 items = [(c, d) for c, d in SLASH_COMMANDS if c.startswith(query)]
         else:
-            # Find an @token that the cursor is inside.
-            at = None
-            for i in range(len(text) - 1, -1, -1):
-                ch = text[i]
-                if ch == "@":
-                    at = i
-                    break
-                if ch in " \t":
-                    break
+            at = _at_token(text, cursor)
             if at is not None:
                 kind = "file"
-                query = text[at + 1:]
-                if query and not any(c in query for c in "\"'|;&"):
-                    pool = self._file_pool(workdir)
-                    q = query.lower()
-                    items = [(f, "") for f in pool if q in f.lower()][:MAX_FILES]
+                query = text[at + 1:cursor]
+                # A quote or a shell metacharacter in the token means this is
+                # prose or a pipeline, not a mention being typed out.
+                if not any(c in query for c in "\"'|;&"):
+                    # A file the agent wrote since the popup last closed has to
+                    # become mentionable, so the walk is redone each time the
+                    # popup opens rather than cached for the session. Only on
+                    # open: re-walking while it is already up would put a
+                    # directory scan between the operator and the character
+                    # they just pressed.
+                    if not self.has_class("visible"):
+                        self._files = None
+                    cands, subject = file_candidates(
+                        self._file_pool(workdir), workdir, query)
+                    items = self._rank(cands, subject.lower())
 
         self.kind = kind
-        self.items = items[:MAX_ROWS] if kind == "slash" else items[:MAX_ROWS]
+        self.items = items[:MAX_ROWS]
         if not items:
             self._hide()
             return False
@@ -245,6 +394,25 @@ class CompletionPopup(VerticalScroll):
         return True
 
     # ---- selection --------------------------------------------------------
+    @staticmethod
+    def _rank(cands: list[tuple[str, str]], subject: str) -> list[tuple[str, str]]:
+        """Order ``(value, subject)`` candidates for *subject*, best first.
+
+        An empty subject keeps the walk's own order — depth-first and
+        alphabetical, which is the shape of the tree and what someone who has
+        typed a bare ``@`` is looking at. A real subject is ranked by match
+        quality and then by path, and anything that does not match is dropped.
+        """
+        if not subject:
+            return [(v, _split(v)[1]) for v, _ in cands]
+        scored: list[tuple[tuple[int, int], str]] = []
+        for value, subj in cands:
+            rank = _match_rank(subj, subject)
+            if rank is not None:
+                scored.append((rank, value))
+        scored.sort(key=lambda rv: (rv[0], rv[1]))
+        return [(v, _split(v)[1]) for _, v in scored]
+
     def move(self, delta: int) -> None:
         if not self.items:
             return
@@ -256,7 +424,7 @@ class CompletionPopup(VerticalScroll):
             return None
         return self.items[self.index][0]
 
-    def accept(self, text: str) -> str | None:
+    def accept(self, text: str, cursor: int | None = None) -> str | None:
         """Return the new prompt text after accepting the selection."""
         value = self.current()
         if value is None:
@@ -266,11 +434,22 @@ class CompletionPopup(VerticalScroll):
                 parts = text.split()
                 return " ".join([parts[0], value]) + " "
             return value + " "
-        # file: replace the @token at/after the last '@'
-        at = text.rfind("@")
-        if at < 0:
+        # file: replace the mention the cursor is in, keeping whatever follows
+        # it — the mention belongs where the operator is typing, not appended
+        # past the end of a line they have already written beyond.
+        if cursor is None or cursor < 0 or cursor > len(text):
+            cursor = len(text)
+        at = _at_token(text, cursor)
+        if at is None:
             return None
-        return text[: at + 1] + value + " "
+        # A directory is a step, not a destination: no trailing space, so the
+        # next Changed event reopens the popup on that directory's children and
+        # the operator keeps descending. A file ends the mention, so it takes a
+        # space — unless one is already sitting at the caret, which would leave
+        # the sentence with two.
+        rest = text[cursor:]
+        tail = "" if value.endswith("/") or rest[:1] in (" ", "\t") else " "
+        return text[: at + 1] + value + tail + rest
 
     def _hide(self) -> None:
         if self.has_class("visible"):
@@ -286,17 +465,15 @@ class CompletionPopup(VerticalScroll):
         t = Text()
         for i, (value, desc) in enumerate(self.items):
             selected = i == self.index
+            if self.kind == "file":
+                # Name first, directory dimmed beside it — the same path, with
+                # the end that differs where the eye lands.
+                value, desc = _split(value)
             prefix = "▸ " if selected else "  "
-            if selected:
-                t.append(prefix, style=f"bold {p.accent}")
-                t.append(value, style=f"bold {p.accent}")
-                if desc:
-                    t.append("  " + desc, style=p.primary)
-            else:
-                t.append(prefix, style=p.dim)
-                t.append(value, style=p.primary)
-                if desc:
-                    t.append("  " + desc, style=p.dim)
+            t.append(prefix, style=f"bold {p.accent}" if selected else p.dim)
+            t.append(value, style=f"bold {p.accent}" if selected else p.primary)
+            if desc:
+                t.append("  " + desc, style=p.primary if selected else p.dim)
             if i < len(self.items) - 1:
                 t.append("\n")
         hint = "  ↑↓ select · tab accept · esc close"

@@ -24,7 +24,7 @@ from zimzilla.config import Config, MODES  # noqa: E402
 from zimzilla.scope import Scope  # noqa: E402
 from zimzilla.theme import agent_color  # noqa: E402
 from zimzilla.ui.app import ZimZillaApp  # noqa: E402
-from zimzilla.ui.complete import CompletionPopup  # noqa: E402
+from zimzilla.ui.complete import CompletionPopup, _iter_files  # noqa: E402
 from zimzilla.ui.widgets import StatusBar  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
@@ -569,12 +569,65 @@ async def test_ui(wd: Path) -> None:
         check("slash popup opens on '/'", comp.has_class("visible") and comp.kind == "slash",
               f"{len(comp.items)} items")
 
+        # The caret follows what a typist's would. Assigning `.value` clamps the
+        # cursor but leaves it where it was, and the picker describes the mention
+        # under the caret — so a stale cursor asks a different question.
         inp.value = "@al"
+        inp.cursor_position = len(inp.value)
         await pilot.pause()
         check("@ popup lists matching files",
               comp.has_class("visible") and comp.kind == "file"
               and any("alpha.py" in v for v, _ in comp.items))
-        check("@ accept inserts the path", (comp.accept("@al") or "").endswith("alpha.py "))
+        check("@ accept inserts the path", (comp.accept("@al") or "").endswith("alpha.py "),
+              f"{comp.accept('@al')!r}")
+
+        # The bare @ is the whole point of the picker: it has to open before a
+        # single character of the path has been typed.
+        inp.value = "@"
+        inp.cursor_position = 1
+        await pilot.pause()
+        pool = _iter_files(wd)
+        check("@ on its own opens the picker",
+              comp.has_class("visible") and comp.kind == "file"
+              and [v for v, _ in comp.items] == pool[:len(comp.items)]
+              and len(comp.items) > 1,
+              f"{len(comp.items)} of {len(pool)} entries")
+
+        # A name match has to outrank a directory-only match, or the entry
+        # being aimed at sits below the fold behind one that was not.
+        inp.value = "@pkg"
+        inp.cursor_position = 4
+        await pilot.pause()
+        check("@ ranks a name match first",
+              bool(comp.items) and comp.items[0][0] == "pkg/",
+              f"{[v for v, _ in comp.items][:3]}")
+
+        inp.value = "@pkg/"
+        inp.cursor_position = 5
+        await pilot.pause()
+        check("@ descending lists that directory's children",
+              comp.has_class("visible")
+              and any(v == "pkg/inner/" for v, _ in comp.items),
+              f"{[v for v, _ in comp.items][:3]}")
+        rows = dict(comp.items)
+        check("@ rows carry the parent directory for display",
+              rows.get("pkg/inner/") == "pkg/"
+              and rows.get("pkg/inner/deep.py") == "pkg/inner/",
+              f"{comp.items[:2]}")
+
+        # Accepting a directory is a step, not a destination: the picker stays
+        # open on what is inside it so the operator can keep going down.
+        inp.value = "@pkg"
+        inp.cursor_position = 4
+        await pilot.pause()
+        await pilot.press("tab")
+        await pilot.pause()
+        check("@ accepting a directory leaves it open to descend",
+              inp.value == "@pkg/" and comp.has_class("visible")
+              and any(v.startswith("pkg/") for v, _ in comp.items),
+              f"{inp.value!r} {[v for v, _ in comp.items][:2]}")
+        inp.value = ""
+        await pilot.pause()
 
         # real keystrokes: /mode zim submits through the popup layer
         inp.value = ""
@@ -2046,6 +2099,10 @@ async def main() -> int:
         wd = Path(td)
         (wd / "alpha.py").write_text("print('a')\n")
         (wd / "beta.md").write_text("# beta\n")
+        # A nested directory for the @ picker: descending needs something to
+        # descend into, and a flat fixture cannot tell the two behaviours apart.
+        (wd / "pkg" / "inner").mkdir(parents=True)
+        (wd / "pkg" / "inner" / "deep.py").write_text("print('d')\n")
         await test_identity(wd)
         test_mode_tools(wd)
         test_web_tools(wd)

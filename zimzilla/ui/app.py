@@ -1417,7 +1417,10 @@ class ZimZillaApp(App):
     @on(Input.Changed, "#input")
     def _on_input_changed(self, event: Input.Changed) -> None:
         try:
-            self._completer().refresh_for(event.value, self.cfg.workdir)
+            # The caret, not the end of the line: a mention edited mid-prompt
+            # has to be the one the popup is describing.
+            self._completer().refresh_for(
+                event.value, self.cfg.workdir, event.input.cursor_position)
         except Exception:
             pass
 
@@ -1435,7 +1438,7 @@ class ZimZillaApp(App):
             event.stop(); event.prevent_default()
         elif key in ("tab", "enter", "return"):
             inp = self.query_one("#input", Input)
-            new = comp.accept(inp.value)
+            new = comp.accept(inp.value, inp.cursor_position)
             if new is not None:
                 inp.value = new
                 inp.cursor_position = len(new)
@@ -3636,7 +3639,7 @@ class ZimZillaApp(App):
             return
         try:
             inp = self.query_one("#input", Input)
-            popup.refresh_for(inp.value, self.cfg.workdir)
+            popup.refresh_for(inp.value, self.cfg.workdir, inp.cursor_position)
         except Exception:
             pass
 
