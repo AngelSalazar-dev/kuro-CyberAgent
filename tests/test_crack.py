@@ -29,6 +29,8 @@ Two invariants worth stating, because they are the ones a refactor would break:
 from __future__ import annotations
 
 import asyncio
+import atexit
+import os
 import shutil
 import sys
 import tempfile
@@ -40,6 +42,14 @@ from unittest.mock import PropertyMock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# A throwaway ZIMZILLA_HOME for the whole suite. ``Config.state_dir`` defaults
+# to ~/.zimzilla and is resolved at import time, so this has to be set before
+# the imports below. Without it every case directory, potfile and archived
+# report this suite builds landed in the operator's live install.
+_TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
+os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 from zimzilla import crack as crack_mod  # noqa: E402
 from zimzilla import scope as scope_mod  # noqa: E402

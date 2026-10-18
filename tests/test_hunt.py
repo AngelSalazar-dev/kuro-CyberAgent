@@ -20,8 +20,10 @@ Two invariants this file is built around:
 from __future__ import annotations
 
 import asyncio
+import atexit
 import os
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -29,6 +31,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# A throwaway ZIMZILLA_HOME for the whole suite. The package resolves it at
+# import time, so it must be set before the imports below. Several checks build
+# a Config without overriding ``state_dir``, and the default is ~/.zimzilla —
+# without this they wrote real campaign directories into the operator's live
+# install, which the app then showed as genuine hunts.
+_TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
+os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 from zimzilla import hunt as hunt_mod  # noqa: E402
 from zimzilla import team as team_mod  # noqa: E402

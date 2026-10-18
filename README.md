@@ -1755,6 +1755,18 @@ through the real loop with a stubbed model, including the boot migration — a
 campaign in the old flat layout is reorganised and read back, and a wave that
 was deliberately re-run is checked to count as one wave rather than three.
 
+Every suite pins `ZIMZILLA_HOME` to a throwaway directory before it imports the
+package, and removes it on exit. The package resolves that path at import time,
+so without the pin the tests write into the operator's *live* `~/.zimzilla` —
+and did: `/theme` calls in `test_phase4.py` rewrote the real `current-theme`, so
+a run that ended on `green` silently reset the theme the operator had chosen,
+`test_hunt.py` left a campaign named `x.test` in the real hunts directory, and
+`test_crack.py` / `test_opencode.py` wrote case directories and a proxy pool
+there. A suite that changes the state of the install it is testing is not a
+test of that install. `test_phase4.py` additionally pins the exit contract:
+`/theme` must have written the choice before the process goes away, on both
+`/exit` and Ctrl+D.
+
 `test_ad.py` needs no domain, no model and no network: the interlock's decision
 surface is a pure function of the command string, so the whole safety property
 is tested by writing commands down — a table of them, each asserted for whether

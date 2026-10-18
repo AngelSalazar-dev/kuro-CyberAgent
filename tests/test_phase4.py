@@ -6,7 +6,9 @@ Run:  python tests/test_phase4.py   (from an activated venv)
 from __future__ import annotations
 
 import asyncio
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -14,6 +16,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# A throwaway ZIMZILLA_HOME for the whole suite. The package resolves this at
+# import time (``config.DEFAULT_HOME``, ``theme.ZIMZILLA_HOME``), so it has to
+# be set before the imports below — and it has to be set at all. Without it,
+# every ``/theme`` this suite drives wrote to the operator's *live*
+# ``~/.zimzilla/current-theme``: a test run that ends on "green" silently reset
+# the theme the operator had chosen, and the next launch came up green with
+# nothing in the app to explain it.
+_TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
+os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 from rich.text import Text  # noqa: E402
 
@@ -1273,6 +1286,66 @@ async def test_system_theme(wd: Path) -> None:
                       blind.palette == PALETTES["green"], blind.palette.bg)
 
 
+async def test_theme_survives_exit(wd: Path) -> None:
+    """The chosen theme outlives the process, whichever way it is left.
+
+    Reported: a theme picked with ``/theme`` came back after closing the
+    terminal, but ``/exit`` brought green back. The app never wrote on the way
+    out, so the choice could only be lost if the *file* was overwritten by
+    something else — and it was: this very suite drove ``/theme`` against the
+    operator's live ``~/.zimzilla`` before the throwaway home at the top of the
+    file existed, so a test run ending on "green" reset the real choice.
+
+    These checks pin both halves of the contract: that the app writes on every
+    exit route it owns, and that nothing in the suite can reach the real home
+    to undo it.
+    """
+    from unittest import mock
+
+    from zimzilla import theme as theme_mod
+
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td) / ".zimzilla"
+        with mock.patch.object(theme_mod, "ZIMZILLA_HOME", home):
+            app = ZimZillaApp(_cfg(wd, boot_rain=False, theme="green"),
+                              term_colors=None)
+            async with app.run_test(size=(100, 30)) as pilot:
+                app.pop_screen()
+                await pilot.pause()
+                app._cmd_theme(["system"])
+                await pilot.pause()
+                check("exit: /theme writes the choice immediately",
+                      (home / "current-theme").read_text().strip() == "system")
+
+                # `/exit` is a bare ``self.exit()`` in the dispatch table; the
+                # choice must already be on disk rather than written on the way
+                # out, or a process killed mid-shutdown loses it.
+                app._handle_command("/exit")
+                await pilot.pause()
+            check("exit: the file is still the chosen theme after /exit",
+                  (home / "current-theme").read_text().strip() == "system",
+                  repr((home / "current-theme").read_text()))
+
+            # And Ctrl+D / action_quit, the other way out.
+            app2 = ZimZillaApp(_cfg(wd, boot_rain=False, theme="green"),
+                               term_colors=None)
+            async with app2.run_test(size=(100, 30)) as pilot:
+                app2.pop_screen()
+                await pilot.pause()
+                app2._cmd_theme(["amber"])
+                await pilot.pause()
+                app2.action_quit()
+                await pilot.pause()
+            check("exit: quitting with ctrl+d keeps the choice too",
+                  (home / "current-theme").read_text().strip() == "amber",
+                  repr((home / "current-theme").read_text()))
+
+    # The suite's own home must be the throwaway one, never the operator's.
+    check("exit: the suite is pinned to a throwaway home",
+          Path(os.environ["ZIMZILLA_HOME"]) != Path.home() / ".zimzilla",
+          os.environ["ZIMZILLA_HOME"])
+
+
 # ---- /team ----------------------------------------------------------------
 
 def test_team_roster(wd: Path) -> None:
@@ -2114,6 +2187,7 @@ async def main() -> int:
         await test_ui_rails(wd)
         await test_termbg(wd)
         await test_system_theme(wd)
+        await test_theme_survives_exit(wd)
         test_default_model(wd)
         test_team_roster(wd)
         test_team_waves(wd)

@@ -32,8 +32,10 @@ every subprocess is mocked.
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import shutil
 import stat
 import sys
 import tempfile
@@ -43,6 +45,14 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# A throwaway ZIMZILLA_HOME for the whole suite. ``opencode.state_dir()`` reads
+# it on every call, so the checks that build a Pool and save it — the
+# persistence ones, which do not pass an explicit path — were rewriting the
+# operator's live ``~/.zimzilla/opencode/pool.json`` with test proxies.
+_TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
+os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 from zimzilla import opencode as oc  # noqa: E402
 
