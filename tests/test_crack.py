@@ -33,7 +33,10 @@ import shutil
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
+from unittest.mock import PropertyMock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -245,8 +248,55 @@ def test_human_time() -> None:
 # The ladder
 # ---------------------------------------------------------------------------
 
+@contextmanager
+def _wordlists_present():
+    """Make every stage read as available, whatever this host has installed.
+
+    ``plan`` drops a stage whose wordlist is missing — correct behaviour, and a
+    different question from the one these tests ask. rockyou.txt ships with
+    neither the distro nor the repo, so on a machine without it every dictionary
+    stage is dropped for "missing" before the budget is ever consulted, and the
+    budget assertions fail for a reason that has nothing to do with the budget.
+    Availability has its own coverage in ``test_plan_missing_wordlist`` below,
+    which pins the opposite way; this pins it out of the way.
+    """
+    with mock.patch.object(crack_mod.Stage, "available",
+                           new_callable=PropertyMock, return_value=True):
+        yield
+
+
+def test_plan_missing_wordlist() -> None:
+    """A stage whose wordlist is absent is dropped, and says which file.
+
+    Pinned in both directions so this passes on a host with rockyou installed
+    and on one without: the point is the decision, not this machine.
+    """
+    with mock.patch.object(crack_mod.Stage, "available",
+                           new_callable=PropertyMock, return_value=False), \
+         mock.patch.object(crack_mod.Stage, "missing",
+                           new_callable=PropertyMock,
+                           return_value="/nonexistent/rockyou.txt"):
+        plan = crack_mod.plan(1000, 86400)
+    check("plan: an unavailable stage does not run", not any(p.run for p in plan))
+    # The --deep stage is refused for being deep, which is decided first and is
+    # the more useful reason; the rest must name the file.
+    check("plan: it names the file it needs",
+          all("/nonexistent/rockyou.txt" in p.reason
+              for p in plan if not p.stage.deep),
+          str([(p.stage.name[:16], p.reason) for p in plan]))
+
+    # And the mask needs no file, so a host with no wordlists still has a rung.
+    check("plan: the mask stage needs nothing",
+          not any(s.needs for s in crack_mod.LADDER if "mask" in s.name))
+
+
 def test_plan_budget() -> None:
     """The budget is a real bound, and a dropped stage is named as dropped."""
+    with _wordlists_present():
+        _test_plan_budget()
+
+
+def _test_plan_budget() -> None:
     # A generous budget runs every default stage and no more. The count is
     # asserted rather than written as a literal so adding a rung to the ladder
     # does not fail this for the wrong reason — what matters is that the deep
@@ -305,6 +355,11 @@ def test_plan_budget() -> None:
 
 def test_plan_deep() -> None:
     """--deep unlocks the expensive stage, and only that stage."""
+    with _wordlists_present():
+        _test_plan_deep()
+
+
+def _test_plan_deep() -> None:
     shallow = crack_mod.plan(1000, 86400)
     deep = crack_mod.plan(1000, 86400, deep=True)
     check("plan: --deep adds no stage, it unlocks one",
@@ -786,6 +841,7 @@ async def main() -> int:
     test_estimate()
     test_human_time()
     test_plan_budget()
+    test_plan_missing_wordlist()
     test_plan_deep()
     test_hashcat_argv()
     test_exit_codes()

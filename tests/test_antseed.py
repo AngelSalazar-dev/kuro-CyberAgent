@@ -635,16 +635,36 @@ def test_is_antseed_by_port_not_name() -> None:
           a.active_endpoint is a.is_antseed)
 
 
-def test_active_key_does_not_confuse_sources() -> None:
-    """sources.active_key must route each port to the right provider."""
+def test_active_key_does_not_confuse_sources(tmp: Path) -> None:
+    """sources.active_key must route each port to the right provider.
+
+    ``active_key`` resolves a port through ``discover()``, which only returns a
+    source whose profile, service and config are all present on disk. The two
+    LiteLLM proxies are therefore laid out in the temp home rather than assumed
+    from the machine running the test: without that, the result depends on
+    whether the operator happens to have Token Juice installed, and a missing
+    install reads as a routing bug in the code under test.
+    """
+    from unittest import mock
+
     from zimzilla import sources as s
 
-    check("sources: 8377 is antseed",
-          s.active_key("http://localhost:8377") == "antseed")
-    check("sources: 4001 is logfare",
-          s.active_key("http://localhost:4001") == "logfare")
-    check("sources: 4000 is tokenjuice",
-          s.active_key("http://localhost:4000") == "tokenjuice")
+    home = tmp / "active-key-home"
+    zhome = tmp / "active-key-zimzilla"
+    for route in ("logfare", "tokenjuice"):
+        for name in ("source", "start-litellm.sh", "litellm-config.yaml"):
+            path = zhome / route / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# test\n", encoding="utf-8")
+
+    with mock.patch.object(s, "DEFAULT_HOME", home), \
+         mock.patch.object(s, "ZIMZILLA_HOME", zhome):
+        check("sources: 8377 is antseed",
+              s.active_key("http://localhost:8377") == "antseed")
+        check("sources: 4001 is logfare",
+              s.active_key("http://localhost:4001") == "logfare")
+        check("sources: 4000 is tokenjuice",
+              s.active_key("http://localhost:4000") == "tokenjuice")
     check("sources: antseed is a builtin key, so a selection survives",
           "antseed" in s.BUILTIN_KEYS)
     check("sources: models_for returns None on a cold cache",
@@ -829,7 +849,7 @@ def main() -> int:
     test_cache_is_keyed_by_endpoint()
     test_cache_expiry()
     test_is_antseed_by_port_not_name()
-    test_active_key_does_not_confuse_sources()
+    test_active_key_does_not_confuse_sources(tmp)
     test_proxy_port_comes_from_the_buyer_config(tmp)
     test_profile_roundtrip(tmp)
     test_apply_and_guard(tmp)
