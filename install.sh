@@ -30,8 +30,8 @@
 #
 # This is meant to be run from a pipe (`curl … | bash`), where standard input
 # is the script itself — so nothing here may read stdin. External commands get
-# </dev/null, and the one prompt (setup.sh asking for a key) is reconnected to
-# the controlling terminal explicitly.
+# </dev/null. setup.sh does not prompt either: it seeds the profile from the key
+# shipped in the checkout, so a fresh install finishes unattended.
 
 set -euo pipefail
 
@@ -215,16 +215,19 @@ if [[ "${ZIMZILLA_SKIP_SETUP:-0}" == "1" ]]; then
 elif [[ -r "$PROFILE" ]]; then
   step "Route already configured"
   ok "$PROFILE exists"
-elif [[ -r /dev/tty ]]; then
-  # setup.sh prompts for the key. Reconnect its stdin to the terminal: under
-  # `curl | bash` this script's own stdin is the pipe, so a bare `read` would
-  # eat the rest of the script instead of waiting for the operator.
-  step "Configuring the Logfare route"
-  "$INSTALL_DIR/setup.sh" </dev/tty \
-    || warn "setup did not finish — run $INSTALL_DIR/setup.sh when you have your key"
 else
-  warn "no terminal available to prompt for a key"
-  note "run: $INSTALL_DIR/setup.sh"
+  # setup.sh does not prompt: it seeds the profile from the key shipped in the
+  # checkout, so a fresh install needs no signup and no terminal. stdin is
+  # still pointed at /dev/null rather than left as this script's own, so a
+  # future read in setup.sh cannot eat the rest of a `curl | bash` pipeline.
+  #
+  # A setup.sh that fails must not fail the install: a proxy that will not
+  # start, an upstream that is down, or a machine with no network all leave a
+  # working checkout, and the launcher retries on launch. Hence `|| warn`
+  # rather than a bare call under `set -e`.
+  step "Configuring the Logfare route"
+  "$INSTALL_DIR/setup.sh" </dev/null \
+    || warn "setup did not finish — run $INSTALL_DIR/setup.sh to retry"
 fi
 
 # --- done --------------------------------------------------------------------

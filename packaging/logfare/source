@@ -1,0 +1,33 @@
+# ZimZilla — Logfare profile
+#
+# Committed on purpose. This carries a shared Logfare key so that a fresh clone
+# can start a session without signing up for one — which is the only reason it
+# exists, and the reason setup.sh reuses it when it finds no other credential.
+#
+# It is not a secret in any meaningful sense: it is in this repository's public
+# history, and Logfare caps it at three concurrent requests for everyone using
+# it. That cap is why Logfare is reported as under construction: it is the
+# starting point, not a route to switch to.
+#
+# Your own key always wins. setup.sh looks at ~/.zimzilla/logfare/source first
+# (mode 600), then $ANTHROPIC_AUTH_TOKEN, and only then at this file. Get a key
+# at https://logfare.ai — they start with `lfu_`.
+
+export ANTHROPIC_BASE_URL="http://localhost:4001"
+export ANTHROPIC_AUTH_TOKEN="***REMOVED***"
+export ANTHROPIC_MODEL="deepseek-v4.1-flash"
+
+# Load-bearing: an empty string keeps ANTHROPIC_AUTH_TOKEN authoritative and
+# clears any real API key inherited from the shell.
+export ANTHROPIC_API_KEY=""
+
+# Model aliases — switch per-invocation, e.g.:
+#   ANTHROPIC_MODEL=$MODEL_QWEN zimzilla
+# These are the models Logfare currently serves. Logfare retires models without
+# notice, so the live list is fetched, not declared: /logfare-models in the TUI
+# shows what is up right now.
+export MODEL_DEFAULT="deepseek-v4.1-flash"
+export MODEL_DEEPSEEK_FLASH="deepseek-v4.1-flash"
+export MODEL_QWEN="qwen-3.8-27b"
+export MODEL_GEMMA="gemma-4-26b"
+export MODEL_AUTO="logfare/auto"

@@ -11,9 +11,11 @@ dist/
 .venv/
 venv/
 
-# Credential profiles. These hold a live upstream key and must never be
-# committed — the `*.example` file beside each one is the committable template.
-# setup.sh writes the real file into ~/.zimzilla/<route>/source with mode 600,
-# so a clone needs no profile in-tree to work.
+# Credential profiles. Token Juice's is personal and must never be committed;
+# its `*.example` beside it is the committable template. Logfare's is the
+# deliberate exception — a shared key shipped so a fresh clone can start, and
+# re-included below — because the whole point of it is that every new install
+# has one.
 packaging/*/source
+!packaging/logfare/source
 

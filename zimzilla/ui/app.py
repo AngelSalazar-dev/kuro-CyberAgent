@@ -2095,7 +2095,7 @@ class ZimZillaApp(App):
             ("/rain", "toggle the matrix-rain background"),
             ("/think", "toggle showing the model's own reasoning"),
             ("/theme green|amber|cyan|system", "switch the color theme"),
-            ("/zim-logfare", "switch upstream to Logfare        (:4001)"),
+            ("/zim-logfare", "Logfare — under construction; the route you start on"),
             ("/zim-tokenjuice", "Token Juice — under construction   (:4000)"),
             ("/zim-tokenharbour", "switch upstream to TokenHarbour (hosted)"),
             ("/zim-openrouter", "switch upstream to OpenRouter   (hosted)"),
@@ -2718,6 +2718,12 @@ class ZimZillaApp(App):
     # LiteLLM proxy. Both upstreams go down independently, so this is the
     # failover: the key, base_url and client are all rebuilt in place, and the
     # choice is persisted so the next launch starts on the one that worked.
+    #
+    # Logfare is the exception the park in sources.UNDER_CONSTRUCTION makes: it
+    # is where a session *starts*, and a switch *to* it is refused, because the
+    # key a new install runs on is shared and rate-capped. The listing still
+    # has to show it as live, though — the session is on it, and a list that
+    # called the active route "under construction" would read as a fault.
     def _cmd_zim_source(self, key: str | None) -> None:
         p = self.palette
         found = sources_mod.discover()
@@ -2728,15 +2734,6 @@ class ZimZillaApp(App):
             t = Text()
             t.append("  UPSTREAM SOURCES\n\n", style=f"bold {p.accent}")
             for k, src in found.items():
-                if src.under_construction:
-                    # Listed, never marked active, and never offered as a
-                    # switch target — the reason replaces the proxy state,
-                    # because "proxy up/down" is not the question here.
-                    t.append(f"  ○ {k:<12}", style=p.dim)
-                    t.append(f":{src.port}  {src.label:<12} ", style=p.dim)
-                    t.append(f"under construction: {src.under_construction}\n",
-                             style=p.amber)
-                    continue
                 mark = "◉" if k == active else "○"
                 style = f"bold {p.accent}" if k == active else p.primary
                 up = sources_mod.proxy_healthy(src.port)
@@ -2744,6 +2741,12 @@ class ZimZillaApp(App):
                 t.append(f"  {mark} {k:<12}", style=style)
                 t.append(f":{src.port}  {src.label:<12} ", style=p.primary)
                 t.append(f"{state}\n", style=p.accent if up else p.amber)
+                if src.under_construction:
+                    # Not offered as a switch target — the reason sits under
+                    # the row rather than replacing its state, because "proxy
+                    # up" is still true and still worth knowing.
+                    t.append(f"      under construction: {src.under_construction}\n",
+                             style=p.amber)
             # TokenHarbour has no port and no local proxy, so it is listed from
             # its credential rather than from discover() — "proxy up" is not a
             # question you can ask a hosted gateway.
@@ -2805,12 +2808,15 @@ class ZimZillaApp(App):
             else:
                 t.append(f"key from {creds[2]} (document tools, not a source)\n",
                          style=p.accent)
-            t.append("\n  switch with  /zim-logfare,  /zim-tokenharbour\n"
-                     "                 or  /zim-openrouter,  /zim-unorouter,\n"
-                     "                 /zim-aihubmix,  or  /zim-antseed\n",
+            t.append("\n  switch with  /zim-tokenharbour,  /zim-openrouter,\n"
+                     "                 /zim-unorouter,  /zim-aihubmix,\n"
+                     "                 or  /zim-antseed\n",
                      style=p.dim)
             # Any route that is present but parked is named once here, so the
             # list above and this hint agree about what is actually reachable.
+            # Logfare is included: it is the route the session is on, and the
+            # one that cannot be switched *to*, so leaving it out would make
+            # the hint look like it had forgotten the source above it.
             for _k in sorted(sources_mod.UNDER_CONSTRUCTION):
                 if _k in found:
                     t.append(f"  /zim-{_k} is under construction\n",

@@ -6,12 +6,18 @@ points at. Two local LiteLLM proxies front two different upstreams:
     logfare      :4001  →  logfare.ai        (the default, shipped with the repo)
     tokenjuice   :4000  →  api.tokenjuice.ai (deepseek-claude's endpoint)
 
-They go down independently, so the point of this module is to make switching
-between them a one-liner — ``/zim-tokenjuice`` / ``/zim-logfare`` — and to have
-the choice survive a restart (``~/.zimzilla/current-source``).
+Both are parked as under construction (see UNDER_CONSTRUCTION), for different
+reasons: Token Juice's upstream keeps renaming its model id, and Logfare's
+shipped key is shared and rate-capped. Logfare is still where a session starts —
+the shipped profile is what lets a fresh clone run with no signup — so the park
+blocks a *switch to* it, not the default.
+
+The other upstreams (TokenHarbour, OpenRouter, UnoRouter, AIHubMix, AntSeed) are
+remote or operator-started, and live in their own modules; this one is the local
+proxy plumbing and the selection record (``~/.zimzilla/current-source``).
 
 Nothing here echoes a key. Credentials live in each source's profile file, mode
-600, exactly as before.
+600, except Logfare's shared one in ``packaging/logfare/source``.
 """
 
 from __future__ import annotations
@@ -64,7 +70,20 @@ class Source:
 # A parked source is never marked active, never started by a switch, and a
 # remembered selection of it is refused by `current_key` — so a stale
 # `current-source` cannot drag a session back onto it.
+#
+# Logfare is parked *after* being installed, not instead of it: setup.sh seeds
+# a new install from the shared key in packaging/logfare/source, so the default
+# route starts a session with no signup. What it cannot be is a place to
+# switch to, because that key is shared by every install — Logfare caps it at
+# three concurrent requests, so a switch would hand the session to someone
+# else's queue. Being on it at launch is the intended state; arriving on it by
+# choice is not.
 UNDER_CONSTRUCTION: dict[str, str] = {
+    "logfare": (
+        "the shipped key is shared by every install and capped at three "
+        "concurrent requests — fine to start on, not a route to switch to; "
+        "set your own key with setup.sh to make it one"
+    ),
     "tokenjuice": (
         "the upstream keeps renaming its model id, and the last rename took "
         "the alias with it"

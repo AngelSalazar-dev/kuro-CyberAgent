@@ -220,6 +220,45 @@ def test_models_for_reads_the_remote_catalogs() -> None:
           sources.models_for("https://api.example.com") is None)
 
 
+def test_logfare_is_parked_but_still_the_starting_point() -> None:
+    """Logfare is under construction, and still the route a session starts on.
+
+    The two facts look contradictory and are not: the shipped key makes a fresh
+    clone run with no signup, and that same key is shared by every install and
+    rate-capped, so it must never be somewhere a session is *switched to*. The
+    park has to refuse the switch without refusing the default.
+    """
+    check("park: logfare is under construction", "logfare" in sources.UNDER_CONSTRUCTION,
+          str(sorted(sources.UNDER_CONSTRUCTION)))
+    check("park: the reason names the shared key",
+          "shared" in sources.UNDER_CONSTRUCTION.get("logfare", ""),
+          sources.UNDER_CONSTRUCTION.get("logfare", ""))
+
+    # A selection left over from before the park must not survive a restart —
+    # the same rule Token Juice is held to.
+    with tempfile.TemporaryDirectory() as td:
+        zhome = Path(td) / "zimzilla"
+        zhome.mkdir()
+        empty_home = Path(td) / "home"
+        empty_home.mkdir()
+        with mock.patch.object(sources, "ZIMZILLA_HOME", zhome), \
+             mock.patch.object(sources, "DEFAULT_HOME", empty_home):
+            sources.set_current("logfare")
+            check("park: a remembered logfare selection is refused",
+                  sources.current_key() is None, str(sources.current_key()))
+
+    # The shipped profile is what makes the default work, so it has to be in
+    # the tree — not gitignored, and carrying a key the launcher can use.
+    shipped = ROOT / "packaging" / "logfare" / "source"
+    check("park: the shared profile ships in the tree", shipped.is_file(), str(shipped))
+    if shipped.is_file():
+        text = shipped.read_text()
+        check("park: the shipped profile carries an lfu_ token",
+              'ANTHROPIC_AUTH_TOKEN="lfu_' in text)
+        check("park: the shipped profile points at the local proxy",
+              'ANTHROPIC_BASE_URL="http://localhost:4001"' in text)
+
+
 def main() -> int:
     test_tokenjuice_prefers_installed_route()
     test_tokenjuice_falls_back_to_home_layout()
@@ -227,6 +266,7 @@ def main() -> int:
     test_remote_gateways_are_identified_by_host()
     test_builtin_keys_survive_a_restart()
     test_models_for_reads_the_remote_catalogs()
+    test_logfare_is_parked_but_still_the_starting_point()
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")
     return 1 if failed else 0

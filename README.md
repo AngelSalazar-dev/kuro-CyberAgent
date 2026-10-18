@@ -121,9 +121,21 @@ zimzilla --deny out-of-scope.yaml  # hosts that are never touched
 If `~/.local/bin` is not on your `PATH`, the installer prints the line to add.
 Re-running the same command updates an existing install.
 
-The installer finishes by running `./setup.sh` to configure the route, which
-prompts for your credential on the terminal. To configure that yourself later,
-or to install somewhere other than the default:
+The installer finishes by running `./setup.sh`, which configures the route
+without asking you anything: it seeds `~/.zimzilla/logfare/source` from the
+shared key shipped in `packaging/logfare/source`, so a new install is a session
+away with no signup. Put your own key in that file (or export `lfu_…` as
+`ANTHROPIC_AUTH_TOKEN`) whenever you want the shared one gone — an existing
+profile is never overwritten.
+
+The shared key is exactly that, shared, and Logfare caps it at three concurrent
+requests for every install using it. That is why **Logfare is reported as under
+construction**: it is where a session starts, not a route to switch to. Switching
+means `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`
+or `/zim-antseed`, each with your own credential or none at all.
+
+To configure setup yourself later, or to install somewhere other than the
+default:
 
 ```bash
 curl -fsSL <install.sh-url> | ZIMZILLA_SKIP_SETUP=1 bash
@@ -592,16 +604,23 @@ up:
 
 | Source | Endpoint | Key | How it starts |
 |---|---|---|---|
-| **Logfare** | `:4001` | discovered | the bundled proxy — the default |
-| **Token Juice** | `:4000` | discovered | its own local proxy |
+| **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, and under construction |
+| **Token Juice** | `:4000` | discovered | its own local proxy — under construction |
 | **TokenHarbour** | `tokenharbor.ai` | yours | hosted — nothing to start |
 | **OpenRouter** | `openrouter.ai` | yours | hosted — nothing to start |
 | **UnoRouter** | `api.unorouter.com` | yours | hosted — nothing to start |
 | **AntSeed** | `:8377` | **none** | `antseed buyer start` — a local buyer on a P2P network |
 
-Switch with `/zim-logfare`, `/zim-tokenjuice`, `/zim-tokenharbour`,
-`/zim-openrouter`, `/zim-unorouter` or `/zim-antseed`; the choice is remembered,
-so the next launch comes back to the one that was working.
+Switch with `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`,
+`/zim-aihubmix` or `/zim-antseed`; the choice is remembered, so the next launch
+comes back to the one that was working.
+
+Logfare and Token Juice are listed by `/zim-source` but **under construction**,
+and cannot be switched to. Logfare is the route a session starts on — the
+shipped key makes that work with no signup — but that key is shared by every
+install and capped at three concurrent requests, so it is a starting point
+rather than somewhere to switch. Token Juice's upstream keeps renaming its model
+id. Both reasons print in full; neither route is hidden.
 
 ### TokenHarbour
 
@@ -923,8 +942,8 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/osint <kind> <target>` | open-source recon on a target |
 | `/osint-tree [kind\|path]` | re-show a finished recon as a result tree |
 | `/phish <host>` | clone a login page, serve it, harvest creds into zim-pane |
-| `/zim-logfare` | switch upstream to Logfare (`:4001`) |
-| `/zim-tokenjuice` | switch upstream to Token Juice (`:4000`) |
+| `/zim-logfare` | Logfare (`:4001`) — under construction; the route you start on |
+| `/zim-tokenjuice` | Token Juice (`:4000`) — under construction |
 | `/zim-tokenharbour` | switch upstream to TokenHarbour (hosted) |
 | `/tokenharbour-api-setup <key>` | store your TokenHarbour API key |
 | `/tokenharbour-models` | fetch the live catalog; show what is free |
@@ -1796,7 +1815,8 @@ requirements.txt`.
 
 **`no credentials found`** — run `./setup.sh`, then source the profile it
 writes: `set -a; . ~/.zimzilla/logfare/source; set +a`. Or just launch with
-`./run.sh`, which does that for you.
+`./run.sh`, which does that for you. A fresh install should not see this: the
+shipped key seeds the profile on the first `setup.sh`.
 
 **`the endpoint rejected the model name`** — run `/model` for valid names.
 

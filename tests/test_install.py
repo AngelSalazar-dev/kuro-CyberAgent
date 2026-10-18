@@ -186,12 +186,108 @@ def test_launcher_falls_back_to_path_python(td: Path) -> None:
           path_py is not None and path_py in err, err.strip()[-300:])
 
 
+def test_setup_seeds_a_key_without_prompting(td: Path) -> None:
+    """A fresh install must not stop to ask for a Logfare key.
+
+    The install path is `curl … | bash` and then `zimzilla`. A prompt for a
+    third-party signup in the middle of that is the friction the shipped key
+    exists to remove, so setup.sh has to find a credential on its own — from the
+    profile in the checkout — and finish with no terminal attached.
+
+    Run in a throwaway HOME with stdin closed. Every network step is stubbed
+    (the proxy is never started, nothing is fetched): what is asserted is the
+    credential decision, not a route.
+    """
+    home = td / "home-setup"
+    home.mkdir()
+    zhome = home / ".zimzilla"
+    checkout = td / "checkout"
+    (checkout / "packaging" / "logfare").mkdir(parents=True)
+    # The shipped profile, as it lands in a clone. A recognisable shape rather
+    # than the real key: this test must not depend on a live credential.
+    (checkout / "packaging" / "logfare" / "source").write_text(
+        'export ANTHROPIC_BASE_URL="http://localhost:4001"\n'
+        'export ANTHROPIC_AUTH_TOKEN="lfu_test_only_not_a_real_key"\n'
+        'export ANTHROPIC_MODEL="deepseek-v4.1-flash"\n'
+    )
+    shutil.copy(ROOT / "setup.sh", checkout / "setup.sh")
+    os.chmod(checkout / "setup.sh", 0o755)
+    # setup.sh refuses to configure a proxy for an interpreter that cannot run
+    # the harness, so the checkout needs a venv whose python really has the
+    # dependencies. A shim that execs the interpreter running this test does
+    # that without building a venv or touching the network. A symlink will not
+    # do: a bare symlink has no pyvenv.cfg, so sys.prefix stays /usr and the
+    # dependencies are not on the path.
+    venv_bin = checkout / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    shim = venv_bin / "python"
+    shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    os.chmod(shim, 0o755)
+
+    env = base_env(home)
+    env["ZIMZILLA_HOME"] = str(zhome)
+    env["ZIMZILLA_ROOT"] = str(checkout)
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    env.pop("ANTHROPIC_API_KEY", None)
+    # Hermetic: no network, and nothing slow. `litellm` on PATH stops setup.sh
+    # from building a proxy venv (a pip install), and a `curl` that always
+    # fails stops the pagekite download and makes the health probes read as
+    # "nothing answering" — both are warnings, so the script still exits 0.
+    stubs = td / "stubs"
+    stubs.mkdir()
+    (stubs / "litellm").write_text("#!/bin/sh\nexit 0\n")
+    (stubs / "curl").write_text("#!/bin/sh\nexit 1\n")
+    for stub in stubs.iterdir():
+        os.chmod(stub, 0o755)
+    env["PATH"] = f"{stubs}:/usr/bin:/bin"
+
+    proc = subprocess.run(
+        ["bash", str(checkout / "setup.sh")],
+        cwd=str(checkout), env=env,
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120,
+    )
+    combined = proc.stdout + proc.stderr
+    check("setup: finishes with no terminal and no prompt", proc.returncode == 0,
+          combined.strip()[-400:])
+    check("setup: never asks for a key",
+          "Paste your" not in combined and "key:" not in combined,
+          combined.strip()[-400:])
+
+    profile = zhome / "logfare" / "source"
+    check("setup: writes the profile from the shipped key",
+          profile.is_file()
+          and "lfu_test_only_not_a_real_key" in profile.read_text(),
+          str(profile))
+    check("setup: the profile is mode 600",
+          profile.is_file() and (profile.stat().st_mode & 0o777) == 0o600,
+          oct(profile.stat().st_mode & 0o777) if profile.is_file() else "missing")
+
+    # The shipped key is a fallback, not an override: a personal credential in
+    # the environment must still win.
+    personal = td / "home-setup2"
+    personal.mkdir()
+    env2 = base_env(personal)
+    env2["ZIMZILLA_HOME"] = str(personal / ".zimzilla")
+    env2["ZIMZILLA_ROOT"] = str(checkout)
+    env2["ANTHROPIC_AUTH_TOKEN"] = "lfu_personal_key_should_win"
+    env2["PATH"] = env["PATH"]
+    subprocess.run(["bash", str(checkout / "setup.sh")],
+                   cwd=str(checkout), env=env2,
+                   stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                   timeout=120)
+    written = (personal / ".zimzilla" / "logfare" / "source")
+    check("setup: a personal key in the environment beats the shipped one",
+          written.is_file() and "lfu_personal_key_should_win" in written.read_text(),
+          written.read_text()[:120] if written.is_file() else "missing")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as td_str:
         td = Path(td_str)
         ctx = test_install_layout(td)
         test_launcher_prefers_bundled_venv(ctx)
         test_launcher_falls_back_to_path_python(td)
+        test_setup_seeds_a_key_without_prompting(td)
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

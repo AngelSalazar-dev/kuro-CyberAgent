@@ -3,10 +3,15 @@
 #
 #   ./setup.sh
 #
-# Finds a Logfare credential (reusing an existing profile or
-# $ANTHROPIC_AUTH_TOKEN if present, otherwise prompting for one), writes the
-# profile to ~/.zimzilla/logfare/source with mode 600, installs the LiteLLM
-# proxy if it is missing, starts it, and verifies the route end to end.
+# Finds a Logfare credential — an existing profile, then $ANTHROPIC_AUTH_TOKEN,
+# then the shared key shipped in packaging/logfare/source — writes the profile
+# to ~/.zimzilla/logfare/source with mode 600, installs the LiteLLM proxy if it
+# is missing, starts it, and verifies the route end to end.
+#
+# It never prompts. A new install has to be `curl … | bash` and then `zimzilla`,
+# with no third-party signup in between; the shipped key is what makes that
+# true. Replace it with your own whenever you like — a profile that already
+# exists is never overwritten.
 #
 # The venv is the user's own: activate it, `pip install -r requirements.txt`,
 # then run this. Idempotent. The key is never echoed back and never leaves this
@@ -86,9 +91,9 @@ KEY_SRC=""
 is_logfare_key() { [[ "${1:-}" == lfu_* ]]; }
 
 # 1. An existing profile. These files are Logfare-specific, so try them first.
-#    The shipped repo profile comes last — it is the shared fallback.
-for candidate in "$PROFILE" "$HOME/logfare/source" "$SELF/../logfare/source" \
-                 "$SELF/packaging/logfare/source"; do
+#    The shipped repo profile is deliberately NOT in this list: it is shared,
+#    so it has to lose to a personal key in the environment. See step 3.
+for candidate in "$PROFILE" "$HOME/logfare/source" "$SELF/../logfare/source"; do
   [[ -f "$candidate" ]] || continue
   found="$(set -a; . "$candidate" 2>/dev/null; printf '%s' "${ANTHROPIC_AUTH_TOKEN:-}")"
   if is_logfare_key "$found"; then
@@ -103,20 +108,31 @@ if [[ -z "$KEY" ]] && is_logfare_key "${ANTHROPIC_AUTH_TOKEN:-}"; then
   KEY="$ANTHROPIC_AUTH_TOKEN"; KEY_SRC="\$ANTHROPIC_AUTH_TOKEN"
 fi
 
-if [[ -n "$KEY" ]]; then
-  ok "using the credential from $KEY_SRC"
-else
-  warn "no credential found"
-  printf '\n  Paste your Logfare API key (starts with lfu_).\n'
-  printf '  Get one at https://logfare.ai — it is stored with mode 600 and never echoed.\n\n'
-  printf '  key: '
-  # -s: do not echo the key to the terminal.
-  read -rs KEY || true
-  printf '\n'
-  [[ -n "$KEY" ]] || die "no key entered."
-  KEY_SRC="prompt"
-  ok "key received (${#KEY} chars)"
+# 3. The shared key shipped in the checkout. Last, so a machine that already
+#    has its own credential keeps it, and a fresh clone still starts.
+#
+#    A new user is not asked for a key. ZimZilla's whole install path is
+#    `curl … | bash` and then `zimzilla`; stopping that at a prompt for a
+#    third-party signup is the friction this file exists to remove, and the
+#    shipped key is the one the project already publishes in its history.
+#
+#    It is a shared key, not a personal one: Logfare caps it at three
+#    concurrent requests for every install using it. That is why the route is
+#    reported as under construction — it starts a session, and it is not a
+#    route to switch to. setup.sh never overwrites a profile that is already
+#    there, so anyone with their own key keeps it by doing nothing.
+if [[ -z "$KEY" ]]; then
+  for candidate in "$SELF/packaging/logfare/source"; do
+    [[ -f "$candidate" ]] || continue
+    found="$(set -a; . "$candidate" 2>/dev/null; printf '%s' "${ANTHROPIC_AUTH_TOKEN:-}")"
+    if is_logfare_key "$found"; then
+      KEY="$found"; KEY_SRC="$candidate (shared)"; break
+    fi
+  done
 fi
+
+[[ -n "$KEY" ]] || die "no Logfare credential found — write one to $PROFILE, or export a lfu_ key, and re-run."
+ok "using the credential from $KEY_SRC"
 
 [[ "$KEY" == lfu_* ]] || warn "that key does not start with 'lfu_' — continuing anyway"
 
@@ -359,7 +375,12 @@ if [[ "$CODE" == "200" ]]; then
 else
   warn "live request returned HTTP $CODE"
   warn "either the key is wrong or Logfare's upstream is down right now:"
-  head -c 300 /tmp/zim-setup-probe.json 2>/dev/null; printf '\n'
+  # The probe file only exists if curl got far enough to write it. Under
+  # `set -e` an unconditional `head` on a missing file would end the script
+  # here — after the profile is written and the proxy is installed — and exit
+  # non-zero, making a completed setup look like a failed one.
+  head -c 300 /tmp/zim-setup-probe.json 2>/dev/null || true
+  printf '\n'
 fi
 rm -f /tmp/zim-setup-probe.json
 
