@@ -1,9 +1,12 @@
 # ZimZilla — Token Juice profile
 #
-# This file is the credential profile for the Token Juice route. setup.sh
-# copies the real one next to this example as `source`, with mode 600, and
-# never commits it. This example exists so the format is visible without
-# exposing a key.
+# This file is the credential profile for the Token Juice route. Copy it to
+# `source` beside this example and put your key in — setup.sh does that for you
+# when $ANTHROPIC_AUTH_TOKEN already holds a tj_ key, and writes it mode 600.
+#
+# `source` is gitignored; only this template is committed. A `source` file was
+# committed here once, carrying a live key, which is why the route now reports
+# itself unavailable rather than shipping a working profile.
 #
 # Token Juice keys start with `tj_`. The same key is the bearer token ZimZilla
 # sends and the upstream OpenAI key LiteLLM forwards.
