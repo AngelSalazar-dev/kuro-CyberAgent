@@ -84,6 +84,38 @@ port_answers() {
   [[ "$code" == "200" ]]
 }
 
+# Pids LISTENing on $PORT. `sport = :$PORT` matches the local port rather than a
+# peer port that merely mentions the number, and ss is used because lsof is not
+# installed everywhere. Empty when nothing is listening.
+port_owner_pids() {
+  ss -ltnpH "sport = :$PORT" 2>/dev/null \
+    | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u
+}
+
+# Kill whatever litellm holds $PORT, when it is not one this script tracks.
+#
+# This exists because matching on our own --config path is not enough. A proxy
+# left behind by an *older* layout was started with a different --config, so the
+# exact-config pkill in do_stop can never see it: the port stays claimed, no pid
+# file explains why, and do_start then refuses to start forever. Matching on the
+# port plus "is a litellm" reclaims those without guessing at a path that has
+# changed since.
+#
+# Both conditions must hold before anything is signalled — it must be a litellm,
+# and it must hold this port — so an unrelated service on :$PORT is never a
+# target. Takes an optional signal name, defaulting to TERM.
+kill_port_orphans() {
+  local sig="${1:-TERM}" pid args
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    args="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null \
+            || ps -o args= -p "$pid" 2>/dev/null || true)"
+    [[ "$args" == *litellm* ]] || continue
+    log "sending SIG$sig to stray litellm on :$PORT (pid $pid)"
+    kill "-$sig" "$pid" 2>/dev/null || true
+  done < <(port_owner_pids)
+}
+
 do_stop() {
   if is_running; then
     local pid; pid="$(cat "$PID_FILE")"
@@ -102,12 +134,33 @@ do_stop() {
     log "stopped."
   else
     rm -f "$PID_FILE"
-    if port_answers; then
-      log "no pid file, but something is still serving :$PORT — killing orphans"
-      pkill -f "litellm --config $CONFIG" 2>/dev/null || true
-      sleep 1
+    if ! port_answers; then
+      log "not tracked as running."
+      return 0
     fi
-    log "not tracked as running."
+    log "no pid file, but something is still serving :$PORT — reclaiming it"
+    # Precise case first: a proxy of ours whose cmdline names this exact config.
+    pkill -f "litellm --config $CONFIG" 2>/dev/null || true
+    # Then the general one, which reaches a stray from an older layout.
+    kill_port_orphans TERM
+    local w
+    for w in $(seq 1 20); do
+      port_answers || break
+      sleep 0.25
+    done
+    if port_answers; then
+      kill_port_orphans KILL
+      for w in $(seq 1 8); do
+        port_answers || break
+        sleep 0.25
+      done
+    fi
+    if port_answers; then
+      err "something is still serving :$PORT and it is not a litellm I can identify."
+      err "find it with:  ss -ltnp \"sport = :$PORT\""
+      return 1
+    fi
+    log "port :$PORT freed."
   fi
 }
 
