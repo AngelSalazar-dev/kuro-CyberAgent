@@ -40,6 +40,7 @@ from .. import osint_tree as osint_tree_mod
 from .. import phish as phish_mod
 from .. import reverse as reverse_mod
 from .. import session as session_mod
+from .. import shodan as shodan_mod
 from .. import sources as sources_mod
 from .. import team as team_mod
 from .. import tokenharbour as th_mod
@@ -1984,6 +1985,9 @@ class ZimZillaApp(App):
         "beatapi-api-setup", "beatapi-models", "zim-beatapi",
         "zim-antseed", "antseed-models",
         "logfare-models",
+        # The Shodan key is a mode-600 write and a local read, like every other
+        # /<source>-api-setup; it starts no turn.
+        "shodan-api-setup",
         # Same again for LDXHub: the key and the catalogs are local reads and
         # a mode-600 write, and /ldxhub-models only fetches public catalogs.
         "ldxhub-api-setup", "ldxhub-models",
@@ -2038,6 +2042,14 @@ class ZimZillaApp(App):
             "team": lambda a: self._cmd_team(a),
             "osint": lambda a: self._cmd_osint(a),
             "osint-tree": lambda a: self._cmd_osint_tree(a),
+            "shodan-api-setup": lambda a: self._cmd_shodan_key(a),
+            "shodan-cam-search": lambda a: self._cmd_shodan_search("cam", a),
+            "shodan-scada-search": lambda a: self._cmd_shodan_search("scada", a),
+            "shodan-db-search": lambda a: self._cmd_shodan_search("db", a),
+            "shodan-rdp-search": lambda a: self._cmd_shodan_search("rdp", a),
+            "shodan-router-search": lambda a: self._cmd_shodan_search("router", a),
+            "shodan-vuln-search": lambda a: self._cmd_shodan_search("vuln", a),
+            "shodan-search": lambda a: self._cmd_shodan_search("raw", a),
             "phish": lambda a: self._cmd_phish(a),
             "bug-hunt": lambda a: self._cmd_bug_hunt(a),
             "scope-validator": lambda a: self._cmd_scope_validator(a),
@@ -2135,6 +2147,14 @@ class ZimZillaApp(App):
             ("/team <task>", "fan the task out across parallel agents"),
             ("/osint [kind] <target>", "open-source recon — email, phone, socials"),
             ("/osint-tree [kind|path]", "re-show a finished recon as a result tree"),
+            ("/shodan-api-setup <key>", "store your Shodan API key"),
+            ("/shodan-cam-search [cc]", "exposed IP cameras, then analyse the result"),
+            ("/shodan-scada-search [cc]", "exposed ICS / SCADA (PLCs, RTUs, HMIs)"),
+            ("/shodan-db-search [cc]", "exposed databases — Mongo, ES, Redis, SQL"),
+            ("/shodan-rdp-search [cc]", "exposed RDP and VNC services"),
+            ("/shodan-router-search [cc]", "exposed routers, firewalls and VPNs"),
+            ("/shodan-vuln-search <q>", "hosts Shodan flagged with a known CVE"),
+            ("/shodan-search <query>", "run any Shodan query verbatim, then analyse"),
             ("/phish <host>", "clone a login page, serve it, harvest creds"),
             ("/scope-validator", "paste a programme overview → allow.yaml, out-of-scope.yaml, ranked targets"),
             ("/bug-hunt <target>", "recon, then one wave of 10 agents"),
@@ -4432,6 +4452,197 @@ class ZimZillaApp(App):
                  style=p.primary)
         self.query_one(ChatPane).write_block(t)
 
+    # ---- Shodan -----------------------------------------------------------
+    # A named search is a *read* of Shodan's index followed by one analysis
+    # turn. Nothing here touches the hosts the index returns: the turn is
+    # asked to rank and ask, not to act. See zimzilla/shodan.py.
+    def _cmd_shodan_key(self, args) -> None:
+        """/shodan-api-setup [key] — store the Shodan API key.
+
+        Written to ~/.zimzilla/shodan/source, mode 600, in the same profile
+        format every other credential uses. The key is never echoed back — the
+        confirmation names the file and the last four characters.
+        """
+        p = self.palette
+        if not args:
+            creds = shodan_mod.load_credentials()
+            t = Text()
+            t.append("  SHODAN API KEY\n\n", style=f"bold {p.accent}")
+            if creds is None:
+                t.append("  no key set.\n\n", style=p.amber)
+            else:
+                _, origin = creds
+                t.append("  source: ", style=p.dim)
+                t.append(origin + "\n\n", style=p.primary)
+            t.append("  set it with  ", style=p.dim)
+            t.append("/shodan-api-setup <key>\n", style=f"bold {p.primary}")
+            t.append("  get a key at  ", style=p.dim)
+            t.append("https://account.shodan.io\n", style=p.primary)
+            t.append(f"  stored in     {shodan_mod.PROFILE}\n", style=p.dim)
+            t.append("  or export     ", style=p.dim)
+            t.append(f"{shodan_mod.ENV_VAR}=<key>\n", style=p.primary)
+            self.query_one(ChatPane).write_block(t)
+            return
+
+        key = args[0].strip().strip("'\"")
+        if not shodan_mod.looks_like_key(key):
+            self._sys_line(
+                "that does not look like a Shodan API key — paste just the key, "
+                "not the whole `export` line", warn=True)
+            return
+
+        path = shodan_mod.save_key(key)
+        shodan_mod.remember_session_key(key)
+        self._sys_line(f"Shodan key saved (…{key[-4:]}) to {path}", ok=True)
+        self._sys_line("try /shodan-cam-search, /shodan-db-search or /shodan-search")
+
+    def _cmd_shodan_search(self, which: str, args) -> None:
+        """/shodan-*-search — run a named search, then analyse the result.
+
+        Parsing is shared by every facet: ``--limit N`` is stripped wherever it
+        appears; for the fixed device facets a leading two-letter token is read
+        as a country and anything after it is appended to the query verbatim.
+        The two query-taking facets (``vuln``, ``raw``) use every remaining
+        word as the query instead.
+        """
+        facet = shodan_mod.facet_for(which)
+        if facet is None:                       # dispatch is static; belt and braces
+            self._sys_line(f"unknown shodan search: {which}", warn=True)
+            return
+
+        # Flags first, so `--limit` cannot be mistaken for a country or a term.
+        rest: list[str] = []
+        limit = shodan_mod.DEFAULT_LIMIT
+        i = 0
+        while i < len(args):
+            a = args[i]
+            if a in ("--limit", "-n") and i + 1 < len(args):
+                try:
+                    limit = int(args[i + 1])
+                except ValueError:
+                    self._sys_line(f"--limit needs a number, not {args[i + 1]!r}",
+                                   warn=True)
+                    return
+                i += 2
+                continue
+            if a.startswith("--limit="):
+                try:
+                    limit = int(a.split("=", 1)[1])
+                except ValueError:
+                    self._sys_line(f"--limit needs a number, not {a!r}", warn=True)
+                    return
+                i += 1
+                continue
+            rest.append(a)
+            i += 1
+
+        if limit < 1:
+            self._sys_line("--limit must be at least 1", warn=True)
+            return
+        if limit > shodan_mod.MAX_LIMIT:
+            self._sys_line(f"capping --limit at {shodan_mod.MAX_LIMIT}", warn=True)
+            limit = shodan_mod.MAX_LIMIT
+
+        creds = shodan_mod.load_credentials()
+        if creds is None:
+            self._sys_line(
+                "no Shodan key — set one with /shodan-api-setup <key>", warn=True)
+            return
+
+        country = ""
+        if facet is shodan_mod.RAW_FACET:
+            query = " ".join(rest).strip()
+        else:
+            if rest and len(rest[0]) == 2 and rest[0].isalpha():
+                country = rest[0].upper()
+                rest = rest[1:]
+            query = facet.build_query(country=country, extra=" ".join(rest))
+        if not query:
+            self._sys_line(
+                f"usage: /{facet.command} {facet.target_label}", warn=True)
+            return
+
+        if self.busy:
+            self._sys_line("harness is busy — Ctrl+C to interrupt", warn=True)
+            return
+
+        key, origin = creds
+        self._sys_line(f"Shodan: {facet.label} · {query}  ({origin})")
+        self._fetch_shodan(key, facet, query, limit, country)
+
+    @work(exclusive=True, thread=True)
+    def _fetch_shodan(self, key: str, facet, query: str, limit: int,
+                      country: str) -> None:
+        """The blocking search, off the UI thread, then a call back on it."""
+        started = time.time()
+        result, err = shodan_mod.search(key, query, limit)
+        self.call_from_thread(
+            self._show_shodan, facet, query, country, result, err, started)
+
+    def _show_shodan(self, facet, query: str, country: str, result,
+                     err: str, started: float) -> None:
+        """Render the result block, then start the analysis turn.
+
+        An empty result set gets the block and a hint, but no turn: asking a
+        model to analyse nothing invites it to invent a population. A busy
+        harness gets the block and no turn either — the results are still
+        worth reading, and interleaving a second turn is never safe.
+        """
+        p = self.palette
+        if result is None:
+            self._sys_line(f"Shodan: {err}", warn=True)
+            return
+
+        took = time.time() - started
+        t = Text()
+        t.append("  ◈ SHODAN    ", style=f"bold {p.accent}")
+        t.append(f"{facet.label}", style=f"bold {p.primary}")
+        if country:
+            t.append(f" · country:{country}", style=p.primary)
+        t.append("\n")
+        t.append("  ◈ QUERY     ", style=f"bold {p.accent}")
+        t.append(query + "\n", style=p.dim)
+        t.append("  ◈ RESULTS   ", style=f"bold {p.accent}")
+        t.append(f"{len(result.hosts)} shown of {result.total:,} matches "
+                 f"· {took:.1f}s\n", style=p.primary)
+        if result.hosts:
+            t.append("\n")
+            for h in result.hosts:
+                t.append("  ")
+                t.append(f"{h.ip}:{h.port:<5}", style=f"bold {p.primary}")
+                if h.org:
+                    t.append(f"  {h.org}", style=p.dim)
+                ident = h.identity
+                if ident:
+                    t.append(f"  [{ident}]", style=p.amber)
+                place = ", ".join(x for x in (h.city, h.country) if x)
+                if place:
+                    t.append(f"  {place}", style=p.dim)
+                if h.vulns:
+                    t.append("  ⚠ " + ",".join(h.vulns[:4]), style=f"bold {p.red}")
+                t.append("\n")
+            t.append("\n  ◈ NEXT      ", style=f"bold {p.accent}")
+            t.append("the working model analyses this and asks you to pick a task\n",
+                     style=p.dim)
+        else:
+            t.append("\n  no matches — try a wider query or drop the country "
+                     "filter\n", style=p.amber)
+        self.query_one(ChatPane).write_block(t)
+
+        if not result.hosts:
+            return
+        if self.busy:
+            self._sys_line("results shown; harness is busy — no analysis turn",
+                           warn=True)
+            return
+
+        self._run_turn(
+            shodan_mod.build_prompt(facet, result, country),
+            display=f"◈ /{facet.command}"
+                    + (f" {country}" if country else "")
+                    + ("" if facet is shodan_mod.RAW_FACET else f" · {query}"),
+        )
+
     # ---- /phish -----------------------------------------------------------
     def _cmd_phish(self, args) -> None:
         """/phish <host> — clone, serve, tunnel, harvest.
@@ -6559,6 +6770,16 @@ class ZimZillaApp(App):
             ("/team", "fan the task out across parallel agents", "team"),
             ("/osint", "open-source recon on a target", "osint"),
             ("/osint-tree", "re-show a finished recon as a result tree", "osint"),
+            ("/shodan-api-setup", "store your Shodan API key", "shodan-api-setup"),
+            ("/shodan-cam-search", "exposed IP cameras, then analyse the result",
+             "shodan-cam-search"),
+            ("/shodan-scada-search", "exposed ICS / SCADA", "shodan-scada-search"),
+            ("/shodan-db-search", "exposed databases", "shodan-db-search"),
+            ("/shodan-rdp-search", "exposed RDP and VNC", "shodan-rdp-search"),
+            ("/shodan-router-search", "exposed routers, firewalls and VPNs",
+             "shodan-router-search"),
+            ("/shodan-vuln-search", "hosts with a known CVE", "shodan-vuln-search"),
+            ("/shodan-search", "any Shodan query, then analyse", "shodan-search"),
             ("/phish", "clone a login page and harvest creds", "phish"),
             ("/bug-hunt", "recon, then one wave of 10 agents", "bug-hunt"),
             ("/ad", "Active Directory campaign — gated and interlocked", "ad"),

@@ -998,6 +998,14 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/team <task>` | fan the task out across parallel agents |
 | `/osint <kind> <target>` | open-source recon on a target |
 | `/osint-tree [kind\|path]` | re-show a finished recon as a result tree |
+| `/shodan-api-setup <key>` | store your Shodan API key |
+| `/shodan-cam-search [cc]` | exposed IP cameras — then the model analyses the result |
+| `/shodan-scada-search [cc]` | exposed ICS / SCADA — PLCs, RTUs, HMIs |
+| `/shodan-db-search [cc]` | exposed databases — MongoDB, Elasticsearch, Redis, SQL |
+| `/shodan-rdp-search [cc]` | exposed RDP and VNC services |
+| `/shodan-router-search [cc]` | exposed routers, firewalls and VPNs |
+| `/shodan-vuln-search <query>` | hosts Shodan has flagged with a known CVE |
+| `/shodan-search <query>` | run any Shodan query verbatim — then analyse |
 | `/phish <host>` | clone a login page, serve it, harvest creds into zim-pane |
 | `/zim-logfare` | Logfare (`:4001`) — under construction; the route you start on |
 | `/zim-tokenjuice` | Token Juice (`:4000`) — under construction |
@@ -1397,6 +1405,79 @@ environment; none are hard-coded.
 
 ---
 
+## Shodan
+
+[Shodan](https://shodan.io) is a public search engine for internet-connected
+devices. ZimZilla wires it into the loop as a set of named searches: you run a
+search, the results land in the transcript, and the working model then
+**analyses them and asks you what to do** — it does not touch anything.
+
+### Set the key
+
+```text
+/shodan-api-setup <key>          # writes ~/.zimzilla/shodan/source, mode 600
+/shodan-api-setup                # shows where the key comes from
+```
+
+A key is free at [account.shodan.io](https://account.shodan.io). The profile is
+the same `export SHODAN_API_KEY=…` shape every other credential in the project
+uses, so a shell that already exports `SHODAN_API_KEY` needs no setup at all.
+The key is never echoed back — the confirmation shows the file and the last four
+characters.
+
+### The searches
+
+| Command | What it queries |
+|---|---|
+| `/shodan-cam-search [cc]` | IP cameras showing a live screenshot (`tag:webcam has_screenshot:true`) |
+| `/shodan-scada-search [cc]` | ICS / SCADA (PLCs, RTUs, HMIs — `tag:ics`) |
+| `/shodan-db-search [cc]` | Exposed MongoDB, Elasticsearch, Redis, PostgreSQL, MySQL |
+| `/shodan-rdp-search [cc]` | Remote desktop — RDP (3389) and VNC (5900) |
+| `/shodan-router-search [cc]` | Network edge — routers, firewalls, VPNs |
+| `/shodan-vuln-search <query>` | Hosts Shodan flagged with a known CVE (`has_vuln:true …`) |
+| `/shodan-search <query>` | Any Shodan query, verbatim |
+
+A two-letter token is read as a country code (`/shodan-cam-search us` →
+`country:US`); any words after it are appended to the query verbatim
+(`/shodan-cam-search us product:Bosch`). `--limit N` caps the page (default 20,
+max 100). Results always filter out Shodan's own scanners and generic cloud
+tags, so a page of an ISP's honeypots does not bury the devices that matter.
+
+### What happens after a search
+
+The page of result rows renders into the transcript — `ip:port`, org, product,
+country, and any CVEs as a warning — and then a single turn hands that same
+evidence to the working model. The model is asked to:
+
+1. describe what the result set says about the population;
+2. group the hosts and name the few that stand out, with reasons;
+3. propose concrete, testable hypotheses (for example, *are these Bosch
+   cameras still on the factory password?*);
+4. return a short, ranked list of tasks — and ask you which one, if any, to
+   pursue.
+
+It is told, in the prompt, that **nothing on the list is in scope and nothing is
+to be run against those addresses**. The search itself is read-only: one GET to
+Shodan's `/shodan/host/search`. The turn's output is a set of questions to
+choose from, not a set of actions taken — the scope rules apply from there
+exactly as they do for any other target you declare.
+
+### What it deliberately does not do
+
+A Shodan host record carries the device's raw `data` banner, and that banner
+routinely contains credentials, session cookies and personal data scraped from
+the device. ZimZilla reads that field and throws it away: only the triaging
+metadata (address, org, product, version, country, tags, CVE IDs) is parsed into
+the result, so a Shodan search cannot become an accidental secret dump. There is
+no "show me the banners" switch.
+
+> **Authorised use only.** A Shodan row is a public index entry, not permission
+> to connect to the device. Use this against infrastructure you own, a consented
+> audit, or a declared engagement — and get authorisation before any task the
+> model proposes leaves the analysis stage.
+
+---
+
 ## Bug hunt
 
 `/bug-hunt <target>` runs a campaign against a target you declare. Recon goes
@@ -1760,6 +1841,7 @@ zimzilla/                     the package
   session.py                  save / load / list
   osint.py                    /osint kinds, playbooks, case dirs, report archive
   osint_tree.py               reads a finished report back as a result tree
+  shodan.py                   /shodan-* searches — the key, the query, the result
   hunt.py                     the campaign engine — wave loop, per-wave dirs, reports
   ad.py                       /ad — the AD doctrine: gate, tool probe, interlock
   crack.py                    /crack — hash identification, the bounded ladder, the estimate
@@ -1802,6 +1884,7 @@ python tests/test_agent_limits.py  # round caps, auto-continue, auto-compact, ov
 python tests/test_reasoning.py     # the reasoning display — forwarding, ordering, renderables
 python tests/test_boot.py          # the boot screen — the logo spin, frame geometry
 python tests/test_opencode.py      # /zim-opencode — the pool, rotation, retry policy, alias
+python tests/test_shodan.py        # /shodan-* — the key, the query, the result, the turn
 ```
 
 `test_agent_limits.py` stubs `_stream_once` and drives `run_turn` directly, so
