@@ -27,6 +27,7 @@ from textual.widgets import Input, Static
 
 from .. import ad as ad_mod
 from .. import aihubmix as ah_mod
+from .. import beatapi as bp_mod
 from .. import crack as crack_mod
 from .. import antseed as as_mod
 from .. import hunt as hunt_mod
@@ -1980,6 +1981,7 @@ class ZimZillaApp(App):
         "openrouter-api-setup", "zim-openrouter", "models",
         "unorouter-api-setup", "unorouter-models", "zim-unorouter",
         "aihubmix-api-setup", "aihubmix-models", "zim-aihubmix",
+        "beatapi-api-setup", "beatapi-models", "zim-beatapi",
         "zim-antseed", "antseed-models",
         "logfare-models",
         # Same again for LDXHub: the key and the catalogs are local reads and
@@ -2064,6 +2066,9 @@ class ZimZillaApp(App):
             "zim-aihubmix": lambda a: self._cmd_zim_gateway("aihubmix"),
             "aihubmix-api-setup": lambda a: self._cmd_gateway_key("aihubmix", a),
             "aihubmix-models": lambda a: self._cmd_models(["aihubmix"]),
+            "zim-beatapi": lambda a: self._cmd_zim_gateway("beatapi"),
+            "beatapi-api-setup": lambda a: self._cmd_gateway_key("beatapi", a),
+            "beatapi-models": lambda a: self._cmd_models(["beatapi"]),
             "antseed-models": lambda a: self._cmd_models(["antseed"]),
             "models": lambda a: self._cmd_models(a),
             "logfare-models": lambda a: self._cmd_logfare_models(a),
@@ -2101,6 +2106,7 @@ class ZimZillaApp(App):
             ("/zim-openrouter", "switch upstream to OpenRouter   (hosted)"),
             ("/zim-unorouter", "switch upstream to UnoRouter    (hosted, free models)"),
             ("/zim-aihubmix", "switch upstream to AIHubMix     (hosted, free models)"),
+            ("/zim-beatapi", "switch upstream to BeatAPI      (hosted, free models)"),
             ("/zim-antseed", "switch upstream to AntSeed (local buyer, free peers)"),
             ("/zim-source", "show upstream sources and their status"),
             ("/tokenharbour-api-setup <key>", "store your TokenHarbour API key"),
@@ -2110,6 +2116,8 @@ class ZimZillaApp(App):
             ("/unorouter-models", "the live free catalog — what is free and usable"),
             ("/aihubmix-api-setup [key]", "store your AIHubMix API key (optional)"),
             ("/aihubmix-models", "the live free catalog — what is free and usable"),
+            ("/beatapi-api-setup [key]", "store your BeatAPI API key (optional)"),
+            ("/beatapi-models", "the live free catalog — what is free and usable"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin"),
             ("/models", "free models of an upstream — /models [source]"),
             ("/logfare-models", "fetch the live catalog; show what is up"),
@@ -2265,6 +2273,10 @@ class ZimZillaApp(App):
         # others: the fetch is the slow part and this is a render.
         ah_catalog = (ah_mod.cached_models()
                       if active == "aihubmix" else None)
+        # BeatAPI's is fetched too, and is read once here for the same reason as
+        # the others: the fetch is the slow part and this is a render.
+        bp_catalog = (bp_mod.cached_models()
+                      if active == "beatapi" else None)
         # Logfare's is fetched too, and carries per-model health. Read once for
         # the same reason: the fetch is the slow part and this is a render.
         lf_catalog = sources_mod.catalog_for(self.cfg.base_url)
@@ -2276,7 +2288,8 @@ class ZimZillaApp(App):
             if active:
                 src = sources_mod.discover().get(active)
                 hosted = {"tokenharbour": "TokenHarbour", "openrouter": "OpenRouter",
-                          "unorouter": "UnoRouter", "antseed": "AntSeed"}
+                          "unorouter": "UnoRouter", "aihubmix": "AIHubMix",
+                          "beatapi": "BeatAPI", "antseed": "AntSeed"}
                 label = src.label if src else hosted.get(active, active)
                 t.append("  source: ", style=p.dim)
                 t.append(label, style=p.dim)
@@ -2286,7 +2299,9 @@ class ZimZillaApp(App):
             # changes; the operator almost always wants the free ones, so they
             # lead — with the model in use never hidden, whatever it costs.
             order = self._model_display_order(
-                models, th_catalog or as_catalog or uno_catalog or ah_catalog)
+                models,
+                th_catalog or as_catalog or uno_catalog or ah_catalog
+                or bp_catalog)
             for m in order:
                 mark = "◉" if m == self.cfg.model else "○"
                 style = f"bold {p.accent}" if m == self.cfg.model else p.primary
@@ -2301,7 +2316,7 @@ class ZimZillaApp(App):
                             break
                 t.append(f"  {mark} {shown:<26}", style=style)
                 note = self._model_note(m, th_catalog, lf_catalog, as_catalog,
-                                        uno_catalog)
+                                        uno_catalog, bp_catalog)
                 t.append(note + "\n", style=p.dim)
             t.append("\n  usage: /model <name>\n", style=p.dim)
             # Say how current the list is, not merely that one exists. A cache
@@ -2338,6 +2353,13 @@ class ZimZillaApp(App):
                     "listed first. Free means priced 0/0, which is\n"
                     "  narrower than the -free suffix suggests\n",
                     style=p.dim)
+            elif active == "beatapi":
+                t.append(
+                    f"  catalog {_catalog_clause(bp_mod.catalog_age(), bp_mod.CACHE_TTL)}"
+                    " — /beatapi-models shows the free\nones; free models are "
+                    "listed first. The free ids are\n"
+                    "  limited-time and rate limited — they move\n",
+                    style=p.dim)
             self.query_one(ChatPane).write_block(t)
             return
         name = args[0]
@@ -2372,7 +2394,7 @@ class ZimZillaApp(App):
         # It is also the source the operator is most likely to be on, so the
         # wrong answer was the common case rather than the corner.
         if active in ("tokenharbour", "openrouter", "unorouter", "antseed",
-                      "logfare", "aihubmix") and (
+                      "logfare", "aihubmix", "beatapi") and (
                 models is None or check_name not in models):
             fetched = None
             if active == "tokenharbour":
@@ -2409,6 +2431,16 @@ class ZimZillaApp(App):
                     fetched, _ = ah_mod.fetch_models(creds[0] if creds else "")
                 else:
                     fetched = list(ah_catalog)
+            elif active == "beatapi":
+                # Keyless like the others: /v1/text/models answers with no
+                # credential. Fetched rather than read from the cache when the
+                # cache is cold or expired, so a live model is not refused
+                # against a stale list.
+                if bp_catalog is None:
+                    creds = bp_mod.load_credentials()
+                    fetched, _ = bp_mod.fetch_models(creds[0] if creds else "")
+                else:
+                    fetched = list(bp_catalog)
             elif active == "logfare":
                 if lf_catalog is None:
                     # The status API is public — no key, so this works before
@@ -2425,6 +2457,8 @@ class ZimZillaApp(App):
                     uno_catalog = fetched
                 elif active == "aihubmix":
                     ah_catalog = fetched
+                elif active == "beatapi":
+                    bp_catalog = fetched
                 elif active == "logfare":
                     lf_catalog = fetched
                 models = tuple(m.id for m in fetched)
@@ -2479,7 +2513,7 @@ class ZimZillaApp(App):
         return head + frees + rest
 
     def _model_note(self, name: str, catalog, lf_catalog=None,
-                    as_catalog=None, uno_catalog=None) -> str:
+                    as_catalog=None, uno_catalog=None, bp_catalog=None) -> str:
         """The price/context note beside a model in /model.
 
         TokenHarbour's catalog is authoritative for its own models — it is the
@@ -2508,6 +2542,8 @@ class ZimZillaApp(App):
             live = as_mod.price_for(name, as_catalog)
         if live is None:
             live = uno_mod.price_for(name, uno_catalog)
+        if live is None:
+            live = bp_mod.price_for(name, bp_catalog)
         if live is not None:
             pin, pout = live
             note = "free" if (pin == 0.0 and pout == 0.0) \
@@ -2771,6 +2807,7 @@ class ZimZillaApp(App):
                 ("openrouter", or_mod, "OpenRouter", "/openrouter-api-setup"),
                 ("unorouter", uno_mod, "UnoRouter", "/unorouter-api-setup"),
                 ("aihubmix", ah_mod, "AIHubMix", "/aihubmix-api-setup"),
+                ("beatapi", bp_mod, "BeatAPI", "/beatapi-api-setup"),
             ):
                 creds = _mod.load_credentials()
                 mark = "◉" if active == _kind else "○"
@@ -2810,7 +2847,7 @@ class ZimZillaApp(App):
                          style=p.accent)
             t.append("\n  switch with  /zim-tokenharbour,  /zim-openrouter,\n"
                      "                 /zim-unorouter,  /zim-aihubmix,\n"
-                     "                 or  /zim-antseed\n",
+                     "                 /zim-beatapi,  or  /zim-antseed\n",
                      style=p.dim)
             # Any route that is present but parked is named once here, so the
             # list above and this hint agree about what is actually reachable.
@@ -3166,6 +3203,8 @@ class ZimZillaApp(App):
             return uno_mod, "UnoRouter"
         if kind == "aihubmix":
             return ah_mod, "AIHubMix"
+        if kind == "beatapi":
+            return bp_mod, "BeatAPI"
         if kind == "antseed":
             return as_mod, "AntSeed"
         return None
@@ -3218,7 +3257,7 @@ class ZimZillaApp(App):
                 return
             t.append("  set it with  ", style=p.dim)
             t.append(f"/{kind}-api-setup <key>\n", style=f"bold {p.primary}")
-            if kind in ("openrouter", "unorouter", "aihubmix"):
+            if kind in ("openrouter", "unorouter", "aihubmix", "beatapi"):
                 # Worth saying plainly: this catalog is public, so the free list
                 # and a model choice work before any key exists. The key is only
                 # needed to actually send a message.
@@ -3457,7 +3496,7 @@ class ZimZillaApp(App):
                 return
 
         known = {"logfare", "tokenjuice", "tokenharbour", "openrouter",
-                 "unorouter", "antseed", "aihubmix"}
+                 "unorouter", "antseed", "aihubmix", "beatapi"}
         if key not in known:
             self._sys_line(
                 f"unknown upstream: {key} — try one of "
@@ -3520,6 +3559,12 @@ class ZimZillaApp(App):
             # when there is one so the listing matches this account.
             creds = ah_mod.load_credentials()
             return ah_mod.usable_free_models(creds[0] if creds else "")
+        if kind == "beatapi":
+            # Keyless: /v1/text/models is public, so the free list works before
+            # /beatapi-api-setup has run. The key is sent when there is one so
+            # the listing matches this account's reachable families.
+            creds = bp_mod.load_credentials()
+            return bp_mod.usable_free_models(creds[0] if creds else "")
         if kind == "tokenharbour":
             creds = th_mod.load_credentials()
             if creds is None:
@@ -3548,7 +3593,7 @@ class ZimZillaApp(App):
             self._sys_line(f"{kind}: {err}", warn=True)
             return
         label = {"openrouter": "OPENROUTER", "unorouter": "UNOROUTER",
-                 "aihubmix": "AIHUBMIX",
+                 "aihubmix": "AIHUBMIX", "beatapi": "BEATAPI",
                  "tokenharbour": "TOKENHARBOUR", "logfare": "LOGFARE",
                  "antseed": "ANTSEED"}.get(kind, kind.upper())
         t = Text()
@@ -3567,6 +3612,11 @@ class ZimZillaApp(App):
                     "listed — image,\n  speech, OCR and embedding models are "
                     "filtered out; tool support is\n  NOT a filter here, "
                     "because AIHubMix under-reports it)\n", style=p.dim)
+            if kind == "beatapi":
+                t.append(
+                    "  (the catalog is live and the free tier is a limited-time\n"
+                    "  offer — an empty list means none are on right now, not "
+                    "that the\n  source is broken)\n", style=p.dim)
         else:
             for m in models:
                 mark = "◉" if m.id == self.cfg.model else "○"
@@ -3654,6 +3704,18 @@ class ZimZillaApp(App):
                 "  tool support is not a filter: AIHubMix leaves tool_call "
                 "null on models\n  that do call tools, so filtering on it "
                 "would hide working ones\n", style=p.dim)
+        if kind == "beatapi":
+            # Two things a reader would otherwise get wrong, both stated by
+            # BeatAPI's own docs rather than inferred here.
+            t.append(
+                "  free = a -free id in the catalog's free family · the catalog "
+                "is live,\n  so the set moves; the ids are rate limited and "
+                "limited-time\n", style=p.dim)
+            t.append(
+                "  tool support is not a filter: free entries publish no "
+                "capabilities, so\n  the flag beside a free model is borrowed "
+                "from its paid sibling — advisory,\n  and used only to order "
+                "the list, never to hide a model\n", style=p.dim)
         self.query_one(ChatPane).write_block(t)
         self._refresh_model_choices()
 
@@ -6458,6 +6520,7 @@ class ZimZillaApp(App):
             ("/zim-openrouter", "switch upstream to OpenRouter", "zim-openrouter"),
             ("/zim-unorouter", "switch upstream to UnoRouter", "zim-unorouter"),
             ("/zim-aihubmix", "switch upstream to AIHubMix", "zim-aihubmix"),
+            ("/zim-beatapi", "switch upstream to BeatAPI", "zim-beatapi"),
             ("/zim-antseed", "switch upstream to AntSeed", "zim-antseed"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin",
              "antseed-models"),
@@ -6475,6 +6538,10 @@ class ZimZillaApp(App):
              "aihubmix-api-setup"),
             ("/aihubmix-models", "the live free catalog — what is free and usable",
              "aihubmix-models"),
+            ("/beatapi-api-setup", "store your BeatAPI API key",
+             "beatapi-api-setup"),
+            ("/beatapi-models", "the live free catalog — what is free and usable",
+             "beatapi-models"),
             ("/models", "free models of an upstream — /models [source]", "models"),
             ("/logfare-models", "fetch the live catalog; show what is up",
              "logfare-models"),

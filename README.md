@@ -131,8 +131,8 @@ profile is never overwritten.
 The shared key is exactly that, shared, and Logfare caps it at three concurrent
 requests for every install using it. That is why **Logfare is reported as under
 construction**: it is where a session starts, not a route to switch to. Switching
-means `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`
-or `/zim-antseed`, each with your own credential or none at all.
+means `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`,
+`/zim-beatapi` or `/zim-antseed`, each with your own credential or none at all.
 
 To configure setup yourself later, or to install somewhere other than the
 default:
@@ -599,7 +599,7 @@ or a colour diff of the change, and three keys:
 
 ZimZilla speaks the Anthropic Messages protocol to whatever `ANTHROPIC_BASE_URL`
 points at, so it can run against a local LiteLLM proxy, a hosted gateway or a
-peer-to-peer marketplace without any code caring which. Six sources are wired
+peer-to-peer marketplace without any code caring which. Eight sources are wired
 up:
 
 | Source | Endpoint | Key | How it starts |
@@ -609,11 +609,13 @@ up:
 | **TokenHarbour** | `tokenharbor.ai` | yours | hosted — nothing to start |
 | **OpenRouter** | `openrouter.ai` | yours | hosted — nothing to start |
 | **UnoRouter** | `api.unorouter.com` | yours | hosted — nothing to start |
+| **AIHubMix** | `aihubmix.com` | yours | hosted — nothing to start |
+| **BeatAPI** | `direct.beatapi.io` | yours | hosted — nothing to start |
 | **AntSeed** | `:8377` | **none** | `antseed buyer start` — a local buyer on a P2P network |
 
 Switch with `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`,
-`/zim-aihubmix` or `/zim-antseed`; the choice is remembered, so the next launch
-comes back to the one that was working.
+`/zim-aihubmix`, `/zim-beatapi` or `/zim-antseed`; the choice is remembered, so
+the next launch comes back to the one that was working.
 
 Logfare and Token Juice are listed by `/zim-source` but **under construction**,
 and cannot be switched to. Logfare is the route a session starts on — the
@@ -792,6 +794,61 @@ hour it was measured, and `deepseek-v4.1-flash:free` is gone now. The list falls
 through to the next name and then to the catalog's own order, so a vanished entry
 costs one lookup rather than a broken switch.
 
+### BeatAPI
+
+BeatAPI (`beatapi.io`) fronts text, image and video models behind one key. The
+text half speaks the **Anthropic Messages protocol natively**, so nothing is
+translated on the way through. It is remote and needs a key of your own:
+
+```
+/beatapi-api-setup sk-yourkeyhere
+```
+
+That writes `~/.zimzilla/beatapi/source` (mode 600), the same profile format as
+every other source. Then:
+
+```
+/zim-beatapi               # switch, and fetch the live free list
+/beatapi-models            # the free catalog again, any time
+/models beatapi            # the same set, through the generic command
+/model glm-5.3-free        # switch to one
+```
+
+**Two hosts, and the difference matters.** Turns go to
+`https://direct.beatapi.io`, which is not behind Cloudflare's 100-second limit —
+so a long non-streaming reply is not cut off. The model catalog is served from
+the *other* origin, `https://api.beatapi.io`, which is also the documented
+fallback for turns. ZimZilla uses each for what it is good for, and does not let
+either one be "fixed" into breaking the other.
+
+**The catalog is public**, so `/models beatapi` works *before* you have a key —
+the key is only needed to send a message.
+
+**Free here is a live set, not a fixed list.** BeatAPI's free models are `-free`
+ids in a `free` family, and they turn over: the gateway calls them a limited-time
+offer, rate limited per account, and they can be withdrawn without notice.
+`/beatapi-models` and `/zim-beatapi` fetch the current set, so the list is what
+is free *now* rather than what was free when this was written. With no preference
+saved, `/zim-beatapi` shows that free list rather than picking a paid model for
+you.
+
+Free entries publish no price, no context window and no capabilities, which is
+why the list is built the way it is:
+
+- **`endpoints` is not a filter.** Every free entry reports `openai` as its
+  native format, and the gateway documents that field as a line's *native*
+  formats, "not the full list of formats you can call" — so filtering on it
+  would hide every free model. The tools hint shown beside a free model is
+  borrowed from its paid sibling and is used to *order* the list, never to hide a
+  model from it.
+- **`priced` means a price was actually read.** A free entry that publishes no
+  price must not read as a `0/0` price, or every unpriced model in the catalog
+  would be offered as free.
+
+Five free text models were on offer when this was written — `glm-5.3-free`,
+`glm-5.3-flash-free`, `gemini-3.8-flash-free`, `deepseek-v4.1-flash-free` and
+`deepseek-v4-flash-0731-free`. Treat that as a dated snapshot: the set moves.
+
 ### AntSeed
 
 AntSeed is not a gateway. It is a peer-to-peer marketplace: independent sellers
@@ -952,9 +1009,15 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/zim-unorouter` | switch upstream to UnoRouter — hosted, free models, native Messages |
 | `/unorouter-api-setup <key>` | store your UnoRouter API key |
 | `/unorouter-models` | the live free catalog — free, text-output and tools-capable, most upstream channels first |
+| `/zim-aihubmix` | switch upstream to AIHubMix — hosted, free models, native Messages |
+| `/aihubmix-api-setup <key>` | store your AIHubMix API key |
+| `/aihubmix-models` | the live free catalog — what is free and usable |
+| `/zim-beatapi` | switch upstream to BeatAPI — hosted, free models, native Messages |
+| `/beatapi-api-setup <key>` | store your BeatAPI API key |
+| `/beatapi-models` | the live free catalog — what is free and usable |
 | `/zim-antseed` | switch upstream to AntSeed — the local buyer, free peers, no key |
 | `/antseed-models` | list AntSeed's free models, each with the peer to pin |
-| `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `antseed` |
+| `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `aihubmix`, `beatapi`, `antseed` |
 | `/zim-source` | show every upstream and its status |
 | `/reverse-engineer <file>` | map an artifact (`.apk`, `.zip`, `.exe`, `.sh`, binary), then ask what you want changed |
 | `/reverse-engineer <file> --map` | map it only — no model turn, nothing sent |

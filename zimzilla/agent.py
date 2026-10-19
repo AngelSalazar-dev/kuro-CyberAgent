@@ -1277,8 +1277,8 @@ class Agent:
                     "rate limit reached for this key's allowance"
                     f"{suffix} — this is a time window, not a momentary burst, "
                     "so retrying now will not clear it. Switch source with "
-                    "/zim-openrouter, /zim-unorouter or /zim-aihubmix, or wait "
-                    "for the reset."
+                    "/zim-openrouter, /zim-unorouter, /zim-aihubmix or "
+                    "/zim-beatapi, or wait for the reset."
                 )
             return (
                 "rate limited (429) — this model's free tier is throttled. "

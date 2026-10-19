@@ -12,9 +12,10 @@ shipped key is shared and rate-capped. Logfare is still where a session starts �
 the shipped profile is what lets a fresh clone run with no signup — so the park
 blocks a *switch to* it, not the default.
 
-The other upstreams (TokenHarbour, OpenRouter, UnoRouter, AIHubMix, AntSeed) are
-remote or operator-started, and live in their own modules; this one is the local
-proxy plumbing and the selection record (``~/.zimzilla/current-source``).
+The other upstreams (TokenHarbour, OpenRouter, UnoRouter, AIHubMix, BeatAPI,
+AntSeed) are remote or operator-started, and live in their own modules; this one
+is the local proxy plumbing and the selection record
+(``~/.zimzilla/current-source``).
 
 Nothing here echoes a key. Credentials live in each source's profile file, mode
 600, except Logfare's shared one in ``packaging/logfare/source``.
@@ -181,6 +182,10 @@ def models_for(base_url: str) -> tuple[str, ...] | None:
         from . import aihubmix as ah_mod
         cached = ah_mod.cached_ids()
         return tuple(cached) if cached else None
+    if key == "beatapi":
+        from . import beatapi as bp_mod
+        cached = bp_mod.cached_ids()
+        return tuple(cached) if cached else None
     return MODELS_BY_KEY.get(key) or None
 
 
@@ -207,6 +212,9 @@ def catalog_models(key: str) -> list | None:
     if key == "aihubmix":
         from . import aihubmix as ah_mod
         return ah_mod.cached_models()
+    if key == "beatapi":
+        from . import beatapi as bp_mod
+        return bp_mod.cached_models()
     return None
 
 
@@ -401,7 +409,8 @@ def _state_file() -> Path:
 #: `discover()`, which only knows the two LiteLLM proxies — its buyer is started
 #: and stopped by the operator, so requiring it to be up at selection time would
 #: lose the choice every time the proxy was down.
-BUILTIN_KEYS = frozenset({"tokenharbour", "openrouter", "unorouter", "antseed", "aihubmix"})
+BUILTIN_KEYS = frozenset({"tokenharbour", "openrouter", "unorouter", "antseed",
+                          "aihubmix", "beatapi"})
 
 
 def current_key() -> str | None:
@@ -451,6 +460,7 @@ def active_key(base_url: str) -> str | None:
     # module-level import would make them import each other.
     from . import aihubmix as ah_mod
     from . import antseed as as_mod
+    from . import beatapi as bp_mod
     from . import openrouter as or_mod
     from . import tokenharbour as th_mod
     from . import unorouter as uno_mod
@@ -462,6 +472,8 @@ def active_key(base_url: str) -> str | None:
         return "unorouter"
     if ah_mod.is_aihubmix(base_url):
         return "aihubmix"
+    if bp_mod.is_beatapi(base_url):
+        return "beatapi"
     # Checked before the port match, and by port rather than by name: the buyer
     # hands out a plain http://localhost:8377 with no "antseed" in it, and the
     # regex below would otherwise find port 8377, miss it in source_for_port()

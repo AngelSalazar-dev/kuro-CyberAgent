@@ -11,6 +11,7 @@ from pathlib import Path
 from . import __version__
 from . import aihubmix as ah_mod
 from . import antseed as as_mod
+from . import beatapi as bp_mod
 from . import logfare as lf_mod
 from . import openrouter as or_mod
 from . import sources as sources_mod
@@ -250,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     _remembered = sources_mod.current_key()
     for _key, _mod in (("tokenharbour", th_mod), ("openrouter", or_mod),
                        ("unorouter", uno_mod), ("antseed", as_mod),
-                       ("aihubmix", ah_mod)):
+                       ("aihubmix", ah_mod), ("beatapi", bp_mod)):
         if _remembered != _key:
             continue
         if _mod.applies_to_default_endpoint(cfg.base_url) or \
