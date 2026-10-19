@@ -882,7 +882,8 @@ class Agent:
                         # not exist here — retry the round with the shorter
                         # prompt.
                         continue
-                yield {"type": "error", "message": self._friendly_error(e)}
+                yield {"type": "error",
+                       "message": self._friendly_error(e, self.cfg.base_url)}
                 await self._pop_last_user_if_dangling()
                 break
 
@@ -1398,7 +1399,7 @@ class Agent:
         return "the configured timeout"
 
     @staticmethod
-    def _friendly_error(e: Exception) -> str:
+    def _friendly_error(e: Exception, base_url: str | None = None) -> str:
         import anthropic
 
         if isinstance(e, anthropic.AuthenticationError):
@@ -1424,12 +1425,33 @@ class Agent:
             detail = _rate_limit_detail(e)
             suffix = f" ({detail})" if detail else ""
             if _rate_limit_is_a_window(e):
+                # Name only the sources this machine can actually switch to.
+                # The fixed list this replaces named four hosted gateways
+                # unconditionally, so on a box with none of them configured it
+                # sent the operator from one error into another — and it never
+                # mentioned the local proxies, which are the ones most likely
+                # to be set up here. `switchable` answers the question the
+                # sentence is really asking: where can this session go next?
+                try:
+                    from . import sources as sources_mod
+                    here = (sources_mod.active_key(base_url)
+                            if base_url else None)
+                    options = sources_mod.switchable(exclude=here)
+                except Exception:  # noqa: BLE001
+                    # This is already the failure path. Discovery reads the
+                    # filesystem, and an exception escaping here would replace
+                    # the operator's real 429 with a traceback about the hint.
+                    options = []
+                if options:
+                    cmds = ", ".join(f"/zim-{k}" for k in options[:4])
+                    tail = f"Switch source with {cmds}, or wait for the reset."
+                else:
+                    tail = ("Set up another source with /zim-source, or wait "
+                            "for the reset.")
                 return (
                     "rate limit reached for this key's allowance"
                     f"{suffix} — this is a time window, not a momentary burst, "
-                    "so retrying now will not clear it. Switch source with "
-                    "/zim-openrouter, /zim-unorouter, /zim-aihubmix or "
-                    "/zim-beatapi, or wait for the reset."
+                    f"so retrying now will not clear it. {tail}"
                 )
             return (
                 "rate limited (429) — this model's free tier is throttled. "
@@ -1736,7 +1758,7 @@ class Agent:
                     messages=[{"role": "user", "content": prompt}],
                 )
         except Exception as e:  # noqa: BLE001
-            return False, self._friendly_error(e)
+            return False, self._friendly_error(e, self.cfg.base_url)
 
         summary = "".join(
             b.text for b in msg.content if getattr(b, "type", "") == "text"

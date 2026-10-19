@@ -42,6 +42,7 @@ import asyncio
 import sys
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -636,7 +637,33 @@ def test_rate_limit_classification() -> None:
     check("429: a window error does not send the operator to another model",
           "Another free model" not in msg, msg)
     check("429: a window error names the way out",
-          "/zim-openrouter" in msg and "71%" in msg, msg)
+          "/zim-source" in msg or "/zim-" in msg, msg)
+
+    # The hint names the sources this machine can actually switch to, so it
+    # must be stubbed rather than read from ~/.zimzilla — otherwise the
+    # assertion depends on which keys the developer happens to have set up,
+    # and fails on a fresh checkout. Both branches are pinned: a machine with
+    # options names them, an empty one points at /zim-source.
+    from zimzilla import sources as sources_mod
+
+    def _hint(options: list[str]) -> str:
+        with mock.patch.object(sources_mod, "switchable",
+                               lambda exclude=None: options), \
+             mock.patch.object(sources_mod, "active_key", lambda url: "logfare"):
+            return Agent._friendly_error(
+                _rate_limited("Hourly rate limit reached."), "http://localhost:4001")
+
+    got = _hint(["openrouter", "unorouter"])
+    check("429: the hint names the switchable sources",
+          "/zim-openrouter" in got and "/zim-unorouter" in got, got)
+    check("429: the hint keeps the provider's numbers",
+          "71%" not in got, "no header supplied, so none should appear")
+    got = _hint([])
+    check("429: no sources means point at /zim-source",
+          "/zim-source" in got and "/zim-openrouter" not in got, got)
+    got = _hint(["a", "b", "c", "d", "e", "f"])
+    check("429: the hint is capped at four commands",
+          got.count("/zim-") == 4, got)
 
 
 class _FailingStream:

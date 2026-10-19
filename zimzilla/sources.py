@@ -496,6 +496,75 @@ def source_for_port(port: int) -> str | None:
     return None
 
 
+def switchable(exclude: str | None = None) -> list[str]:
+    """Source keys this machine could switch to right now, best first.
+
+    "Right now" is meant literally, because the caller is a *failure* message:
+    telling an operator to run ``/zim-openrouter`` when no OpenRouter key is
+    set moves them from one error to another. So a key is only offered when it
+    would actually work —
+
+    * a local proxy is offered when ``discover()`` finds its profile, service
+      and config (it can be started on demand);
+    * a hosted gateway is offered when it has a credential;
+    * AntSeed is offered when a buyer is answering, since it needs no key but
+      does need the proxy up;
+    * anything parked is never offered.
+
+    ``exclude`` drops the source that just refused the request, so a message
+    never suggests the thing that just failed. Ordered by preference rather
+    than alphabetically: the hosted gateways are already running and answer
+    immediately, while a local proxy has to be started first.
+    """
+    found = discover()
+    out: list[str] = []
+    for key in ("openrouter", "unorouter", "aihubmix", "beatapi",
+                "tokenharbour", "infronai", "iteracompute", "antseed",
+                "logfare"):
+        if key == exclude or key in UNDER_CONSTRUCTION:
+            continue
+        if key in found:
+            out.append(key)
+            continue
+        try:
+            if key == "antseed":
+                from . import antseed as as_mod
+                if as_mod.reachable():
+                    out.append(key)
+                continue
+            if key == "logfare":
+                # Always available: the shipped profile makes it work on a
+                # fresh clone, and its own 429 is why `exclude` exists.
+                out.append(key)
+                continue
+            if key in BUILTIN_KEYS:
+                mod = _gateway_module(key)
+                if mod is not None and mod.load_credentials() is not None:
+                    out.append(key)
+        except Exception:  # noqa: BLE001
+            # A source that cannot even be asked is not one to recommend.
+            continue
+    return out
+
+
+def _gateway_module(key: str):
+    """The module that owns a hosted gateway's credential, or ``None``.
+
+    Imported locally for the same reason ``active_key`` does it: these modules
+    are imported by ``sources``' callers, and a module-level import would make
+    them import each other.
+    """
+    from . import aihubmix as ah_mod
+    from . import beatapi as bp_mod
+    from . import openrouter as or_mod
+    from . import tokenharbour as th_mod
+    from . import unorouter as uno_mod
+    return {
+        "openrouter": or_mod, "unorouter": uno_mod, "aihubmix": ah_mod,
+        "beatapi": bp_mod, "tokenharbour": th_mod,
+    }.get(key)
+
+
 #: Memo for ``_upstream_id``: (config path, mtime) -> upstream model id. The
 #: config is read on the render path, so it is parsed once per change rather
 #: than once per frame.

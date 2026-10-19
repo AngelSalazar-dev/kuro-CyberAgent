@@ -22,6 +22,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from zimzilla import sources  # noqa: E402
+# Imported for the ``switchable`` suite: ``sources`` reaches for AntSeed inside
+# the function rather than at module level (to avoid a circular import), so the
+# module has to be patched where it actually lives.
+from zimzilla import antseed  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -303,6 +307,109 @@ def test_logfare_offers_every_chat_model() -> None:
           'model_name: "*"' in config, "no wildcard in litellm-config.yaml")
 
 
+def test_switchable_names_only_what_would_work() -> None:
+    """``switchable`` answers "where can this session go next?" honestly.
+
+    It exists because the 429 message used to hardcode four hosted gateways.
+    On a box with none of them configured, that sentence moved the operator
+    from one error to the next; on this box it never mentioned the local
+    proxies, which were the sources actually set up. The caller is a *failure*
+    message, so a wrong answer is worse than a short one.
+
+    Fully stubbed: ``discover`` and the gateway modules are replaced, so this
+    asserts the policy without reading the real ~/.zimzilla or the network.
+    """
+    class _Cred:
+        """Stands in for a gateway module; ``key`` is what it holds, if any."""
+
+        def __init__(self, key: str | None):
+            self.key = key
+
+        def load_credentials(self):
+            return None if self.key is None else (self.key, "m", "test")
+
+    def run(found: dict, creds: dict, exclude: str | None = None) -> list[str]:
+        """``switchable`` minus logfare, which is asserted separately.
+
+        Logfare ships a profile, so it is offered on every machine and would
+        otherwise appear in every expectation below. Dropping it here keeps
+        each check about the rule it names.
+        """
+        def fake_module(name: str):
+            return _Cred(creds.get(name))
+        with mock.patch.object(sources, "discover", lambda: found), \
+             mock.patch.object(sources, "_gateway_module", fake_module), \
+             mock.patch.object(antseed, "reachable", lambda: False):
+            return [k for k in sources.switchable(exclude=exclude)
+                    if k != "logfare"]
+
+    # Nothing configured anywhere: the message must not invent a source. The
+    # empty list is what makes _friendly_error fall back to /zim-source.
+    check("switchable: an empty machine offers nothing",
+          run({}, {}) == [], str(run({}, {})))
+
+    # A gateway with no key is not offered — this is the bug the function was
+    # written for.
+    check("switchable: a gateway with no credential is omitted",
+          run({}, {"openrouter": None}) == [], str(run({}, {"openrouter": None})))
+    check("switchable: a gateway with a credential is offered",
+          run({}, {"openrouter": "sk-x"}) == ["openrouter"],
+          str(run({}, {"openrouter": "sk-x"})))
+
+    # The source that just refused must never be recommended again.
+    check("switchable: exclude drops the failing source",
+          run({}, {"openrouter": "sk-x", "unorouter": "u"}, exclude="openrouter")
+          == ["unorouter"],
+          str(run({}, {"openrouter": "sk-x", "unorouter": "u"},
+                  exclude="openrouter")))
+
+    # A discovered local proxy is offered without asking any module: its
+    # files are the proof it can be started.
+    fake = sources.Source(
+        key="infronai", label="InfronAI", port=4003,
+        profile=Path("/nope"), service=Path("/nope"), config=Path("/nope"),
+        model="m", root=Path("/nope"), models=(), under_construction=None)
+    check("switchable: a discovered local proxy is offered",
+          "infronai" in run({"infronai": fake}, {}),
+          str(run({"infronai": fake}, {})))
+
+    # Parked sources are never offered, discovered or not — /zim-tokenjuice
+    # refuses them, so naming it would send the operator into a refusal.
+    # Parked *openrouter* here rather than using tokenjuice: tokenjuice is
+    # already absent from the preference list, so offering it proves nothing
+    # about the guard. This parks a key the loop does reach.
+    with mock.patch.dict(sources.UNDER_CONSTRUCTION, {"openrouter": "test"}):
+        check("switchable: a parked source is never offered",
+              "openrouter" not in run({}, {"openrouter": "sk-x"}),
+              str(run({}, {"openrouter": "sk-x"})))
+
+    # A source whose module raises is dropped, not propagated: this runs
+    # inside an error handler, and a raise here would replace the real 429
+    # with a traceback about the hint.
+    class _Boom:
+        def load_credentials(self):
+            raise RuntimeError("unreadable profile")
+
+    with mock.patch.object(sources, "discover", lambda: {}), \
+         mock.patch.object(sources, "_gateway_module", lambda n: _Boom()):
+        try:
+            got = sources.switchable()
+            ok = "openrouter" not in got
+        except Exception as exc:  # noqa: BLE001
+            ok, got = False, f"raised {exc!r}"
+    check("switchable: a gateway that raises is dropped", ok, str(got))
+
+    # Logfare always answers: its profile ships, so it is a real option on a
+    # fresh clone even when nothing else is set up. Asserted on the raw call,
+    # since ``run`` deliberately strips it.
+    with mock.patch.object(sources, "discover", lambda: {}), \
+         mock.patch.object(sources, "_gateway_module", lambda n: _Cred(None)), \
+         mock.patch.object(antseed, "reachable", lambda: False):
+        raw = sources.switchable()
+    check("switchable: logfare is offered on an empty machine",
+          raw == ["logfare"], str(raw))
+
+
 def main() -> int:
     test_tokenjuice_prefers_installed_route()
     test_tokenjuice_falls_back_to_home_layout()
@@ -312,6 +419,7 @@ def main() -> int:
     test_models_for_reads_the_remote_catalogs()
     test_logfare_is_a_switchable_route()
     test_logfare_offers_every_chat_model()
+    test_switchable_names_only_what_would_work()
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")
     return 1 if failed else 0
