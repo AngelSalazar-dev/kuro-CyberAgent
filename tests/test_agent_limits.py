@@ -723,6 +723,206 @@ async def test_window_429_is_not_retried(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# A model that refuses a sampling parameter
+# ---------------------------------------------------------------------------
+
+def _bad_request(message: str):
+    """A 400 shaped the way the SDK builds one."""
+    import httpx2
+
+    req = httpx2.Request("POST", "http://127.0.0.1:4001/v1/messages")
+    resp = httpx2.Response(
+        400, request=req,
+        json={"type": "error",
+              "error": {"type": "invalid_request_error", "message": message}})
+    return anthropic.BadRequestError(
+        message, response=resp,
+        body={"type": "error",
+              "error": {"type": "invalid_request_error", "message": message}})
+
+
+class _ParamRejectingStream:
+    """Rejects the request while ``temperature`` is in it, then succeeds.
+
+    This is claude-haiku-5-5's actual behaviour on Logfare, measured
+    2026-10-19: the identical request answers 400 with `temperature` present
+    and 200 without it. The fake reads the request the way the real endpoint
+    does, so a fix that merely retries the same body fails here — and it
+    records every body, so the test can prove the parameter was dropped rather
+    than assume it.
+    """
+
+    def __init__(self, reject: str = "temperature"):
+        self.reject = reject
+        self.bodies: list[dict] = []
+        self.finals = 0
+
+    def stream(self, **kw):
+        extra = dict(kw.get("extra_body") or {})
+        self.bodies.append(extra)
+        return _ParamAwareCtx(self)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+    async def get_final_message(self):
+        self.finals += 1
+        return _done("Done.")
+
+
+class _ParamAwareCtx:
+    def __init__(self, owner: _ParamRejectingStream):
+        self.owner = owner
+
+    async def __aenter__(self):
+        if self.owner.reject in self.owner.bodies[-1]:
+            raise _bad_request(
+                f"`{self.owner.reject}` is deprecated for this model.")
+        return self.owner
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+
+async def test_rejected_param_is_dropped_and_retried(tmp: Path) -> None:
+    """A model that refuses `temperature` must still work.
+
+    The failure this pins: claude-haiku-5-5 answers 400 "`temperature` is
+    deprecated for this model" to every turn, because cfg.temperature defaults
+    to 0.0 and the harness sends it unconditionally. The model was unusable,
+    and the 400 was reported as a bad model *name* — the upstream's sentence
+    contains the word "model" — so the one thing that was correct got blamed.
+    """
+    agent = Agent(_cfg(tmp))
+    stream = _ParamRejectingStream()
+
+    class _Client:
+        def __init__(self):
+            self.messages = self
+
+        def stream(self, **kw):
+            return stream.stream(**kw)
+
+    agent._client = _Client()
+    events = await _drive(agent, "Hi")
+
+    check("param: the rejected parameter is reported",
+          any(e.get("type") == "param_dropped" for e in events),
+          str([e.get("type") for e in events]))
+    dropped = [e for e in events if e.get("type") == "param_dropped"]
+    check("param: it names the parameter",
+          bool(dropped) and dropped[0].get("param") == "temperature", str(dropped))
+    check("param: the first request carried it", "temperature" in stream.bodies[0],
+          str(stream.bodies))
+    check("param: the retry does not", "temperature" not in stream.bodies[-1],
+          str(stream.bodies))
+    # The retry must actually SUCCEED. An earlier version of this fake raised
+    # None on the retry, which the turn loop caught as a generic error — the
+    # assertions above still passed, so the test proved nothing about recovery.
+    check("param: the retry produced a real reply", stream.finals == 1,
+          f"finals={stream.finals} bodies={stream.bodies}")
+    check("param: no error was reported",
+          not [e for e in events if e.get("type") == "error"],
+          str([e for e in events if e.get("type") == "error"]))
+    check("param: the turn still completes",
+          any(e.get("type") == "turn_end" for e in events),
+          str([e.get("type") for e in events]))
+    check("param: it is remembered for later turns",
+          "temperature" in agent._dropped_params, str(agent._dropped_params))
+
+    # And it must not be re-sent on the NEXT turn — the fix is a session
+    # decision, not a one-off retry that the next request undoes.
+    stream.bodies.clear()
+    await _drive(agent, "Again")
+    check("param: the next turn omits it too",
+          bool(stream.bodies) and "temperature" not in stream.bodies[0],
+          str(stream.bodies))
+
+
+def test_param_rejection_is_not_a_model_name_problem() -> None:
+    """The message must not blame the model name.
+
+    The upstream says "for this model", which the old `"model" in msg` test
+    read as a bad name and answered with "run /model" — sending the operator to
+    re-pick a model that was already correct.
+    """
+    e = _bad_request("`temperature` is deprecated for this model.")
+    check("param: it is recognised as a parameter rejection",
+          Agent._unsupported_sampling_param(e) == "temperature",
+          repr(Agent._unsupported_sampling_param(e)))
+
+    msg = Agent._friendly_error(e)
+    check("param: the message names the parameter", "temperature" in msg, msg)
+    check("param: it does not send the operator to /model",
+          "/model" not in msg, msg)
+
+    # An ordinary bad request is untouched by the new branch.
+    plain = _bad_request("messages: field required")
+    check("param: an unrelated 400 is not treated as a parameter rejection",
+          Agent._unsupported_sampling_param(plain) == "")
+    # A model-name typo still gets the model-name advice.
+    typo = _bad_request("Model 'claude-haiku-4-5' not found")
+    typo_msg = Agent._friendly_error(typo)
+    check("param: a real model-name error still says so",
+          "/model" in typo_msg, typo_msg)
+
+
+async def test_compaction_survives_a_param_rejecting_model(tmp: Path) -> None:
+    """/compact sends `temperature` too, and must cope with a model that refuses it.
+
+    ``compact()`` hard-coded ``extra_body={"temperature": 0}``. On
+    claude-haiku-5-5 that made compaction fail with the same 400 the turn path
+    hits — so the one recovery mechanism for a full context was dead on the
+    model that needed it most.
+    """
+    agent = Agent(_cfg(tmp))
+    agent.messages = [
+        {"role": "user", "content": "one"},
+        {"role": "assistant", "content": "two"},
+        {"role": "user", "content": "three"},
+        {"role": "assistant", "content": "four"},
+    ]
+
+    calls: list[dict] = []
+
+    class _Messages:
+        async def create(self, **kw):
+            extra = dict(kw.get("extra_body") or {})
+            calls.append(extra)
+            if "temperature" in extra:
+                raise _bad_request("`temperature` is deprecated for this model.")
+
+            class _M:
+                content = [_Blk(type="text", text="a summary")]
+                usage = None
+            return _M()
+
+    class _Client:
+        messages = _Messages()
+
+    agent._client = _Client()
+    ok, note = await agent.compact()
+    check("compact: it succeeds on a model that rejects temperature", ok, note)
+    check("compact: the first call carried temperature",
+          "temperature" in calls[0], str(calls))
+    check("compact: the retry dropped it",
+          len(calls) == 2 and "temperature" not in calls[1], str(calls))
+    check("compact: the rejection is remembered for later turns",
+          "temperature" in agent._dropped_params, str(agent._dropped_params))
+
+
+
+
+# ---------------------------------------------------------------------------
 
 async def main() -> int:
     with tempfile.TemporaryDirectory() as td:
@@ -745,6 +945,9 @@ async def main() -> int:
         test_window_lookup_never_raises(tmp)
         test_rate_limit_classification()
         await test_window_429_is_not_retried(tmp)
+        await test_rejected_param_is_dropped_and_retried(tmp)
+        test_param_rejection_is_not_a_model_name_problem()
+        await test_compaction_survives_a_param_rejecting_model(tmp)
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

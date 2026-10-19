@@ -1611,6 +1611,18 @@ class ZimZillaApp(App):
             )
             bar.set_activity(f"retry {ev['attempt']}/{ev['max']}", busy=True)
 
+        elif etype == "param_dropped":
+            # The model refused a sampling knob the harness sent; it is dropped
+            # and the request retried. Worth one dim line — otherwise the
+            # session silently stops honouring a setting the operator chose,
+            # and the next turn looks like it ignored them.
+            self._flush_stream(chat, p)
+            self._sys_line(
+                f"this model does not accept `{ev['param']}` — dropped for this "
+                f"session and retrying",
+                warn=True,
+            )
+
         elif etype == "usage":
             # The agent has not yet folded this turn's usage into its session
             # totals, so add it here for a live running figure. Any team

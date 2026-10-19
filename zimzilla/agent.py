@@ -435,6 +435,10 @@ class Agent:
         cfg._scope = self.scope  # type: ignore[attr-defined]
 
         self._always_allowed: set[str] = set()
+        #: Sampling parameters the active model rejected, dropped from every
+        #: later request in this session. Empty for most models; populated the
+        #: first time one answers 400 "`temperature` is deprecated".
+        self._dropped_params: set[str] = set()
         self._client = None
 
     # ---- client -----------------------------------------------------------
@@ -1243,6 +1247,12 @@ class Agent:
                 extra: dict = {}
                 if self.cfg.temperature is not None:
                     extra["temperature"] = self.cfg.temperature
+                # A parameter the model rejected is dropped for the rest of the
+                # session. Without this the retry below would re-send it and
+                # fail identically — measured on claude-haiku-5-5, which rejects
+                # `temperature` outright.
+                for _p in self._dropped_params:
+                    extra.pop(_p, None)
                 if extra:
                     kwargs["extra_body"] = extra
 
@@ -1273,6 +1283,19 @@ class Agent:
                     final = await stream.get_final_message()
                     yield (None, final)
                     return
+            except anthropic.BadRequestError as e:
+                # A parameter the model refuses is dropped and retried once,
+                # rather than surfaced as a failure. This is not a bad request
+                # the operator can fix by rewording anything — it is the
+                # harness sending a knob the model does not have, and the model
+                # works perfectly without it. Measured on claude-haiku-5-5:
+                # `temperature` present → 400, absent → 200.
+                param = self._unsupported_sampling_param(e)
+                if param and param not in self._dropped_params:
+                    self._dropped_params.add(param)
+                    yield ({"type": "param_dropped", "param": param}, None)
+                    continue
+                raise
             except (
                 anthropic.RateLimitError,
                 anthropic.APIConnectionError,
@@ -1431,6 +1454,16 @@ class Agent:
                     "/compact, or switch to a longer-context model with /model."
                 )
             msg = str(e)
+            # Checked before the model-name test: a parameter rejection names
+            # the model too ("`temperature` is deprecated for this model"), so
+            # testing for "model" first reported a perfectly good model name as
+            # the fault. The name is the one thing that was NOT wrong.
+            param = Agent._unsupported_sampling_param(e)
+            if param:
+                return (
+                    f"this model does not accept `{param}`, even after dropping "
+                    f"it and retrying once.\n  " + msg[:240]
+                )
             if "model" in msg.lower():
                 return (
                     "the endpoint rejected the model name. Run /model to list "
@@ -1518,6 +1551,39 @@ class Agent:
         return self._last_input_tokens >= window * self.cfg.compact_at
 
     @staticmethod
+    def _unsupported_sampling_param(e: Exception) -> str:
+        """The sampling parameter *e* says the model does not accept, or "".
+
+        Not every model takes ``temperature``. Logfare's catalog publishes
+        ``supported_parameters`` per model, and ``claude-haiku-5-5`` is the one
+        chat model there that omits it — every request carrying it answers
+
+            400  ``temperature`` is deprecated for this model.
+
+        The harness sends ``temperature`` on every turn (``cfg.temperature``
+        defaults to 0.0, not None), so that model could not be used at all, and
+        the 400 was then reported as a bad model *name* because the upstream's
+        sentence happens to contain the word "model". Matched on the wording
+        rather than a hard-coded model list: the next model to change its
+        parameter set should not need a ZimZilla release.
+
+        Returns the parameter name so the retry can drop exactly that one and
+        leave the rest of the request alone.
+        """
+        import anthropic
+        if not isinstance(e, anthropic.BadRequestError):
+            return ""
+        msg = str(e).lower()
+        if not any(w in msg for w in ("deprecated", "not supported", "unsupported",
+                                      "not allowed", "unknown parameter")):
+            return ""
+        for param in ("temperature", "top_p", "top_k", "frequency_penalty",
+                      "presence_penalty"):
+            if param in msg:
+                return param
+        return ""
+
+    @staticmethod
     def _is_context_overflow(e: Exception) -> bool:
         """Whether *e* is the endpoint rejecting the prompt for being too long.
 
@@ -1577,13 +1643,32 @@ class Agent:
         )
         import anthropic
 
+        # The same knob the turn path sends, and subject to the same rule: a
+        # model that rejects `temperature` must not make /compact fail. The
+        # first attempt honours whatever the session has already learned; if
+        # that fails for the same reason, drop it and try once more.
+        extra: dict = {}
+        if "temperature" not in self._dropped_params:
+            extra["temperature"] = 0
         try:
-            msg = await self.client.messages.create(
-                model=self.cfg.model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}],
-                extra_body={"temperature": 0},
-            )
+            try:
+                msg = await self.client.messages.create(
+                    model=self.cfg.model,
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}],
+                    extra_body=extra,
+                )
+            except anthropic.BadRequestError as e:
+                # Nothing left to drop means the retry would be identical, so
+                # let the outer handler report it rather than sending it twice.
+                if not extra or not self._unsupported_sampling_param(e):
+                    raise
+                self._dropped_params.update(extra.keys())
+                msg = await self.client.messages.create(
+                    model=self.cfg.model,
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}],
+                )
         except Exception as e:  # noqa: BLE001
             return False, self._friendly_error(e)
 
