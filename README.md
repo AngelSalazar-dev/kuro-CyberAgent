@@ -1409,8 +1409,8 @@ environment; none are hard-coded.
 
 [Shodan](https://shodan.io) is a public search engine for internet-connected
 devices. ZimZilla wires it into the loop as a set of named searches: you run a
-search, the results land in the transcript, and the working model then
-**analyses them and asks you what to do** — it does not touch anything.
+search, the result lands in the transcript, and the working model then
+**analyses it and asks you what to do** — it does not touch anything.
 
 ### Set the key
 
@@ -1423,44 +1423,88 @@ A key is free at [account.shodan.io](https://account.shodan.io). The profile is
 the same `export SHODAN_API_KEY=…` shape every other credential in the project
 uses, so a shell that already exports `SHODAN_API_KEY` needs no setup at all.
 The key is never echoed back — the confirmation shows the file and the last four
-characters.
+characters. Setting a key also prints **which plan it is on**, because that
+decides what a search can return.
+
+### The plan decides the shape, not the query
+
+This is the part worth knowing before you file a bug against a search. Shodan's
+API is tiered, and the tiers are not visible from the error message:
+
+| Endpoint | Free (`oss`) | Membership and up |
+|---|---|---|
+| `/shodan/host/count` — totals + facets | **yes** | yes |
+| `/shodan/host/search` — host records | **no** — `403 Requires membership or higher` | yes |
+
+On a free key `/shodan/host/search` answers 403 **for every query**, including a
+bare `apache`. No filter makes it work — the endpoint is gated, not the query.
+So the free commands answer with what is actually available: **the size of the
+result set and its facets** — country, product, port, organisation, OS and
+version, each ranked. That is not a consolation prize; "where does this
+population live, what is it made of, what is it running" is the first question
+any of these device classes asks, and a free key answers it:
+
+```text
+/shodan-db-search nl
+  ◈ TOTAL     37,027 hosts
+  ◈ PRODUCT   MySQL (17,635) · PostgreSQL (8,274) · MySQL X Protocol (8,086) ·
+              Redis key-value store (1,828) · MongoDB (758)
+  ◈ PORT      3306 (17,201) · 5432 (8,276) · 33060 (8,088) · 6379 (1,817)
+  ◈ ORG       BisectHosting (4,965) · GORIWEB GEOCOM LLC (2,785) · LeaseWeb (1,183)
+  ◈ VERSION   9.6.0 or later (5,230) · 8.0.46-0ubuntu0.24.04.4 (1,577)
+```
+
+When the plan *does* include host records, the same command also renders the
+rows, and the analysis turn cites them. The code asks `/api-info` once per
+session and never attempts a gated call on a free key, so a search cannot fail
+because of the plan — it answers at the resolution it has and says which
+resolution that was.
 
 ### The searches
 
 | Command | What it queries |
 |---|---|
-| `/shodan-cam-search [cc]` | IP cameras showing a live screenshot (`tag:webcam has_screenshot:true`) |
+| `/shodan-cam-search [cc]` | Cameras and DVRs that answer a screenshot request (`has_screenshot:true product:Hikvision,Dahua,…`) |
 | `/shodan-scada-search [cc]` | ICS / SCADA (PLCs, RTUs, HMIs — `tag:ics`) |
-| `/shodan-db-search [cc]` | Exposed MongoDB, Elasticsearch, Redis, PostgreSQL, MySQL |
+| `/shodan-db-search [cc]` | Exposed MongoDB, Redis, PostgreSQL, MySQL, Elasticsearch |
 | `/shodan-rdp-search [cc]` | Remote desktop — RDP (3389) and VNC (5900) |
-| `/shodan-router-search [cc]` | Network edge — routers, firewalls, VPNs |
+| `/shodan-router-search [cc]` | Network edge — routers, firewalls, VPNs (`device:router`) |
 | `/shodan-vuln-search <query>` | Hosts Shodan flagged with a known CVE (`has_vuln:true …`) |
 | `/shodan-search <query>` | Any Shodan query, verbatim |
 
-A two-letter token is read as a country code (`/shodan-cam-search us` →
-`country:US`); any words after it are appended to the query verbatim
-(`/shodan-cam-search us product:Bosch`). `--limit N` caps the page (default 20,
-max 100). Results always filter out Shodan's own scanners and generic cloud
-tags, so a page of an ISP's honeypots does not bury the devices that matter.
+A two-letter token is read as a country code (`/shodan-cam-search nl` →
+`country:NL`); any words after it are appended to the query verbatim
+(`/shodan-cam-search nl product:Hikvision`). `--limit N` caps host rows (default
+20, max 100) and is ignored on a plan that returns no rows. Every query filters
+out Shodan's own scanners and generic cloud tags.
 
-### What happens after a search
+Two Shodan syntax facts the queries are built around, both verified against the
+live API: `OR` is **invalid** — multiple values are comma-joined instead
+(`port:3389,5900`), never `port:3389 OR port:5900` — and `tag:webcam`, the
+obvious camera filter, **no longer exists** (it returns 0), so the camera search
+keys off the products that actually make up the population.
 
-The page of result rows renders into the transcript — `ip:port`, org, product,
-country, and any CVEs as a warning — and then a single turn hands that same
-evidence to the working model. The model is asked to:
+### What happens after a call
 
-1. describe what the result set says about the population;
-2. group the hosts and name the few that stand out, with reasons;
-3. propose concrete, testable hypotheses (for example, *are these Bosch
-   cameras still on the factory password?*);
+The total and the facet breakdown render into the transcript, and then a single
+turn hands that same evidence to the working model. The model is asked to:
+
+1. describe what the population is — dominant products, ports, countries, and
+   what that composition says about who runs these boxes;
+2. name what is notable in the shape — a product concentration, an odd ASN, a
+   version cluster that dates the fleet;
+3. propose concrete, testable hypotheses (for example, *are these Hikvision
+   boxes still on the factory password?*);
 4. return a short, ranked list of tasks — and ask you which one, if any, to
    pursue.
 
-It is told, in the prompt, that **nothing on the list is in scope and nothing is
-to be run against those addresses**. The search itself is read-only: one GET to
-Shodan's `/shodan/host/search`. The turn's output is a set of questions to
-choose from, not a set of actions taken — the scope rules apply from there
-exactly as they do for any other target you declare.
+The prompt is told which resolution it has. On a free key it is told **in
+writing that there are no host records**, so it reasons from the facet shape
+instead of inventing addresses that were never returned. It is told that
+**nothing described is in scope and nothing is to be run against it**. The
+calls are read-only — a count and, where permitted, a search. The turn's output
+is a set of questions to choose from, not a set of actions taken — the scope
+rules apply from there exactly as they do for any other target you declare.
 
 ### What it deliberately does not do
 

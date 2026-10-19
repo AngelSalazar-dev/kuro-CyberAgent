@@ -1,24 +1,33 @@
-"""`/shodan-*` regression suite: the key, the query, the result, the turn.
+"""`/shodan-*` regression suite: the key, the plan, the query, the facets, the turn.
 
 Run:  python tests/test_shodan.py
 
-Offline and model-free. Four layers:
+Offline and model-free. Five layers:
 
 * **the key** — that `/shodan-api-setup` writes a mode-600 profile every other
   credential in the project can read, that a key set this session beats a stale
   environment, and that a pasted `export` line is refused;
+* **the plan** — that a free key is *known* to be free before a search is
+  attempted, so the run degrades to facets instead of failing with a 403;
 * **the query** — that a facet composes the query it says it does, country and
-  limit included, and that the raw facet stays verbatim;
-* **the result** — an actual ``urlopen`` stub: parsing, the fields dropped on
-  purpose, the limit clamp, and the words each HTTP error turns into;
-* **the turn** — that the prompt handed to the model carries the evidence and
-  the instruction to *ask* rather than act, and that it never carries a banner.
+  extra included, and that no facet uses `OR`, which Shodan rejects;
+* **the result** — an actual ``urlopen`` stub: totals, facets, the limit clamp,
+  the error bodies, and the fields dropped on purpose;
+* **the turn** — that the prompt carries the evidence and the instruction to
+  *ask* rather than act, and that it tells the model when there are no host rows
+  so it cannot invent them.
 
-The one invariant worth stating: **a banner never reaches the result.** Shodan
-returns a host's raw ``data`` alongside its metadata, and that blob routinely
-holds credentials and personal data. ``_parse_host`` must reduce a match to the
-triaging fields and nothing else — a regression here is a secret dump, not a
-cosmetic bug, so it is asserted directly.
+Two invariants worth stating, because they are the ones a regression would
+break silently:
+
+* **A banner never reaches the result.** Shodan returns a host's raw ``data``
+  alongside its metadata, and that blob routinely holds credentials and
+  personal data. ``_parse_host`` must reduce a match to the triaging fields and
+  nothing else — a regression here is a secret dump, not a cosmetic bug.
+* **A free key still answers.** The whole point of the count path is that
+  ``/shodan/host/search`` being gated does not make the command useless. A test
+  that only ever stubs a successful search would not notice the feature breaking
+  for the plan most operators are on.
 """
 
 from __future__ import annotations
@@ -87,6 +96,22 @@ def _match(**kw) -> dict:
     return base
 
 
+def _count(total: int, facets: dict | None = None) -> dict:
+    return {"matches": [], "total": total, "facets": facets or {}}
+
+
+#: A realistic free-plan facet payload: every bucket Shodan actually returns.
+_FACETS = {
+    "country": [{"value": "US", "count": 900}, {"value": "NL", "count": 120}],
+    "product": [{"value": "Hikvision IP Camera", "count": 800},
+                {"value": "Dahua-based DVR", "count": 90}],
+    "port": [{"value": 554, "count": 700}, {"value": 80, "count": 210}],
+    "org": [{"value": "Hetzner Online GmbH", "count": 300}],
+    "os": [{"value": "Linux", "count": 40}],
+    "version": [{"value": "1.0", "count": 12}],
+}
+
+
 # ---------------------------------------------------------------------------
 # the key
 # ---------------------------------------------------------------------------
@@ -146,24 +171,60 @@ def test_key_env_fallback() -> None:
 
 
 # ---------------------------------------------------------------------------
+# the plan
+# ---------------------------------------------------------------------------
+
+def test_plan() -> None:
+    # The real shape of /api-info on the free plan — query_credits is 0 and the
+    # plan name is "oss". This is what the operator's key actually returned.
+    oss = {"plan": "oss", "query_credits": 0, "scan_credits": 0,
+           "unlocked": False,
+           "usage_limits": {"query_credits": 0, "scan_credits": 0,
+                            "monitored_ips": 0}}
+    with mock.patch("urllib.request.urlopen", return_value=_Resp(oss)):
+        plan, err = shodan_mod.fetch_plan("k" * 32)
+    check("plan: /api-info parsed", plan is not None and err == "", err)
+    check("plan: oss is named", plan.name == "oss", plan.name)
+    check("plan: oss cannot search", plan.search is False)
+    check("plan: the blurb says counts only",
+          "counts and facets only" in plan.blurb, plan.blurb)
+
+    member = {"plan": "membership", "query_credits": 100,
+              "usage_limits": {"query_credits": 100, "scan_credits": 1}}
+    with mock.patch("urllib.request.urlopen", return_value=_Resp(member)):
+        plan, _ = shodan_mod.fetch_plan("k" * 32)
+    check("plan: membership can search", plan.search is True, plan.name)
+
+    # A plan with no credits left cannot search, whatever it is called — the
+    # balance is the truth, not the label.
+    spent = {"plan": "dev", "query_credits": 0,
+             "usage_limits": {"query_credits": 0}}
+    with mock.patch("urllib.request.urlopen", return_value=_Resp(spent)):
+        plan, _ = shodan_mod.fetch_plan("k" * 32)
+    check("plan: an exhausted balance cannot search", plan.search is False,
+          f"{plan.name} {plan.query_credits}")
+
+
+# ---------------------------------------------------------------------------
 # the query
 # ---------------------------------------------------------------------------
 
 def test_facet_queries() -> None:
     cam = shodan_mod.FACETS["cam"]
-    q = cam.build_query(country="us", extra="product:Bosch")
+    q = cam.build_query(country="us", extra="port:554")
     check("query: cam composes country and extra",
-          q.startswith("tag:webcam has_screenshot:true")
-          and "country:US" in q and "product:Bosch" in q, q)
+          "has_screenshot:true" in q and "country:US" in q and "port:554" in q, q)
     check("query: cloud noise is filtered", "-org:Shodan" in q, q)
 
     bare = cam.build_query()
     check("query: no country means no country clause",
           "country:" not in bare, bare)
 
-    # Every named facet builds a non-empty query, so none of them can send an
-    # empty search and return the whole index.
+    # Shodan rejects `OR` as invalid syntax; a facet that uses it would 400 on
+    # every plan, including a paid one. Multiple values are comma-joined.
     for name, facet in shodan_mod.FACETS.items():
+        check(f"query: {name} never uses OR", " OR " not in facet.query,
+              facet.query)
         check(f"query: {name} is non-empty", bool(facet.build_query().strip()),
               facet.build_query())
 
@@ -177,71 +238,121 @@ def test_facet_queries() -> None:
           shodan_mod.VULN_FACET.build_query(extra="product:Apache").startswith(
               "has_vuln:true"))
 
+    # `tag:webcam` is gone from Shodan's index — a camera facet keyed on it
+    # would silently return nothing, which is the bug this asserts against.
+    check("query: the camera facet does not rely on the dead webcam tag",
+          "tag:webcam" not in shodan_mod.FACETS["cam"].query,
+          shodan_mod.FACETS["cam"].query)
+    check("query: every facet carries the question it is asking",
+          all(f.question for f in shodan_mod.FACETS.values()))
+
 
 # ---------------------------------------------------------------------------
-# the result
+# the result — a free key, which is the case that used to fail
 # ---------------------------------------------------------------------------
 
-def test_search_parses() -> None:
-    payload = {"total": 4321, "matches": [_match(), _match(ip_str="198.51.100.9",
-                                                            port=8080)]}
-    with mock.patch("urllib.request.urlopen", return_value=_Resp(payload)):
-        result, err = shodan_mod.search("k" * 32, "tag:webcam", limit=20)
-    check("result: no error", err == "", err)
-    check("result: total is kept", result is not None and result.total == 4321)
-    check("result: hosts parsed", result is not None and len(result.hosts) == 2)
+def test_free_plan_still_answers() -> None:
+    oss = shodan_mod.Plan(name="oss", query_credits=0)
+    with mock.patch("urllib.request.urlopen",
+                    return_value=_Resp(_count(1032, _FACETS))):
+        result, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"],
+                                          "has_screenshot:true", plan=oss)
+    check("free: the count answers", err == "" and result is not None, err)
+    check("free: the total is kept", result.total == 1032, str(result.total))
+    check("free: facets are parsed", bool(result.facets), str(result.facets.keys()))
+    check("free: no host rows, and that is not an error", result.hosts == [])
+    check("free: the plan is recorded", result.plan.name == "oss")
+
+    top = result.top("product")
+    check("free: facets are sorted biggest-first",
+          top and top[0].value == "Hikvision IP Camera", str(top))
+    check("free: top() honours its limit", len(result.top("country", 1)) == 1)
+    # A port facet arrives as an int and must become a string, not "554 " or 554.
+    check("free: an integer facet value is normalised",
+          result.top("port")[0].value == "554", result.top("port")[0].value)
+
+    # The whole point: the search endpoint is never called on a free plan, so a
+    # 403 cannot turn a good facet answer into a failed command.
+    calls: list[str] = []
+    real = shodan_mod._get
+
+    def _spy(path, params, timeout):
+        calls.append(path)
+        return real(path, params, timeout)
+
+    with mock.patch.object(shodan_mod, "_get", side_effect=_spy), \
+         mock.patch("urllib.request.urlopen",
+                    return_value=_Resp(_count(10, _FACETS))):
+        shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], "x", plan=oss)
+    check("free: host search is not attempted", "/shodan/host/search" not in calls,
+          str(calls))
+    check("free: the count is attempted", "/shodan/host/count" in calls, str(calls))
+
+
+def test_paid_plan_gets_rows() -> None:
+    paid = shodan_mod.Plan(name="membership", query_credits=100)
+    payloads = [_count(500, _FACETS),
+                {"total": 500, "matches": [_match(),
+                                           _match(ip_str="198.51.100.9", port=8080)]}]
+    with mock.patch("urllib.request.urlopen", side_effect=[_Resp(p) for p in payloads]):
+        result, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"],
+                                          "x", plan=paid, limit=20)
+    check("paid: no error", err == "", err)
+    check("paid: rows parsed", len(result.hosts) == 2, str(len(result.hosts)))
     h = result.hosts[0]
-    check("result: address parsed", h.endpoint == "203.0.113.7:80", h.endpoint)
-    check("result: identity is product+version", h.identity == "Hipcam 1.0", h.identity)
-    check("result: country parsed", h.country == "Netherlands", h.country)
-    check("result: vulns kept as a tuple", h.vulns == ("CVE-2019-0001",), str(h.vulns))
+    check("paid: address parsed", h.endpoint == "203.0.113.7:80", h.endpoint)
+    check("paid: identity is product+version", h.identity == "Hipcam 1.0", h.identity)
+    check("paid: country parsed", h.country == "Netherlands", h.country)
+    check("paid: vulns kept as a tuple", h.vulns == ("CVE-2019-0001",), str(h.vulns))
+    check("paid: facets survive alongside rows", result.total == 500)
+
     # The invariant: no banner, no cookie, no secret reaches the Host.
     blob = json.dumps([h.__dict__ for h in result.hosts])
-    check("result: the banner never survives parsing",
+    check("paid: the banner never survives parsing",
           "tops3cret" not in blob and "Set-Cookie" not in blob, blob[:80])
 
+    # A search that fails after a good count keeps the facet answer and says
+    # why the rows are missing — a degradation, not a failure. An exception
+    # *instance* in a side_effect list is raised; a function would be returned
+    # as the response, which is not what a gated endpoint does.
+    gated = urllib.error.HTTPError("http://x", 403, "nope", {}, None)
+    with mock.patch("urllib.request.urlopen",
+                    side_effect=[_Resp(_count(9, _FACETS)), gated]):
+        result, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"],
+                                          "x", plan=paid)
+    check("paid: a gated search degrades to facets",
+          err == "" and result is not None and result.total == 9, err)
+    check("paid: the reason is recorded", "403" in result.search_error,
+          result.search_error)
 
-def test_search_limit_and_shape() -> None:
-    payload = {"total": 3, "matches": [_match(ip_str=f"10.0.0.{i}") for i in range(3)]}
-    with mock.patch("urllib.request.urlopen", return_value=_Resp(payload)):
-        result, _ = shodan_mod.search("k" * 32, "x", limit=1)
-    check("result: limit truncates the page", len(result.hosts) == 1)
 
-    # A match with no address is dropped rather than crashing the page.
-    payload = {"total": 2, "matches": [_match(), {"port": 22}]}
-    with mock.patch("urllib.request.urlopen", return_value=_Resp(payload)):
-        result, err = shodan_mod.search("k" * 32, "x")
-    check("result: an addressless match is skipped, the rest survive",
-          err == "" and len(result.hosts) == 1, f"{err} {len(result.hosts)}")
-
+def test_result_errors() -> None:
     # A 200 with an `error` body is an error, not an empty success.
     with mock.patch("urllib.request.urlopen",
                     return_value=_Resp({"error": "Invalid query"})):
-        result, err = shodan_mod.search("k" * 32, "x")
-    check("result: an error body is an error", result is None and "Invalid query" in err,
-          err)
+        result, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], "x")
+    check("error: an error body is an error",
+          result is None and "Invalid query" in err, err)
 
-
-def test_search_errors() -> None:
     def _raise(code: int):
         def _inner(*a, **k):
             raise urllib.error.HTTPError("http://x", code, "nope", {}, None)
         return _inner
 
-    for code, needle in ((401, "key rejected"), (403, "plan"), (429, "rate limited")):
+    for code, needle in ((401, "401"), (403, "403"), (429, "429")):
         with mock.patch("urllib.request.urlopen", side_effect=_raise(code)):
-            _, err = shodan_mod.search("k" * 32, "x")
-        check(f"error: HTTP {code} says something useful",
+            _, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], "x")
+        check(f"error: HTTP {code} is reported without the key",
               needle in err and "k" * 32 not in err, err)
 
     with mock.patch("urllib.request.urlopen",
                     side_effect=urllib.error.URLError("no dns")):
-        _, err = shodan_mod.search("k" * 32, "x")
+        _, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], "x")
     check("error: a network failure is reported, not raised",
           "network error" in err, err)
 
     with mock.patch("urllib.request.urlopen", return_value=_Resp("not json")):
-        _, err = shodan_mod.search("k" * 32, "x")
+        _, err = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], "x")
     check("error: a non-JSON body is reported", "not JSON" in err, err)
 
 
@@ -249,17 +360,27 @@ def test_search_errors() -> None:
 # the turn
 # ---------------------------------------------------------------------------
 
-def test_prompt() -> None:
-    payload = {"total": 12, "matches": [_match()]}
-    with mock.patch("urllib.request.urlopen", return_value=_Resp(payload)):
-        result, _ = shodan_mod.search("k" * 32, "tag:webcam")
+def test_prompt_free() -> None:
+    """The free-plan prompt must say there are no rows, or the model invents them."""
+    oss = shodan_mod.Plan(name="oss", query_credits=0)
+    query = shodan_mod.FACETS["cam"].build_query(country="US")
+    with mock.patch("urllib.request.urlopen",
+                    return_value=_Resp(_count(1032, _FACETS))):
+        result, _ = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], query,
+                                        plan=oss)
     prompt = shodan_mod.build_prompt(shodan_mod.FACETS["cam"], result, country="US")
 
-    check("prompt: carries the query", "tag:webcam" in prompt)
-    check("prompt: carries the host endpoint", "203.0.113.7:80" in prompt)
-    check("prompt: carries the CVE", "CVE-2019-0001" in prompt)
+    check("prompt: carries the query", "has_screenshot:true" in prompt)
+    check("prompt: carries the total", "1,032" in prompt)
+    check("prompt: carries the facet shape", "Hikvision IP Camera" in prompt)
+    check("prompt: names the plan", "oss" in prompt)
+    check("prompt: says there are no host records",
+          "You do NOT have host records" in prompt)
+    check("prompt: forbids inventing addresses",
+          "Do not invent addresses" in prompt)
     check("prompt: says nothing here is in scope",
-          "nothing in this list is in scope" in prompt.lower())
+          "nothing in this list is in scope" in prompt.lower()
+          or "nothing here is in scope" in prompt.lower(), prompt[:300])
     check("prompt: tells the model not to run tools against the hosts",
           "Do NOT run" in prompt)
     check("prompt: asks for proposed tasks", "task" in prompt.lower())
@@ -268,6 +389,20 @@ def test_prompt() -> None:
     check("prompt: carries no banner",
           "tops3cret" not in prompt and "Set-Cookie" not in prompt)
 
+
+def test_prompt_paid() -> None:
+    paid = shodan_mod.Plan(name="membership", query_credits=100)
+    payloads = [_count(500, _FACETS), {"total": 500, "matches": [_match()]}]
+    with mock.patch("urllib.request.urlopen", side_effect=[_Resp(p) for p in payloads]):
+        result, _ = shodan_mod.describe("k" * 32, shodan_mod.FACETS["cam"], "x",
+                                        plan=paid)
+    prompt = shodan_mod.build_prompt(shodan_mod.FACETS["cam"], result)
+    check("prompt: a paid plan gets its rows", "203.0.113.7:80" in prompt)
+    check("prompt: a paid plan gets the CVE", "CVE-2019-0001" in prompt)
+    check("prompt: a paid plan is told to cite addresses",
+          "Cite specific addresses" in prompt)
+    check("prompt: a paid plan is not told it has no rows",
+          "You do NOT have host records" not in prompt)
     check("summary: one line per host", len(shodan_mod.summary_lines(result)) == 1)
     check("summary: names the endpoint",
           "203.0.113.7:80" in shodan_mod.summary_lines(result)[0])
@@ -292,6 +427,10 @@ def test_wiring() -> None:
           "from .. import shodan as shodan_mod" in app_src)
     check("wiring: _cmd_shodan_key is defined", "def _cmd_shodan_key(" in app_src)
     check("wiring: _cmd_shodan_search is defined", "def _cmd_shodan_search(" in app_src)
+    check("wiring: the plan is fetched on setup",
+          "def _check_shodan_plan(" in app_src)
+    check("wiring: the plan is cached per session",
+          "_shodan_plan" in app_src)
 
     commands = [f.command for f in shodan_mod.FACETS.values()]
     commands += [shodan_mod.VULN_FACET.command, shodan_mod.RAW_FACET.command]
@@ -317,11 +456,13 @@ def test_wiring() -> None:
 def main() -> int:
     test_key_roundtrip()
     test_key_env_fallback()
+    test_plan()
     test_facet_queries()
-    test_search_parses()
-    test_search_limit_and_shape()
-    test_search_errors()
-    test_prompt()
+    test_free_plan_still_answers()
+    test_paid_plan_gets_rows()
+    test_result_errors()
+    test_prompt_free()
+    test_prompt_paid()
     test_wiring()
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

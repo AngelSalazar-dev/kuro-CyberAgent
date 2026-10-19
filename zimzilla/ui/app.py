@@ -4493,8 +4493,41 @@ class ZimZillaApp(App):
 
         path = shodan_mod.save_key(key)
         shodan_mod.remember_session_key(key)
+        # The plan decides whether a search returns host rows or only counts,
+        # and it is the first thing the operator needs to know about a new key.
+        self._shodan_plan = None
+        self._check_shodan_plan(key)
         self._sys_line(f"Shodan key saved (…{key[-4:]}) to {path}", ok=True)
         self._sys_line("try /shodan-cam-search, /shodan-db-search or /shodan-search")
+
+    @work(exclusive=True, thread=True)
+    def _check_shodan_plan(self, key: str) -> None:
+        """Report the plan, and what it means for these commands."""
+        plan, err = shodan_mod.fetch_plan(key)
+        self.call_from_thread(self._show_shodan_plan, plan, err)
+
+    def _show_shodan_plan(self, plan, err: str) -> None:
+        p = self.palette
+        if plan is None:
+            self._sys_line(f"could not read the Shodan plan: {err}", warn=True)
+            return
+        self._shodan_plan = plan
+        t = Text()
+        t.append("  ◈ SHODAN    ", style=f"bold {p.accent}")
+        t.append(f"plan: {plan.name}\n", style=f"bold {p.primary}")
+        if plan.search:
+            t.append("  ◈ RECORDS   ", style=f"bold {p.accent}")
+            t.append("host records available — searches return rows and facets\n",
+                     style=p.dim)
+        else:
+            t.append("  ◈ RECORDS   ", style=f"bold {p.amber}")
+            t.append("counts and facets only\n", style=p.dim)
+            t.append("  ◈ NOTE      ", style=f"bold {p.amber}")
+            t.append("Shodan gates /shodan/host/search at membership, for every "
+                     "query — no filter makes it work on a free key. These "
+                     "commands still answer: total, countries, products, ports, "
+                     "orgs and versions.\n", style=p.dim)
+        self.query_one(ChatPane).write_block(t)
 
     def _cmd_shodan_search(self, which: str, args) -> None:
         """/shodan-*-search — run a named search, then analyse the result.
@@ -4573,25 +4606,36 @@ class ZimZillaApp(App):
     @work(exclusive=True, thread=True)
     def _fetch_shodan(self, key: str, facet, query: str, limit: int,
                       country: str) -> None:
-        """The blocking search, off the UI thread, then a call back on it."""
+        """The blocking calls, off the UI thread, then a call back on it.
+
+        The plan is fetched once per session and cached: it changes only when
+        the operator buys a plan, and a second HTTP call on every search is a
+        wasted query credit.
+        """
         started = time.time()
-        result, err = shodan_mod.search(key, query, limit)
+        plan = getattr(self, "_shodan_plan", None)
+        if plan is None:
+            plan, _ = shodan_mod.fetch_plan(key)
+        result, err = shodan_mod.describe(key, facet, query, plan=plan, limit=limit)
         self.call_from_thread(
-            self._show_shodan, facet, query, country, result, err, started)
+            self._show_shodan, facet, query, country, result, err, started, plan)
 
     def _show_shodan(self, facet, query: str, country: str, result,
-                     err: str, started: float) -> None:
+                     err: str, started: float, plan=None) -> None:
         """Render the result block, then start the analysis turn.
 
-        An empty result set gets the block and a hint, but no turn: asking a
-        model to analyse nothing invites it to invent a population. A busy
-        harness gets the block and no turn either — the results are still
-        worth reading, and interleaving a second turn is never safe.
+        A failed count gets the error and no turn. An empty population gets the
+        block and a hint, but no turn either: asking a model to analyse nothing
+        invites it to invent a population. A busy harness gets the block and no
+        turn — the results are still worth reading, and interleaving a second
+        turn is never safe.
         """
         p = self.palette
         if result is None:
             self._sys_line(f"Shodan: {err}", warn=True)
             return
+        if plan is not None:
+            self._shodan_plan = plan
 
         took = time.time() - started
         t = Text()
@@ -4602,11 +4646,27 @@ class ZimZillaApp(App):
         t.append("\n")
         t.append("  ◈ QUERY     ", style=f"bold {p.accent}")
         t.append(query + "\n", style=p.dim)
-        t.append("  ◈ RESULTS   ", style=f"bold {p.accent}")
-        t.append(f"{len(result.hosts)} shown of {result.total:,} matches "
-                 f"· {took:.1f}s\n", style=p.primary)
-        if result.hosts:
+        t.append("  ◈ TOTAL     ", style=f"bold {p.accent}")
+        t.append(f"{result.total:,} hosts · {took:.1f}s\n", style=p.primary)
+
+        # The facets are the answer on a free plan and the shape on a paid one,
+        # so they are always rendered — before the host rows, which may be
+        # absent.
+        for name in shodan_mod.FACET_FIELDS:
+            values = result.top(name)
+            if not values:
+                continue
+            t.append(f"  ◈ {name.upper():<9} ", style=f"bold {p.accent}")
+            for i, v in enumerate(values):
+                if i:
+                    t.append(" · ", style=p.dim)
+                t.append(v.value, style=p.primary)
+                t.append(f" ({v.count:,})", style=p.dim)
             t.append("\n")
+
+        if result.hosts:
+            t.append(f"\n  ◈ HOSTS     ", style=f"bold {p.accent}")
+            t.append(f"{len(result.hosts)} records\n", style=p.dim)
             for h in result.hosts:
                 t.append("  ")
                 t.append(f"{h.ip}:{h.port:<5}", style=f"bold {p.primary}")
@@ -4621,6 +4681,16 @@ class ZimZillaApp(App):
                 if h.vulns:
                     t.append("  ⚠ " + ",".join(h.vulns[:4]), style=f"bold {p.red}")
                 t.append("\n")
+        elif result.search_error:
+            # Say *why* there are no rows. "403 — Requires membership" is the
+            # answer to "why is this different from what I see on the site".
+            t.append("\n  ◈ ROWS      ", style=f"bold {p.amber}")
+            t.append(f"none — {result.search_error}\n", style=p.dim)
+        else:
+            t.append("\n  ◈ ROWS      ", style=f"bold {p.amber}")
+            t.append("none — this plan returns counts and facets only\n", style=p.dim)
+
+        if result.total:
             t.append("\n  ◈ NEXT      ", style=f"bold {p.accent}")
             t.append("the working model analyses this and asks you to pick a task\n",
                      style=p.dim)
@@ -4629,7 +4699,7 @@ class ZimZillaApp(App):
                      "filter\n", style=p.amber)
         self.query_one(ChatPane).write_block(t)
 
-        if not result.hosts:
+        if not result.total:
             return
         if self.busy:
             self._sys_line("results shown; harness is busy — no analysis turn",
