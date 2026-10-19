@@ -142,7 +142,7 @@ up right now, with uptime, and `/model` offers the same list. The proxy config
 also carries a wildcard route, so a model Logfare adds later works without
 waiting for a ZimZilla release.
 
-Other upstreams are `/zim-iteracompute`, `/zim-tokenharbour`,
+Other upstreams are `/zim-iteracompute`, `/zim-infronai`, `/zim-tokenharbour`,
 `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`, `/zim-beatapi` and
 `/zim-antseed`, each with your own credential or none at all.
 
@@ -625,7 +625,7 @@ or a colour diff of the change, and three keys:
 
 ZimZilla speaks the Anthropic Messages protocol to whatever `ANTHROPIC_BASE_URL`
 points at, so it can run against a local LiteLLM proxy, a hosted gateway or a
-peer-to-peer marketplace without any code caring which. Nine sources are wired
+peer-to-peer marketplace without any code caring which. Ten sources are wired
 up:
 
 | Source | Endpoint | Key | How it starts |
@@ -633,6 +633,7 @@ up:
 | **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, all chat models |
 | **Token Juice** | `:4000` | discovered | its own local proxy — under construction |
 | **IteraCompute** | `:4002` | yours | its own local proxy — free Qwen tier |
+| **InfronAI** | `:4003` | yours | its own local proxy — free model tier, $5 balance required |
 | **TokenHarbour** | `tokenharbor.ai` | yours | hosted — nothing to start |
 | **OpenRouter** | `openrouter.ai` | yours | hosted — nothing to start |
 | **UnoRouter** | `api.unorouter.com` | yours | hosted — nothing to start |
@@ -640,10 +641,10 @@ up:
 | **BeatAPI** | `direct.beatapi.io` | yours | hosted — nothing to start |
 | **AntSeed** | `:8377` | **none** | `antseed buyer start` — a local buyer on a P2P network |
 
-Switch with `/zim-logfare`, `/zim-iteracompute`, `/zim-tokenharbour`,
-`/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`, `/zim-beatapi` or
-`/zim-antseed`; the choice is remembered, so the next launch comes back to the
-one that was working.
+Switch with `/zim-logfare`, `/zim-iteracompute`, `/zim-infronai`,
+`/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`,
+`/zim-beatapi` or `/zim-antseed`; the choice is remembered, so the next launch
+comes back to the one that was working.
 
 Logfare is a full switch target: the shipped key makes it work with no signup,
 and it serves every chat model on Logfare's catalog. The key is shared, so its
@@ -879,6 +880,74 @@ fail on a request the upstream would reject. The free account tier's context is
 128K per the docs, smaller than the model's own window, so compaction plans
 against the conservative 128K.
 
+### InfronAI
+
+InfronAI (`infron.ai`, API at `llm.onerouter.pro`) is a model marketplace behind
+one key, and it is the one upstream here that **does** speak the Anthropic
+protocol natively — `POST /v1/messages` answers `401` without a key while a
+nonsense path `404`s, so the endpoint exists. It still runs behind a local
+LiteLLM proxy on `:4003`, and the catalog is what says why.
+
+**Every free chat model is OpenAI-endpoint only.** The catalog publishes
+`supported_endpoint_types` per model: all six `:free` chat models list
+`["openai"]` and nothing else. Of 341 LLM entries only 21 list `anthropic`, and
+none of those is free. A session aimed straight at the upstream would work for a
+paid Claude model and fail for exactly the models this route exists to serve.
+
+Set your key once:
+
+```
+/infronai-api-setup yourkeyhere
+```
+
+That writes `~/.zimzilla/infronai/source` (mode 600), the same profile format as
+every other source, and the launcher starts the proxy from
+`~/.zimzilla/infronai/start-litellm.sh`. Then:
+
+```
+/zim-infronai              # switch (starts the proxy), and fetch the free list
+/infronai-models           # the free catalog again, any time
+/models infronai           # the same set, through the generic command
+/model deepseek/deepseek-v4.1-flash:free
+```
+
+**The catalog is public**, so `/infronai-models` and `/models infronai` work
+*before* you have a key — the key is only needed to send a message.
+
+**Free means a read 0/0 price, not the suffix.** Free variants carry a `:free`
+suffix and are billed at $0.00 per token, and the catalog's
+`min_prompt_price`/`min_completion_price` agree on every entry measured. Both are
+read; the suffix is trusted only when no price could be read, because 120 of the
+503 entries carry nulls and a missing price must not read as free.
+
+**The free tier is not free of prerequisites.** Standard free models need **$5
+or more** on the account — an anti-abuse measure that free usage never deducts
+from — and are capped at **1000 requests per day per account, shared across
+every standard free model**, resetting at 00:00 UTC. An unfunded account gets
+`402` even for a `:free` model, which is why the message for a 402 says so
+rather than leaving it to be puzzled out.
+
+**Three catalog traps are filtered, not named.** Entries whose
+`output_modalities` is not `text` cannot answer a turn — 52 of the free-priced
+ones are video generators. `is_display_only` marks a model shown but not served.
+And a handful of LLMs list only `openai-response`, which the Chat Completions
+proxy cannot forward. Each is a field test, so a new model is handled without an
+edit here.
+
+**The proxy pins Chat Completions**, for the same reason as IteraCompute: LiteLLM
+sends an `openai/` deployment's `/v1/messages` through the **Responses API** by
+default, while Infron serves `/v1/chat/completions` for all 503 catalog entries
+and `/v1/responses` for only a handful.
+
+**Model ids are `provider/model` and are forwarded verbatim.** The proxy carries
+a `*` wildcard, so a model added upstream works without a release here, and the
+gateway's docs are explicit that no `infronai/` prefix belongs on the id.
+
+**One request detail is load-bearing.** The gateway sits behind Cloudflare, which
+answers urllib's default `Python-urllib` signature with `403 Error 1010` — so the
+module sends its own User-Agent, and a 403 is reported as the bot rule rather
+than as a rejected key (a bad key reads as `401` here).
+
 ### BeatAPI
 
 BeatAPI (`beatapi.io`) fronts text, image and video models behind one key. The
@@ -1111,9 +1180,12 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/zim-iteracompute` | switch upstream to IteraCompute — local proxy, free models, OpenAI-only upstream |
 | `/iteracompute-api-setup <key>` | store your IteraCompute API key |
 | `/iteracompute-models` | the live free catalog — what is free and usable |
+| `/zim-infronai` | switch upstream to InfronAI — local proxy, free models, OpenAI-only for every free model |
+| `/infronai-api-setup <key>` | store your InfronAI API key |
+| `/infronai-models` | the live free catalog — what is free and usable |
 | `/zim-antseed` | switch upstream to AntSeed — the local buyer, free peers, no key |
 | `/antseed-models` | list AntSeed's free models, each with the peer to pin |
-| `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `aihubmix`, `beatapi`, `iteracompute`, `antseed` |
+| `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `aihubmix`, `beatapi`, `iteracompute`, `infronai`, `antseed` |
 | `/zim-source` | show every upstream and its status |
 | `/reverse-engineer <file>` | map an artifact (`.apk`, `.zip`, `.exe`, `.sh`, binary), then ask what you want changed |
 | `/reverse-engineer <file> --map` | map it only — no model turn, nothing sent |

@@ -6,6 +6,7 @@ points at. Three local LiteLLM proxies front three different upstreams:
     logfare       :4001  →  logfare.ai         (the default, shipped with the repo)
     tokenjuice    :4000  →  api.tokenjuice.ai  (deepseek-claude's endpoint)
     iteracompute  :4002  →  api.iteracompute.com (OpenAI-only; free Qwen tier)
+    infronai      :4003  →  llm.onerouter.pro  (OpenAI-only; free model tier)
 
 Logfare is a full route, not just the starting point: the shipped profile makes
 a fresh clone run with no signup, and ``/zim-logfare`` switches back to it at
@@ -16,6 +17,11 @@ which the harness reports rather than retrying.
 IteraCompute is OpenAI-compatible only, so its proxy is not optional: the
 upstream has no Messages endpoint at all. Its free tier is 30M tokens per UTC
 calendar month on one model, and ``/iteracompute-api-setup`` stores the key.
+
+InfronAI does serve Messages natively, but its free models are listed
+``openai``-endpoint only in the catalog, so its proxy is not optional either.
+Its free tier needs a funded balance ($5) and allows 1000 requests per day
+across all free models; ``/infronai-api-setup`` stores the key.
 
 Token Juice stays parked (see UNDER_CONSTRUCTION) because its upstream keeps
 renaming its model id.
@@ -145,10 +151,24 @@ ITERACOMPUTE_MODELS: tuple[str, ...] = (
     "qwen/qwen3.8-27b",
 )
 
+#: InfronAI's declared fallback. Its real catalog is fetched from the public
+#: Models endpoint (see ``infronai.py``); this is what ``/model`` shows before
+#: that fetch. The free lineup is six chat models and turns over, so these are
+#: the ones measured present on 2026-10-20 — a starting point, not the truth.
+INFRONAI_MODELS: tuple[str, ...] = (
+    "deepseek/deepseek-v4.1-flash:free",
+    "qwen/qwen3.8-27b:free",
+    "apodex/apodex-1.1-mini:free",
+    "inclusionai/ling-3.1-flash:free",
+    "internlm/atria-dawn-preview:free",
+    "qwen/qwen3.8-27b-abliterated-cyber:free",
+)
+
 MODELS_BY_KEY: dict[str, tuple[str, ...]] = {
     "logfare": LOGFARE_MODELS,
     "tokenjuice": TOKENJUICE_MODELS,
     "iteracompute": ITERACOMPUTE_MODELS,
+    "infronai": INFRONAI_MODELS,
 }
 
 
@@ -212,6 +232,10 @@ def models_for(base_url: str) -> tuple[str, ...] | None:
         from . import iteracompute as ic_mod
         cached = ic_mod.cached_ids()
         return tuple(cached) if cached else None
+    if key == "infronai":
+        from . import infronai as inf_mod
+        cached = inf_mod.cached_ids()
+        return tuple(cached) if cached else None
     return MODELS_BY_KEY.get(key) or None
 
 
@@ -244,6 +268,9 @@ def catalog_models(key: str) -> list | None:
     if key == "iteracompute":
         from . import iteracompute as ic_mod
         return ic_mod.cached_models()
+    if key == "infronai":
+        from . import infronai as inf_mod
+        return inf_mod.cached_models()
     return None
 
 
@@ -366,6 +393,11 @@ def _service_candidates(key: str) -> list[Path]:
             ZIMZILLA_HOME / "iteracompute" / "start-litellm.sh",
             DEFAULT_ROOT / "packaging" / "iteracompute" / "start-litellm.sh",
         ]
+    if key == "infronai":
+        return [
+            ZIMZILLA_HOME / "infronai" / "start-litellm.sh",
+            DEFAULT_ROOT / "packaging" / "infronai" / "start-litellm.sh",
+        ]
     return [
         ZIMZILLA_HOME / "tokenjuice" / "start-litellm.sh",
         DEFAULT_HOME / "start-litellm.sh",
@@ -382,6 +414,11 @@ def _config_candidates(key: str) -> list[Path]:
         return [
             ZIMZILLA_HOME / "iteracompute" / "litellm-config.yaml",
             DEFAULT_ROOT / "packaging" / "iteracompute" / "litellm-config.yaml",
+        ]
+    if key == "infronai":
+        return [
+            ZIMZILLA_HOME / "infronai" / "litellm-config.yaml",
+            DEFAULT_ROOT / "packaging" / "infronai" / "litellm-config.yaml",
         ]
     return [
         ZIMZILLA_HOME / "tokenjuice" / "litellm-config.yaml",
@@ -401,6 +438,11 @@ def _profile_candidates(key: str) -> list[Path]:
         # it otherwise, so there is nothing to fall back to in the tree.
         return [
             ZIMZILLA_HOME / "iteracompute" / "source",
+        ]
+    if key == "infronai":
+        # Same shape as IteraCompute: no credential ships, and none could.
+        return [
+            ZIMZILLA_HOME / "infronai" / "source",
         ]
     return [
         ZIMZILLA_HOME / "tokenjuice" / "source",
@@ -437,6 +479,12 @@ def discover() -> dict[str, Source]:
     iteracompute = _build("iteracompute", "IteraCompute", 4002, "qwen/qwen3.8-27b")
     if iteracompute:
         found["iteracompute"] = iteracompute
+    # Same arrangement, one port over: the proxy files ship in the tree, and
+    # only the operator's key can be missing.
+    infronai = _build("infronai", "InfronAI", 4003,
+                      "deepseek/deepseek-v4.1-flash:free")
+    if infronai:
+        found["infronai"] = infronai
     return found
 
 
@@ -581,6 +629,7 @@ def active_key(base_url: str) -> str | None:
     from . import aihubmix as ah_mod
     from . import antseed as as_mod
     from . import beatapi as bp_mod
+    from . import infronai as inf_mod
     from . import iteracompute as ic_mod
     from . import openrouter as or_mod
     from . import tokenharbour as th_mod
@@ -601,6 +650,10 @@ def active_key(base_url: str) -> str | None:
     # source is recognised even when `discover()` has no profile to find.
     if ic_mod.is_iteracompute(base_url):
         return "iteracompute"
+    # Same reasoning as IteraCompute above: a local proxy identified by its own
+    # predicate, so the port lives in one module rather than being spelled here.
+    if inf_mod.is_infronai(base_url):
+        return "infronai"
     # Checked before the port match, and by port rather than by name: the buyer
     # hands out a plain http://localhost:8377 with no "antseed" in it, and the
     # regex below would otherwise find port 8377, miss it in source_for_port()

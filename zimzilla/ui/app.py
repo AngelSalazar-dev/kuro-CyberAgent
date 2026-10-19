@@ -31,6 +31,7 @@ from .. import beatapi as bp_mod
 from .. import crack as crack_mod
 from .. import antseed as as_mod
 from .. import hunt as hunt_mod
+from .. import infronai as inf_mod
 from .. import iteracompute as ic_mod
 from .. import ldxhub as ldx_mod
 from .. import logfare as lf_mod
@@ -1211,6 +1212,11 @@ class ZimZillaApp(App):
         # list until the operator happened to run /iteracompute-models.
         elif sources_mod.active_key(self.cfg.base_url) == "iteracompute":
             self._warm_iteracompute_catalog()
+        # And again for InfronAI, for the same reason: every id it serves is
+        # `provider/model`, and the declared fallback is a snapshot of a free
+        # lineup that changes over time.
+        elif sources_mod.active_key(self.cfg.base_url) == "infronai":
+            self._warm_infronai_catalog()
         # Replay anything the user typed while the boot animation was running.
         text = "".join(typed or [])
         inp.focus()
@@ -2003,6 +2009,7 @@ class ZimZillaApp(App):
         "aihubmix-api-setup", "aihubmix-models", "zim-aihubmix",
         "beatapi-api-setup", "beatapi-models", "zim-beatapi",
         "iteracompute-api-setup", "iteracompute-models", "zim-iteracompute",
+        "infronai-api-setup", "infronai-models", "zim-infronai",
         "zim-antseed", "antseed-models",
         "logfare-models",
         # The Shodan key is a mode-600 write and a local read, like every other
@@ -2105,6 +2112,10 @@ class ZimZillaApp(App):
             "iteracompute-api-setup": lambda a: self._cmd_gateway_key(
                 "iteracompute", a),
             "iteracompute-models": lambda a: self._cmd_models(["iteracompute"]),
+            "zim-infronai": lambda a: self._cmd_zim_source("infronai"),
+            "infronai-api-setup": lambda a: self._cmd_gateway_key(
+                "infronai", a),
+            "infronai-models": lambda a: self._cmd_models(["infronai"]),
             "antseed-models": lambda a: self._cmd_models(["antseed"]),
             "models": lambda a: self._cmd_models(a),
             "logfare-models": lambda a: self._cmd_logfare_models(a),
@@ -2144,6 +2155,7 @@ class ZimZillaApp(App):
             ("/zim-aihubmix", "switch upstream to AIHubMix     (hosted, free models)"),
             ("/zim-beatapi", "switch upstream to BeatAPI      (hosted, free models)"),
             ("/zim-iteracompute", "switch upstream to IteraCompute (local proxy, free models)"),
+            ("/zim-infronai", "switch upstream to InfronAI   (local proxy, free models)"),
             ("/zim-antseed", "switch upstream to AntSeed (local buyer, free peers)"),
             ("/zim-source", "show upstream sources and their status"),
             ("/tokenharbour-api-setup <key>", "store your TokenHarbour API key"),
@@ -2157,6 +2169,8 @@ class ZimZillaApp(App):
             ("/beatapi-models", "the live free catalog — what is free and usable"),
             ("/iteracompute-api-setup [key]", "store your IteraCompute API key"),
             ("/iteracompute-models", "the live free catalog — what is free and usable"),
+            ("/infronai-api-setup [key]", "store your InfronAI API key"),
+            ("/infronai-models", "the live free catalog — what is free and usable"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin"),
             ("/models", "free models of an upstream — /models [source]"),
             ("/logfare-models", "fetch the live catalog; show what is up"),
@@ -2328,6 +2342,9 @@ class ZimZillaApp(App):
         # reason as the others: the fetch is the slow part and this is a render.
         ic_catalog = (ic_mod.cached_models()
                       if active == "iteracompute" else None)
+        # InfronAI's, on the same terms.
+        inf_catalog = (inf_mod.cached_models()
+                       if active == "infronai" else None)
         # Logfare's is fetched too, and carries per-model health. Read once for
         # the same reason: the fetch is the slow part and this is a render.
         lf_catalog = sources_mod.catalog_for(self.cfg.base_url)
@@ -2352,7 +2369,7 @@ class ZimZillaApp(App):
             order = self._model_display_order(
                 models,
                 th_catalog or as_catalog or uno_catalog or ah_catalog
-                or bp_catalog or ic_catalog)
+                or bp_catalog or ic_catalog or inf_catalog)
             for m in order:
                 mark = "◉" if m == self.cfg.model else "○"
                 style = f"bold {p.accent}" if m == self.cfg.model else p.primary
@@ -2367,7 +2384,8 @@ class ZimZillaApp(App):
                             break
                 t.append(f"  {mark} {shown:<26}", style=style)
                 note = self._model_note(m, th_catalog, lf_catalog, as_catalog,
-                                        uno_catalog, bp_catalog, ic_catalog)
+                                        uno_catalog, bp_catalog, ic_catalog,
+                                        inf_catalog)
                 t.append(note + "\n", style=p.dim)
             t.append("\n  usage: /model <name>\n", style=p.dim)
             # Say how current the list is, not merely that one exists. A cache
@@ -2418,6 +2436,14 @@ class ZimZillaApp(App):
                     "are listed first. The free tier is\n"
                     "  a monthly token allowance on one model\n",
                     style=p.dim)
+            elif active == "infronai":
+                t.append(
+                    f"  catalog {_catalog_clause(inf_mod.catalog_age(), inf_mod.CACHE_TTL)}"
+                    " — /infronai-models shows the\nfree ones; free models are "
+                    "listed first. Free means priced 0/0 or a\n"
+                    "  :free suffix, and a free account still needs a $5 "
+                    "balance\n",
+                    style=p.dim)
             self.query_one(ChatPane).write_block(t)
             return
         name = args[0]
@@ -2453,7 +2479,7 @@ class ZimZillaApp(App):
         # wrong answer was the common case rather than the corner.
         if active in ("tokenharbour", "openrouter", "unorouter", "antseed",
                       "logfare", "aihubmix", "beatapi",
-                      "iteracompute") and (
+                      "iteracompute", "infronai") and (
                 models is None or check_name not in models):
             fetched = None
             if active == "tokenharbour":
@@ -2509,6 +2535,15 @@ class ZimZillaApp(App):
                     fetched, _ = ic_mod.fetch_models(creds[0] if creds else "")
                 else:
                     fetched = list(ic_catalog)
+            elif active == "infronai":
+                # Keyless too: /v1/models answers with no credential. Fetched
+                # rather than read from the cache when the cache is cold or
+                # expired, so a live model is not refused against a stale list.
+                if inf_catalog is None:
+                    creds = inf_mod.load_credentials()
+                    fetched, _ = inf_mod.fetch_models(creds[0] if creds else "")
+                else:
+                    fetched = list(inf_catalog)
             elif active == "logfare":
                 if lf_catalog is None:
                     # The status API is public — no key, so this works before
@@ -2529,6 +2564,8 @@ class ZimZillaApp(App):
                     bp_catalog = fetched
                 elif active == "iteracompute":
                     ic_catalog = fetched
+                elif active == "infronai":
+                    inf_catalog = fetched
                 elif active == "logfare":
                     lf_catalog = fetched
                 models = tuple(m.id for m in fetched)
@@ -2585,7 +2622,7 @@ class ZimZillaApp(App):
 
     def _model_note(self, name: str, catalog, lf_catalog=None,
                     as_catalog=None, uno_catalog=None, bp_catalog=None,
-                    ic_catalog=None) -> str:
+                    ic_catalog=None, inf_catalog=None) -> str:
         """The price/context note beside a model in /model.
 
         TokenHarbour's catalog is authoritative for its own models — it is the
@@ -2618,6 +2655,8 @@ class ZimZillaApp(App):
             live = bp_mod.price_for(name, bp_catalog)
         if live is None:
             live = ic_mod.price_for(name, ic_catalog)
+        if live is None:
+            live = inf_mod.price_for(name, inf_catalog)
         if live is not None:
             pin, pout = live
             note = "free" if (pin == 0.0 and pout == 0.0) \
@@ -2895,21 +2934,23 @@ class ZimZillaApp(App):
                 ("beatapi", bp_mod, "BeatAPI", "/beatapi-api-setup"),
                 ("iteracompute", ic_mod, "IteraCompute",
                  "/iteracompute-api-setup"),
+                ("infronai", inf_mod, "InfronAI", "/infronai-api-setup"),
             ):
-                # IteraCompute has a local proxy, so when its profile exists it
-                # is already listed above by discover() — with a port and a live
-                # health state, which is more than this row could say. Listing
-                # it twice would make one source look like two.
+                # IteraCompute and InfronAI have local proxies, so when their
+                # profiles exist they are already listed above by discover() —
+                # with a port and a live health state, which is more than this
+                # row could say. Listing one twice would make one source look
+                # like two.
                 if _kind in found:
                     continue
                 creds = _mod.load_credentials()
                 mark = "◉" if active == _kind else "○"
                 style = f"bold {p.accent}" if active == _kind else p.primary
                 t.append(f"  {mark} {_kind:<12}", style=style)
-                if _kind == "iteracompute":
-                    # Not hosted: it is a local proxy whose profile is simply
+                if _kind in ("iteracompute", "infronai"):
+                    # Not hosted: a local proxy whose profile is simply
                     # missing, so the port is the honest detail to show.
-                    t.append(f":{ic_mod.PROXY_PORT}  {_label:<12} ",
+                    t.append(f":{_mod.PROXY_PORT}  {_label:<12} ",
                              style=p.primary)
                 else:
                     t.append(f"      hosted  {_label:<12} ", style=p.primary)
@@ -2947,7 +2988,7 @@ class ZimZillaApp(App):
             t.append("\n  switch with  /zim-logfare,  /zim-tokenharbour,\n"
                      "                 /zim-openrouter,  /zim-unorouter,\n"
                      "                 /zim-aihubmix,  /zim-beatapi,\n"
-                     "                 /zim-iteracompute,\n"
+                     "                 /zim-iteracompute,  /zim-infronai,\n"
                      "                 or  /zim-antseed\n",
                      style=p.dim)
             # Any route that is present but parked is named once here, so the
@@ -2961,14 +3002,15 @@ class ZimZillaApp(App):
 
         src = found.get(key)
         if src is None:
-            # IteraCompute is the one local proxy with no shipped profile: it is
-            # missing until the operator sets their own key, so the generic
-            # "profile, config or service missing" would leave them with no next
-            # step. Name the command that creates it.
-            if key == "iteracompute":
+            # IteraCompute and InfronAI are the local proxies with no shipped
+            # profile: they are missing until the operator sets their own key,
+            # so the generic "profile, config or service missing" would leave
+            # them with no next step. Name the command that creates it.
+            if key in ("iteracompute", "infronai"):
+                _label = "IteraCompute" if key == "iteracompute" else "InfronAI"
                 self._sys_line(
-                    "IteraCompute is not set up on this machine — set your key "
-                    "with /iteracompute-api-setup <key>", warn=True)
+                    f"{_label} is not set up on this machine — set your key "
+                    f"with /{key}-api-setup <key>", warn=True)
                 return
             self._sys_line(
                 f"source '{key}' is not available — profile, config or service missing",
@@ -3049,24 +3091,32 @@ class ZimZillaApp(App):
     async def _verify_model_for(self, src, name: str) -> tuple[str, str | None]:
         """``(model_to_use, replaced_name_or_None)`` for a just-started source.
 
-        Logfare and IteraCompute both publish a catalog, and both have a local
-        proxy whose profile can go stale — IteraCompute's more so, because its
-        free tier is one model and the one on offer turns over. A fetch that
-        fails leaves the stored name alone: an unreachable catalog is not
-        evidence that a model was retired, and refusing to switch on it would
-        be worse than the 404 it is trying to prevent.
+        Logfare, IteraCompute and InfronAI all publish a catalog, and all have a
+        local proxy whose profile can go stale — the free-tier ones more so,
+        because the lineup they serve turns over. A fetch that fails leaves the
+        stored name alone: an unreachable catalog is not evidence that a model
+        was retired, and refusing to switch on it would be worse than the 404
+        it is trying to prevent.
         """
-        if src.key == "iteracompute":
+        if src.key in ("iteracompute", "infronai"):
             # The catalog, not the health feed: this is what says which ids the
-            # proxy can actually forward, and image entries are excluded by
-            # `model_ids` so a switch cannot land on one.
-            ids, _ = await asyncio.to_thread(ic_mod.model_ids)
+            # proxy can actually forward. `model_ids` drops image entries, and
+            # for InfronAI also the Responses-only ones, so a switch cannot land
+            # on something the Chat Completions proxy would refuse.
+            mod = ic_mod if src.key == "iteracompute" else inf_mod
+            ids, _ = await asyncio.to_thread(mod.model_ids)
             if not ids:
                 return name, None
             if name in ids:
                 return name, None
             if src.model in ids:
                 return src.model, name
+            # Neither the stored name nor the declared default survives: the
+            # free lineup moved. Prefer whatever is free right now over leaving
+            # a paid name in place that the account may not be funded for.
+            fresh = await asyncio.to_thread(mod.default_free_model)
+            if fresh:
+                return fresh, name
             return name, None
         if src.key != "logfare":
             return name, None
@@ -3235,6 +3285,18 @@ class ZimZillaApp(App):
         creds = ic_mod.load_credentials()
         ic_mod.fetch_models(creds[0] if creds else "")
 
+    @work(exclusive=True, thread=True)
+    def _warm_infronai_catalog(self) -> None:
+        """Fetch InfronAI's catalog once at startup, silently.
+
+        Silent for the same reason the other two warm-ups are: a launch that
+        cannot reach the public catalog is still a working launch, /model falls
+        back to the declared list, and /infronai-models reports the failure on
+        demand. A catalog that is merely fresh is not news.
+        """
+        creds = inf_mod.load_credentials()
+        inf_mod.fetch_models(creds[0] if creds else "")
+
     def _show_logfare_models(self, models, err: str) -> None:
         p = self.palette
         if models is None:
@@ -3344,6 +3406,10 @@ class ZimZillaApp(App):
         # the same read/write against a mode-600 profile.
         if kind == "iteracompute":
             return ic_mod, "IteraCompute"
+        # Same case again: a local proxy, so `/zim-infronai` goes through
+        # `_cmd_zim_source`. Listed here for the key command alone.
+        if kind == "infronai":
+            return inf_mod, "InfronAI"
         if kind == "antseed":
             return as_mod, "AntSeed"
         return None
@@ -3397,7 +3463,7 @@ class ZimZillaApp(App):
             t.append("  set it with  ", style=p.dim)
             t.append(f"/{kind}-api-setup <key>\n", style=f"bold {p.primary}")
             if kind in ("openrouter", "unorouter", "aihubmix", "beatapi",
-                        "iteracompute"):
+                        "iteracompute", "infronai"):
                 # Worth saying plainly: this catalog is public, so the free list
                 # and a model choice work before any key exists. The key is only
                 # needed to actually send a message.
@@ -3620,11 +3686,12 @@ class ZimZillaApp(App):
         upstream this session is not pointed at cannot be run at all.
 
         An explicit source is accepted for the one case the active-source rule
-        gets wrong: **OpenRouter's and UnoRouter's catalogs are public**, so
-        their free lists are worth seeing before a key exists — and before the
-        session is pointed there, since pointing at either needs a key. Without
-        the argument those lists would be unreachable until after the very setup
-        they are meant to inform.
+        gets wrong: **OpenRouter's, UnoRouter's, AIHubMix's, BeatAPI's,
+        IteraCompute's and InfronAI's catalogs are public**, so their free lists
+        are worth seeing before a key exists — and before the session is pointed
+        there, since pointing at any of them needs a key. Without the argument
+        those lists would be unreachable until after the very setup they are
+        meant to inform.
         """
         key = args[0].strip().lower() if args else ""
         if not key:
@@ -3637,7 +3704,7 @@ class ZimZillaApp(App):
 
         known = {"logfare", "tokenjuice", "tokenharbour", "openrouter",
                  "unorouter", "antseed", "aihubmix", "beatapi",
-                 "iteracompute"}
+                 "iteracompute", "infronai"}
         if key not in known:
             self._sys_line(
                 f"unknown upstream: {key} — try one of "
@@ -3712,6 +3779,13 @@ class ZimZillaApp(App):
             # present so the listing matches this account.
             creds = ic_mod.load_credentials()
             return ic_mod.usable_free_models(creds[0] if creds else "")
+        if kind == "infronai":
+            # Keyless: the catalog at llm.onerouter.pro/v1/models answers with no
+            # credential at all, so /infronai-models works before
+            # /infronai-api-setup has run. Sent when present so the listing
+            # matches this account's reachable models.
+            creds = inf_mod.load_credentials()
+            return inf_mod.usable_free_models(creds[0] if creds else "")
         if kind == "tokenharbour":
             creds = th_mod.load_credentials()
             if creds is None:
@@ -3742,6 +3816,7 @@ class ZimZillaApp(App):
         label = {"openrouter": "OPENROUTER", "unorouter": "UNOROUTER",
                  "aihubmix": "AIHUBMIX", "beatapi": "BEATAPI",
                  "iteracompute": "ITERACOMPUTE",
+                 "infronai": "INFRONAI",
                  "tokenharbour": "TOKENHARBOUR", "logfare": "LOGFARE",
                  "antseed": "ANTSEED"}.get(kind, kind.upper())
         t = Text()
@@ -3772,6 +3847,14 @@ class ZimZillaApp(App):
                     "token allowance, so an\n  empty list means none is offered "
                     "right now — not that the source is\n  broken)\n",
                     style=p.dim)
+            if kind == "infronai":
+                t.append(
+                    "  (the catalog is live; free means a zero read AND write "
+                    "price, or a\n  ':free' suffix on an unpriced entry. The "
+                    "free tier needs a funded\n  balance and is capped at 1000 "
+                    "requests/day across all free models, so\n  an empty list "
+                    "means none is offered right now — not that the source\n"
+                    "  is broken)\n", style=p.dim)
         else:
             for m in models:
                 mark = "◉" if m.id == self.cfg.model else "○"
@@ -3882,6 +3965,22 @@ class ZimZillaApp(App):
                 "  context shown is the free tier's 128K cap, not the model's "
                 "larger\n  window: an API key does not say which tier the "
                 "account is on\n", style=p.dim)
+        if kind == "infronai":
+            # Three facts, all measured from the catalog rather than inferred:
+            # what "free" means here, that the suffix alone is not it, and the
+            # two limits the free tier carries.
+            t.append(
+                "  free = zero read AND write price · NOT the :free suffix on "
+                "its own,\n  which also appears on entries the catalog leaves "
+                "unpriced\n", style=p.dim)
+            t.append(
+                "  free models need a $5 balance (anti-abuse, not spent by "
+                "free usage) and\n  share 1000 requests/day per account, "
+                "resetting 00:00 UTC\n", style=p.dim)
+            t.append(
+                "  text output only · tool support is shown but never used to "
+                "hide a\n  model, because the catalog under-reports it\n",
+                style=p.dim)
         self.query_one(ChatPane).write_block(t)
         self._refresh_model_choices()
 
@@ -6949,6 +7048,7 @@ class ZimZillaApp(App):
             ("/zim-aihubmix", "switch upstream to AIHubMix", "zim-aihubmix"),
             ("/zim-beatapi", "switch upstream to BeatAPI", "zim-beatapi"),
             ("/zim-iteracompute", "switch upstream to IteraCompute", "zim-iteracompute"),
+            ("/zim-infronai", "switch upstream to InfronAI", "zim-infronai"),
             ("/zim-antseed", "switch upstream to AntSeed", "zim-antseed"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin",
              "antseed-models"),
@@ -6974,6 +7074,10 @@ class ZimZillaApp(App):
              "iteracompute-api-setup"),
             ("/iteracompute-models", "the live free catalog — what is free and usable",
              "iteracompute-models"),
+            ("/infronai-api-setup", "store your InfronAI API key",
+             "infronai-api-setup"),
+            ("/infronai-models", "the live free catalog — what is free and usable",
+             "infronai-models"),
             ("/models", "free models of an upstream — /models [source]", "models"),
             ("/logfare-models", "fetch the live catalog; show what is up",
              "logfare-models"),

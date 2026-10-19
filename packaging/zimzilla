@@ -139,6 +139,22 @@ if [[ "$_current_source" == "iteracompute" ]]; then
   fi
 fi
 
+if [[ "$_current_source" == "infronai" ]]; then
+  # The same fail-open arrangement as IteraCompute: a local proxy whose profile
+  # is the operator's own, so there is nothing shipped to fall back to. When it
+  # is missing, fall through to Logfare rather than dying fail-closed on a route
+  # that has not been set up — `/infronai-api-setup` is the command that fixes
+  # it, and a session that cannot start cannot run it.
+  _inf_profile="$ZIMZILLA_HOME/infronai/source"
+  _inf_service="$ZIMZILLA_HOME/infronai/start-litellm.sh"
+  if [[ -r "$_inf_profile" && -x "$_inf_service" ]]; then
+    LITELLM_ENV_FILE="${_env_override:-$_inf_profile}"
+    LITELLM_PORT="${_port_override:-4003}"
+    LITELLM_SERVICE="${_svc_override:-$_inf_service}"
+    LITELLM_LOG="${LITELLM_LOG:-/tmp/litellm-infron.log}"
+  fi
+fi
+
 if [[ "$_current_source" == "tokenjuice" ]]; then
   # Prefer the installed route, which setup.sh populates; fall back to the
   # standalone deepseek-claude layout for a machine that had one before
