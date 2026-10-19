@@ -6,11 +6,14 @@ points at. Two local LiteLLM proxies front two different upstreams:
     logfare      :4001  →  logfare.ai        (the default, shipped with the repo)
     tokenjuice   :4000  →  api.tokenjuice.ai (deepseek-claude's endpoint)
 
-Both are parked as under construction (see UNDER_CONSTRUCTION), for different
-reasons: Token Juice's upstream keeps renaming its model id, and Logfare's
-shipped key is shared and rate-capped. Logfare is still where a session starts —
-the shipped profile is what lets a fresh clone run with no signup — so the park
-blocks a *switch to* it, not the default.
+Logfare is a full route, not just the starting point: the shipped profile makes
+a fresh clone run with no signup, and ``/zim-logfare`` switches back to it at
+any time. Its key is shared by every install, so heavy use can exhaust the
+upstream's daily request budget — that arrives as a 429 with a ``Retry-After``,
+which the harness reports rather than retrying.
+
+Token Juice stays parked (see UNDER_CONSTRUCTION) because its upstream keeps
+renaming its model id.
 
 The other upstreams (TokenHarbour, OpenRouter, UnoRouter, AIHubMix, BeatAPI,
 AntSeed) are remote or operator-started, and live in their own modules; this one
@@ -72,19 +75,14 @@ class Source:
 # remembered selection of it is refused by `current_key` — so a stale
 # `current-source` cannot drag a session back onto it.
 #
-# Logfare is parked *after* being installed, not instead of it: setup.sh seeds
-# a new install from the shared key in packaging/logfare/source, so the default
-# route starts a session with no signup. What it cannot be is a place to
-# switch to, because that key is shared by every install — Logfare caps it at
-# three concurrent requests, so a switch would hand the session to someone
-# else's queue. Being on it at launch is the intended state; arriving on it by
-# choice is not.
+# Logfare is deliberately NOT parked. It was, while the shipped key looked like
+# a starting point only; but the key is the project's own published credential,
+# every install is meant to run on it, and `/zim-logfare` has to be a route the
+# operator can come back to. What the shared key cannot do is carry unlimited
+# traffic — Logfare's free budget is per account, and exhausting it answers 429
+# with a Retry-After. That is a runtime condition to report, not a reason to
+# hide the route.
 UNDER_CONSTRUCTION: dict[str, str] = {
-    "logfare": (
-        "the shipped key is shared by every install and capped at three "
-        "concurrent requests — fine to start on, not a route to switch to; "
-        "set your own key with setup.sh to make it one"
-    ),
     "tokenjuice": (
         "the upstream keeps renaming its model id, and the last rename took "
         "the alias with it"
@@ -103,6 +101,11 @@ UNDER_CONSTRUCTION: dict[str, str] = {
 # the truth. Anything not in the live catalog returns "Model not found" (404) at
 # request time.
 #
+# It now mirrors the *whole* live chat catalog rather than a safe subset, so a
+# cold cache offers everything the proxy can route. The proxy config carries a
+# wildcard, so a model added upstream works here even before this tuple learns
+# about it — the tuple only decides what the picker shows before the fetch.
+#
 # Logfare's catalog also lists image/TTS/STT models (flux-*, sdxl-lightning,
 # whisper-large-v3-turbo, aura-2-en, nova-3, phoenix-1.0, lucid-origin); they
 # reject chat completions, so they are omitted here.
@@ -115,7 +118,12 @@ UNDER_CONSTRUCTION: dict[str, str] = {
 # place that name belongs.
 LOGFARE_MODELS: tuple[str, ...] = (
     "deepseek-v4.1-flash",
+    "deepseek-v4-pro-0813",
     "gemma-4-26b",
+    "glm-5.3",
+    "glm-5.3-flash",
+    "kimi-k2.6",
+    "claude-haiku-5-5",
     "logfare/auto",
     "qwen-3.8-27b",
 )

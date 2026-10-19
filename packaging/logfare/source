@@ -1,13 +1,14 @@
 # ZimZilla — Logfare profile
 #
 # Committed on purpose. This carries a shared Logfare key so that a fresh clone
-# can start a session without signing up for one — which is the only reason it
-# exists, and the reason setup.sh reuses it when it finds no other credential.
+# can start a session without signing up for one — and so `/zim-logfare` has a
+# credential to switch back to. setup.sh reuses it when it finds no other.
 #
 # It is not a secret in any meaningful sense: it is in this repository's public
-# history, and Logfare caps it at three concurrent requests for everyone using
-# it. That cap is why Logfare is reported as under construction: it is the
-# starting point, not a route to switch to.
+# history. What it is, is shared — every install uses it, against one per-account
+# budget (20/min, 500/hour, 2500/day, three concurrent). Exhausting that budget
+# gets a 429 with a Retry-After until the UTC day rolls over, which the harness
+# reports rather than retries. Your own key is the way to a larger allowance.
 #
 # Your own key always wins. setup.sh looks at ~/.zimzilla/logfare/source first
 # (mode 600), then $ANTHROPIC_AUTH_TOKEN, and only then at this file. Get a key

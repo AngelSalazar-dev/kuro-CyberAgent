@@ -151,7 +151,12 @@ DEFAULT_PRICE = (1.00, 3.00)
 # does not serve comes back "Model not found" (404) at request time.
 KNOWN_MODELS: list[str] = [
     "deepseek-v4.1-flash",
+    "deepseek-v4-pro-0813",
     "gemma-4-26b",
+    "glm-5.3",
+    "glm-5.3-flash",
+    "kimi-k2.6",
+    "claude-haiku-5-5",
     "logfare/auto",
     "qwen-3.8-27b",
 ]

@@ -37,7 +37,7 @@ SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/rain", "toggle the matrix-rain background"),
     ("/think", "toggle showing the model's own reasoning"),
     ("/theme", "switch palette: green | amber | cyan | system"),
-    ("/zim-logfare", "Logfare — under construction; the route you start on (:4001)"),
+    ("/zim-logfare", "switch upstream to Logfare (bundled proxy, all models)"),
     ("/zim-tokenjuice", "Token Juice — under construction (:4000)"),
     ("/zim-source", "show upstream sources and status"),
     ("/zim-tokenharbour", "switch upstream to TokenHarbour (hosted)"),

@@ -128,11 +128,23 @@ away with no signup. Put your own key in that file (or export `lfu_…` as
 `ANTHROPIC_AUTH_TOKEN`) whenever you want the shared one gone — an existing
 profile is never overwritten.
 
-The shared key is exactly that, shared, and Logfare caps it at three concurrent
-requests for every install using it. That is why **Logfare is reported as under
-construction**: it is where a session starts, not a route to switch to. Switching
-means `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`,
-`/zim-beatapi` or `/zim-antseed`, each with your own credential or none at all.
+The shared key is exactly that, shared. Every install uses it against one
+per-account budget — **20 requests/minute, 500/hour, 2,500/day, three
+concurrent** — and a busy day can exhaust it. When that happens Logfare answers
+`429` with a `Retry-After` (the budget resets at 00:00 UTC); ZimZilla reports the
+wait rather than retrying into it. Your own key has its own budget; put one in
+the profile whenever you want more headroom.
+
+**Logfare is a full route, not just the starting point.** `/zim-logfare` switches
+back to it from any other upstream, and the choice is remembered. Every chat
+model Logfare serves is available through it — `/logfare-models` lists what is
+up right now, with uptime, and `/model` offers the same list. The proxy config
+also carries a wildcard route, so a model Logfare adds later works without
+waiting for a ZimZilla release.
+
+Other upstreams are `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`,
+`/zim-aihubmix`, `/zim-beatapi` and `/zim-antseed`, each with your own credential
+or none at all.
 
 To configure setup yourself later, or to install somewhere other than the
 default:
@@ -189,6 +201,20 @@ fetched list expires after five minutes, so a long session cannot keep offering
 a catalog that has since moved on. `/model` says how old its list is
 (`catalog live (2m old)`, `catalog expired (1h old)`) rather than asserting that
 it is current.
+
+Every chat model in that catalog is selectable. At the time of writing that is
+nine: `deepseek-v4.1-flash`, `deepseek-v4-pro-0813`, `gemma-4-26b`, `glm-5.3`,
+`glm-5.3-flash`, `kimi-k2.6`, `claude-haiku-5-5`, `logfare/auto` and
+`qwen-3.8-27b`. The proxy config names each one and carries a `*` wildcard, so a
+model Logfare adds later routes without a new ZimZilla release — the wildcard is
+a fallback, never preferred over a named entry.
+
+Two upstream behaviours are worth knowing before you pick one. **Premium models
+need a one-time training opt-in** on the Logfare account; until it is granted the
+upstream answers `403 training_optin_required`, which is the account's state and
+not a fault in ZimZilla. And **the shared key has a daily request budget**, so a
+busy day answers `429` with a `Retry-After` until 00:00 UTC — the harness reports
+the wait instead of retrying into it, and your own key has its own budget.
 
 ### Updates
 
@@ -604,7 +630,7 @@ up:
 
 | Source | Endpoint | Key | How it starts |
 |---|---|---|---|
-| **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, and under construction |
+| **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, all chat models |
 | **Token Juice** | `:4000` | discovered | its own local proxy — under construction |
 | **TokenHarbour** | `tokenharbor.ai` | yours | hosted — nothing to start |
 | **OpenRouter** | `openrouter.ai` | yours | hosted — nothing to start |
@@ -613,16 +639,16 @@ up:
 | **BeatAPI** | `direct.beatapi.io` | yours | hosted — nothing to start |
 | **AntSeed** | `:8377` | **none** | `antseed buyer start` — a local buyer on a P2P network |
 
-Switch with `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`,
-`/zim-aihubmix`, `/zim-beatapi` or `/zim-antseed`; the choice is remembered, so
-the next launch comes back to the one that was working.
+Switch with `/zim-logfare`, `/zim-tokenharbour`, `/zim-openrouter`,
+`/zim-unorouter`, `/zim-aihubmix`, `/zim-beatapi` or `/zim-antseed`; the choice
+is remembered, so the next launch comes back to the one that was working.
 
-Logfare and Token Juice are listed by `/zim-source` but **under construction**,
-and cannot be switched to. Logfare is the route a session starts on — the
-shipped key makes that work with no signup — but that key is shared by every
-install and capped at three concurrent requests, so it is a starting point
-rather than somewhere to switch. Token Juice's upstream keeps renaming its model
-id. Both reasons print in full; neither route is hidden.
+Logfare is a full switch target: the shipped key makes it work with no signup,
+and it serves every chat model on Logfare's catalog. The key is shared, so its
+request budget is shared too — see [Install](#install) for the numbers, and use
+`/logfare-models` to see what is up right now. Token Juice is the one route still
+listed by `/zim-source` as **under construction**, because its upstream keeps
+renaming its model id; the reason prints in full, and the route stays visible.
 
 ### TokenHarbour
 
@@ -1007,7 +1033,7 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/shodan-vuln-search <query>` | hosts Shodan has flagged with a known CVE |
 | `/shodan-search <query>` | run any Shodan query verbatim — then analyse |
 | `/phish <host>` | clone a login page, serve it, harvest creds into zim-pane |
-| `/zim-logfare` | Logfare (`:4001`) — under construction; the route you start on |
+| `/zim-logfare` | switch upstream to Logfare (`:4001`) — bundled proxy, all chat models |
 | `/zim-tokenjuice` | Token Juice (`:4000`) — under construction |
 | `/zim-tokenharbour` | switch upstream to TokenHarbour (hosted) |
 | `/tokenharbour-api-setup <key>` | store your TokenHarbour API key |

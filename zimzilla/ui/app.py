@@ -2112,7 +2112,7 @@ class ZimZillaApp(App):
             ("/rain", "toggle the matrix-rain background"),
             ("/think", "toggle showing the model's own reasoning"),
             ("/theme green|amber|cyan|system", "switch the color theme"),
-            ("/zim-logfare", "Logfare — under construction; the route you start on"),
+            ("/zim-logfare", "switch upstream to Logfare (bundled proxy, all models)"),
             ("/zim-tokenjuice", "Token Juice — under construction   (:4000)"),
             ("/zim-tokenharbour", "switch upstream to TokenHarbour (hosted)"),
             ("/zim-openrouter", "switch upstream to OpenRouter   (hosted)"),
@@ -2775,11 +2775,10 @@ class ZimZillaApp(App):
     # failover: the key, base_url and client are all rebuilt in place, and the
     # choice is persisted so the next launch starts on the one that worked.
     #
-    # Logfare is the exception the park in sources.UNDER_CONSTRUCTION makes: it
-    # is where a session *starts*, and a switch *to* it is refused, because the
-    # key a new install runs on is shared and rate-capped. The listing still
-    # has to show it as live, though — the session is on it, and a list that
-    # called the active route "under construction" would read as a fault.
+    # Logfare is a full switch target. Its key is shared, so it can hit the
+    # upstream's daily budget — a 429 that the turn path reports rather than
+    # retries — but that is a reason to say so when it happens, not a reason to
+    # refuse the route. Only Token Juice is parked (sources.UNDER_CONSTRUCTION).
     def _cmd_zim_source(self, key: str | None) -> None:
         p = self.palette
         found = sources_mod.discover()
@@ -2865,15 +2864,13 @@ class ZimZillaApp(App):
             else:
                 t.append(f"key from {creds[2]} (document tools, not a source)\n",
                          style=p.accent)
-            t.append("\n  switch with  /zim-tokenharbour,  /zim-openrouter,\n"
-                     "                 /zim-unorouter,  /zim-aihubmix,\n"
-                     "                 /zim-beatapi,  or  /zim-antseed\n",
+            t.append("\n  switch with  /zim-logfare,  /zim-tokenharbour,\n"
+                     "                 /zim-openrouter,  /zim-unorouter,\n"
+                     "                 /zim-aihubmix,  /zim-beatapi,\n"
+                     "                 or  /zim-antseed\n",
                      style=p.dim)
             # Any route that is present but parked is named once here, so the
             # list above and this hint agree about what is actually reachable.
-            # Logfare is included: it is the route the session is on, and the
-            # one that cannot be switched *to*, so leaving it out would make
-            # the hint look like it had forgotten the source above it.
             for _k in sorted(sources_mod.UNDER_CONSTRUCTION):
                 if _k in found:
                     t.append(f"  /zim-{_k} is under construction\n",

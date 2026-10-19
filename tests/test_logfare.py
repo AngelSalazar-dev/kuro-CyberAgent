@@ -270,16 +270,25 @@ def test_declared_fallback_is_plausible() -> None:
 
     This is the regression that started all of it: LOGFARE_MODELS listed ten
     models that 404'd upstream, so /model offered them. The list cannot be kept
-    honest by a test — only a fetch can — but it can be kept *small*, and this
-    pins it to the set that was live when the fetch was added.
+    honest by a test — only a fetch can — so this pins it to the set that was
+    live on a known date, and the *chat* filter is what keeps image, TTS and STT
+    entries out. A model that appears upstream after that date is picked up by
+    the fetch (and routed by the proxy's wildcard), not by editing this test.
     """
     from zimzilla import sources as s
     from zimzilla.config import KNOWN_MODELS, PRICING
 
-    check("fallback: LOGFARE_MODELS is the four live models",
-          set(s.LOGFARE_MODELS) ==
-          {"deepseek-v4.1-flash", "gemma-4-26b", "logfare/auto", "qwen-3.8-27b"},
-          str(s.LOGFARE_MODELS))
+    # Every chat model Logfare served on 2026-10-19, and nothing else. The list
+    # is the cold-cache half of /model, so a served model missing here is one
+    # the picker hides until the fetch lands.
+    served = {
+        "claude-haiku-5-5", "deepseek-v4-pro-0813", "deepseek-v4.1-flash",
+        "gemma-4-26b", "glm-5.3", "glm-5.3-flash", "kimi-k2.6",
+        "logfare/auto", "qwen-3.8-27b",
+    }
+    check("fallback: LOGFARE_MODELS is the live chat catalog",
+          set(s.LOGFARE_MODELS) == served,
+          str(sorted(set(s.LOGFARE_MODELS) ^ served)))
     check("fallback: KNOWN_MODELS agrees", set(KNOWN_MODELS) == set(s.LOGFARE_MODELS))
     # A retired model must not still carry a price, or /cost quotes a 404.
     for dead in ("claude-opus-4.6", "deepseek-v3.2", "glm-5", "grok-4.6",

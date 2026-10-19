@@ -220,22 +220,20 @@ def test_models_for_reads_the_remote_catalogs() -> None:
           sources.models_for("https://api.example.com") is None)
 
 
-def test_logfare_is_parked_but_still_the_starting_point() -> None:
-    """Logfare is under construction, and still the route a session starts on.
+def test_logfare_is_a_switchable_route() -> None:
+    """Logfare is a full route: switchable to, remembered, and shipped.
 
-    The two facts look contradictory and are not: the shipped key makes a fresh
-    clone run with no signup, and that same key is shared by every install and
-    rate-capped, so it must never be somewhere a session is *switched to*. The
-    park has to refuse the switch without refusing the default.
+    It used to be parked while the shipped key looked like a starting point
+    only. That made ``/zim-logfare`` refuse the one thing it exists to do. The
+    shared key still limits *how much* traffic it can carry, but that is a 429
+    the turn path reports, not a reason to hide the route.
     """
-    check("park: logfare is under construction", "logfare" in sources.UNDER_CONSTRUCTION,
+    check("logfare: it is not parked",
+          "logfare" not in sources.UNDER_CONSTRUCTION,
           str(sorted(sources.UNDER_CONSTRUCTION)))
-    check("park: the reason names the shared key",
-          "shared" in sources.UNDER_CONSTRUCTION.get("logfare", ""),
-          sources.UNDER_CONSTRUCTION.get("logfare", ""))
 
-    # A selection left over from before the park must not survive a restart —
-    # the same rule Token Juice is held to.
+    # A selection of it must survive a restart, like any other discovered
+    # source. This is the exact case the old park refused.
     with tempfile.TemporaryDirectory() as td:
         zhome = Path(td) / "zimzilla"
         zhome.mkdir()
@@ -244,19 +242,65 @@ def test_logfare_is_parked_but_still_the_starting_point() -> None:
         with mock.patch.object(sources, "ZIMZILLA_HOME", zhome), \
              mock.patch.object(sources, "DEFAULT_HOME", empty_home):
             sources.set_current("logfare")
-            check("park: a remembered logfare selection is refused",
+            check("logfare: a remembered selection is honoured",
+                  sources.current_key() == "logfare", str(sources.current_key()))
+
+            # Token Juice is still parked, and must still be dropped.
+            sources.set_current("tokenjuice")
+            check("park: tokenjuice is still refused",
                   sources.current_key() is None, str(sources.current_key()))
 
-    # The shipped profile is what makes the default work, so it has to be in
-    # the tree — not gitignored, and carrying a key the launcher can use.
+    # The shipped profile is what makes the route work out of the box, so it
+    # has to be in the tree — not gitignored, and carrying a usable key.
     shipped = ROOT / "packaging" / "logfare" / "source"
-    check("park: the shared profile ships in the tree", shipped.is_file(), str(shipped))
+    check("logfare: the shared profile ships in the tree",
+          shipped.is_file(), str(shipped))
     if shipped.is_file():
         text = shipped.read_text()
-        check("park: the shipped profile carries an lfu_ token",
+        check("logfare: the shipped profile carries an lfu_ token",
               'ANTHROPIC_AUTH_TOKEN="lfu_' in text)
-        check("park: the shipped profile points at the local proxy",
+        check("logfare: the shipped profile points at the local proxy",
               'ANTHROPIC_BASE_URL="http://localhost:4001"' in text)
+
+
+def test_logfare_offers_every_chat_model() -> None:
+    """The fallback list and the proxy config must both cover the whole catalog.
+
+    ``/model`` reads the fetched catalog first, so the declared list is what a
+    cold cache shows. Leaving a served model out of it hid that model for the
+    first seconds of every session. The proxy config is the other half: a name
+    it does not register is rejected before the upstream is ever asked, so a
+    model missing there cannot be used at all — the wildcard is what keeps that
+    from happening for a model Logfare adds later.
+    """
+    from zimzilla.config import KNOWN_MODELS
+
+    # The nine chat models Logfare served on 2026-10-19. The non-chat entries
+    # (flux-*, whisper-*, aura-*, nova-*, phoenix-*, lucid-origin, sdxl-*) must
+    # stay out: they reject a Messages turn.
+    served = {
+        "claude-haiku-5-5", "deepseek-v4-pro-0813", "deepseek-v4.1-flash",
+        "gemma-4-26b", "glm-5.3", "glm-5.3-flash", "kimi-k2.6",
+        "logfare/auto", "qwen-3.8-27b",
+    }
+    check("catalog: the fallback lists every chat model",
+          served <= set(sources.LOGFARE_MODELS),
+          f"missing {sorted(served - set(sources.LOGFARE_MODELS))}")
+    check("catalog: KNOWN_MODELS agrees with the fallback",
+          served <= set(KNOWN_MODELS),
+          f"missing {sorted(served - set(KNOWN_MODELS))}")
+    for non_chat in ("whisper-large-v3-turbo", "flux-2-dev", "aura-2-en",
+                     "nova-3", "phoenix-1.0", "lucid-origin", "sdxl-lightning"):
+        check(f"catalog: {non_chat} (non-chat) is not offered",
+              non_chat not in sources.LOGFARE_MODELS)
+
+    # The proxy config is the real ceiling. Every named chat model must be
+    # registered, and the wildcard must be present so a future one routes.
+    config = (ROOT / "packaging" / "logfare" / "litellm-config.yaml").read_text()
+    for model in served:
+        check(f"proxy: {model} is registered", f"model_name: {model}" in config)
+    check("proxy: a wildcard route exists so new models need no release",
+          'model_name: "*"' in config, "no wildcard in litellm-config.yaml")
 
 
 def main() -> int:
@@ -266,7 +310,8 @@ def main() -> int:
     test_remote_gateways_are_identified_by_host()
     test_builtin_keys_survive_a_restart()
     test_models_for_reads_the_remote_catalogs()
-    test_logfare_is_parked_but_still_the_starting_point()
+    test_logfare_is_a_switchable_route()
+    test_logfare_offers_every_chat_model()
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")
     return 1 if failed else 0

@@ -116,11 +116,13 @@ fi
 #    third-party signup is the friction this file exists to remove, and the
 #    shipped key is the one the project already publishes in its history.
 #
-#    It is a shared key, not a personal one: Logfare caps it at three
-#    concurrent requests for every install using it. That is why the route is
-#    reported as under construction — it starts a session, and it is not a
-#    route to switch to. setup.sh never overwrites a profile that is already
-#    there, so anyone with their own key keeps it by doing nothing.
+#    It is a shared key, not a personal one: every install uses it, and Logfare
+#    applies a per-account request budget (20/min, 500/hour, 2500/day, three
+#    concurrent) that a busy day can exhaust — the upstream then answers 429
+#    with a Retry-After, which the harness reports. Your own key is the way to
+#    a larger budget; `/zim-logfare` works either way. setup.sh never
+#    overwrites a profile that is already there, so anyone with their own key
+#    keeps it by doing nothing.
 if [[ -z "$KEY" ]]; then
   for candidate in "$SELF/packaging/logfare/source"; do
     [[ -f "$candidate" ]] || continue
