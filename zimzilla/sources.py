@@ -1,16 +1,21 @@
-"""Upstream "sources" — the two LiteLLM proxies ZimZilla can talk through.
+"""Upstream "sources" — the LiteLLM proxies ZimZilla can talk through.
 
 ZimZilla speaks the Anthropic Messages protocol to whatever ``ANTHROPIC_BASE_URL``
-points at. Two local LiteLLM proxies front two different upstreams:
+points at. Three local LiteLLM proxies front three different upstreams:
 
-    logfare      :4001  →  logfare.ai        (the default, shipped with the repo)
-    tokenjuice   :4000  →  api.tokenjuice.ai (deepseek-claude's endpoint)
+    logfare       :4001  →  logfare.ai         (the default, shipped with the repo)
+    tokenjuice    :4000  →  api.tokenjuice.ai  (deepseek-claude's endpoint)
+    iteracompute  :4002  →  api.iteracompute.com (OpenAI-only; free Qwen tier)
 
 Logfare is a full route, not just the starting point: the shipped profile makes
 a fresh clone run with no signup, and ``/zim-logfare`` switches back to it at
 any time. Its key is shared by every install, so heavy use can exhaust the
 upstream's daily request budget — that arrives as a 429 with a ``Retry-After``,
 which the harness reports rather than retrying.
+
+IteraCompute is OpenAI-compatible only, so its proxy is not optional: the
+upstream has no Messages endpoint at all. Its free tier is 30M tokens per UTC
+calendar month on one model, and ``/iteracompute-api-setup`` stores the key.
 
 Token Juice stays parked (see UNDER_CONSTRUCTION) because its upstream keeps
 renaming its model id.
@@ -43,7 +48,7 @@ DEFAULT_ROOT = Path(__file__).resolve().parent.parent
 class Source:
     """One upstream: where to reach it, how to start it, what to call the model."""
 
-    key: str            # "logfare" | "tokenjuice"
+    key: str            # "logfare" | "tokenjuice" | "iteracompute"
     label: str          # human name, for the transcript
     port: int
     profile: Path       # shell profile to source (holds the key; mode 600)
@@ -132,9 +137,18 @@ TOKENJUICE_MODELS: tuple[str, ...] = (
     "deepseek-v4.1-flash",
 )
 
+#: IteraCompute's declared fallback. Its real catalog is fetched from the public
+#: Models endpoint (see ``iteracompute.py``); this is what ``/model`` shows
+#: before that fetch. The free model is the only one an account can use without
+#: a balance, so it leads and is the one the switch selects.
+ITERACOMPUTE_MODELS: tuple[str, ...] = (
+    "qwen/qwen3.8-27b",
+)
+
 MODELS_BY_KEY: dict[str, tuple[str, ...]] = {
     "logfare": LOGFARE_MODELS,
     "tokenjuice": TOKENJUICE_MODELS,
+    "iteracompute": ITERACOMPUTE_MODELS,
 }
 
 
@@ -194,6 +208,10 @@ def models_for(base_url: str) -> tuple[str, ...] | None:
         from . import beatapi as bp_mod
         cached = bp_mod.cached_ids()
         return tuple(cached) if cached else None
+    if key == "iteracompute":
+        from . import iteracompute as ic_mod
+        cached = ic_mod.cached_ids()
+        return tuple(cached) if cached else None
     return MODELS_BY_KEY.get(key) or None
 
 
@@ -223,6 +241,9 @@ def catalog_models(key: str) -> list | None:
     if key == "beatapi":
         from . import beatapi as bp_mod
         return bp_mod.cached_models()
+    if key == "iteracompute":
+        from . import iteracompute as ic_mod
+        return ic_mod.cached_models()
     return None
 
 
@@ -259,6 +280,74 @@ def context_window_for(base_url: str, model: str) -> int | None:
     return None
 
 
+def catalog_price_for(base_url: str, model: str) -> tuple[float, float] | None:
+    """``(in, out)`` per Mtok from the active source's live catalog, or ``None``.
+
+    The configured estimate table is keyed by this harness's own model names,
+    and a gateway's ids are not always the same string: IteraCompute serves
+    ``qwen/qwen3.8-27b`` where Logfare serves ``qwen-3.8-27b``, so the table
+    misses it and bills a free model at ``DEFAULT_PRICE``. The catalog knows the
+    real answer — including that it is free — so it is consulted first.
+
+    ``None`` means "the catalog cannot say", and the caller falls back to the
+    estimate. Read from the cache and never fetched, for the same reason
+    ``context_window_for`` does: this is on the turn path.
+    """
+    key = active_key(base_url)
+    if key is None:
+        return None
+    cached = catalog_models(key)
+    if not cached:
+        return None
+    for entry in cached:
+        if getattr(entry, "id", None) != model:
+            continue
+        if getattr(entry, "free", False):
+            return (0.0, 0.0)
+        # A module that records whether a price was actually read must be
+        # believed: its default ``price_in``/``price_out`` are 0.0, so an
+        # unpriced entry would otherwise be reported as free. Modules with no
+        # such field keep the old behaviour, where the pair is the answer.
+        if getattr(entry, "priced", True) is False:
+            return None
+        price_in = getattr(entry, "price_in", None)
+        price_out = getattr(entry, "price_out", None)
+        if isinstance(price_in, (int, float)) and isinstance(price_out, (int, float)):
+            return (float(price_in), float(price_out))
+        return None
+    return None
+
+
+def max_output_for(base_url: str, model: str) -> int | None:
+    """The active model's real output ceiling, from its source's live catalog.
+
+    ``None`` when nothing knows, and the caller then keeps the configured
+    ``max_tokens``. The distinction matters: this is a **cap**, so a catalog
+    that does not publish one must not be read as "zero".
+
+    Only some catalogs publish the field — AIHubMix, UnoRouter, AntSeed and
+    IteraCompute do, under ``max_output`` or ``max_output_tokens``; the rest do
+    not. Read by name off each module's own ``Model`` for the same reason
+    ``context_window_for`` does, and from the cache rather than by fetching,
+    because this is called on the turn path.
+    """
+    key = active_key(base_url)
+    if key is None:
+        return None
+    cached = catalog_models(key)
+    if not cached:
+        return None
+    for entry in cached:
+        if getattr(entry, "id", None) != model:
+            continue
+        for attr in ("max_output", "max_output_tokens"):
+            value = getattr(entry, attr, None)
+            if isinstance(value, int) and value > 0:
+                return value
+        return None
+    return None
+
+
 def _first(paths: list[Path]) -> Path | None:
     for p in paths:
         if p and p.is_file():
@@ -272,6 +361,11 @@ def _service_candidates(key: str) -> list[Path]:
             ZIMZILLA_HOME / "logfare" / "start-litellm.sh",
             DEFAULT_ROOT / "packaging" / "logfare" / "start-litellm.sh",
         ]
+    if key == "iteracompute":
+        return [
+            ZIMZILLA_HOME / "iteracompute" / "start-litellm.sh",
+            DEFAULT_ROOT / "packaging" / "iteracompute" / "start-litellm.sh",
+        ]
     return [
         ZIMZILLA_HOME / "tokenjuice" / "start-litellm.sh",
         DEFAULT_HOME / "start-litellm.sh",
@@ -284,6 +378,11 @@ def _config_candidates(key: str) -> list[Path]:
             ZIMZILLA_HOME / "logfare" / "litellm-config.yaml",
             DEFAULT_ROOT / "packaging" / "logfare" / "litellm-config.yaml",
         ]
+    if key == "iteracompute":
+        return [
+            ZIMZILLA_HOME / "iteracompute" / "litellm-config.yaml",
+            DEFAULT_ROOT / "packaging" / "iteracompute" / "litellm-config.yaml",
+        ]
     return [
         ZIMZILLA_HOME / "tokenjuice" / "litellm-config.yaml",
         DEFAULT_HOME / "litellm-config.yaml",
@@ -295,6 +394,13 @@ def _profile_candidates(key: str) -> list[Path]:
         return [
             ZIMZILLA_HOME / "logfare" / "source",
             DEFAULT_ROOT / "packaging" / "logfare" / "source",
+        ]
+    if key == "iteracompute":
+        # No shipped profile: the key is the operator's own. setup.sh writes it
+        # when $ANTHROPIC_AUTH_TOKEN is set, and /iteracompute-api-setup writes
+        # it otherwise, so there is nothing to fall back to in the tree.
+        return [
+            ZIMZILLA_HOME / "iteracompute" / "source",
         ]
     return [
         ZIMZILLA_HOME / "tokenjuice" / "source",
@@ -325,6 +431,12 @@ def discover() -> dict[str, Source]:
     tokenjuice = _build("tokenjuice", "Token Juice", 4000, "deepseek-v4.1-flash")
     if tokenjuice:
         found["tokenjuice"] = tokenjuice
+    # The service and config ship in the tree, so this is discovered on every
+    # install; only the profile is the operator's, and without it the source is
+    # not offered rather than offered and broken at switch time.
+    iteracompute = _build("iteracompute", "IteraCompute", 4002, "qwen/qwen3.8-27b")
+    if iteracompute:
+        found["iteracompute"] = iteracompute
     return found
 
 
@@ -469,6 +581,7 @@ def active_key(base_url: str) -> str | None:
     from . import aihubmix as ah_mod
     from . import antseed as as_mod
     from . import beatapi as bp_mod
+    from . import iteracompute as ic_mod
     from . import openrouter as or_mod
     from . import tokenharbour as th_mod
     from . import unorouter as uno_mod
@@ -482,6 +595,12 @@ def active_key(base_url: str) -> str | None:
         return "aihubmix"
     if bp_mod.is_beatapi(base_url):
         return "beatapi"
+    # Checked by port before the generic regex for the same reason AntSeed is:
+    # it is a local proxy, and identifying it by its own predicate keeps the
+    # port in one module rather than spelling it here too. It also means the
+    # source is recognised even when `discover()` has no profile to find.
+    if ic_mod.is_iteracompute(base_url):
+        return "iteracompute"
     # Checked before the port match, and by port rather than by name: the buyer
     # hands out a plain http://localhost:8377 with no "antseed" in it, and the
     # regex below would otherwise find port 8377, miss it in source_for_port()

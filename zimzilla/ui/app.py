@@ -31,6 +31,7 @@ from .. import beatapi as bp_mod
 from .. import crack as crack_mod
 from .. import antseed as as_mod
 from .. import hunt as hunt_mod
+from .. import iteracompute as ic_mod
 from .. import ldxhub as ldx_mod
 from .. import logfare as lf_mod
 from .. import opencode as oc_mod
@@ -1204,6 +1205,12 @@ class ZimZillaApp(App):
         # round-trip to a status API that has nothing to do with the session.
         if sources_mod.active_key(self.cfg.base_url) == "logfare":
             self._warm_logfare_catalog()
+        # Same reason, for the other local proxy with a public catalog: its
+        # model ids are `provider/model`, none of which appear in the declared
+        # fallback beyond the free one, so a cold cache would offer a one-entry
+        # list until the operator happened to run /iteracompute-models.
+        elif sources_mod.active_key(self.cfg.base_url) == "iteracompute":
+            self._warm_iteracompute_catalog()
         # Replay anything the user typed while the boot animation was running.
         text = "".join(typed or [])
         inp.focus()
@@ -1995,6 +2002,7 @@ class ZimZillaApp(App):
         "unorouter-api-setup", "unorouter-models", "zim-unorouter",
         "aihubmix-api-setup", "aihubmix-models", "zim-aihubmix",
         "beatapi-api-setup", "beatapi-models", "zim-beatapi",
+        "iteracompute-api-setup", "iteracompute-models", "zim-iteracompute",
         "zim-antseed", "antseed-models",
         "logfare-models",
         # The Shodan key is a mode-600 write and a local read, like every other
@@ -2093,6 +2101,10 @@ class ZimZillaApp(App):
             "zim-beatapi": lambda a: self._cmd_zim_gateway("beatapi"),
             "beatapi-api-setup": lambda a: self._cmd_gateway_key("beatapi", a),
             "beatapi-models": lambda a: self._cmd_models(["beatapi"]),
+            "zim-iteracompute": lambda a: self._cmd_zim_source("iteracompute"),
+            "iteracompute-api-setup": lambda a: self._cmd_gateway_key(
+                "iteracompute", a),
+            "iteracompute-models": lambda a: self._cmd_models(["iteracompute"]),
             "antseed-models": lambda a: self._cmd_models(["antseed"]),
             "models": lambda a: self._cmd_models(a),
             "logfare-models": lambda a: self._cmd_logfare_models(a),
@@ -2131,6 +2143,7 @@ class ZimZillaApp(App):
             ("/zim-unorouter", "switch upstream to UnoRouter    (hosted, free models)"),
             ("/zim-aihubmix", "switch upstream to AIHubMix     (hosted, free models)"),
             ("/zim-beatapi", "switch upstream to BeatAPI      (hosted, free models)"),
+            ("/zim-iteracompute", "switch upstream to IteraCompute (local proxy, free models)"),
             ("/zim-antseed", "switch upstream to AntSeed (local buyer, free peers)"),
             ("/zim-source", "show upstream sources and their status"),
             ("/tokenharbour-api-setup <key>", "store your TokenHarbour API key"),
@@ -2142,6 +2155,8 @@ class ZimZillaApp(App):
             ("/aihubmix-models", "the live free catalog — what is free and usable"),
             ("/beatapi-api-setup [key]", "store your BeatAPI API key (optional)"),
             ("/beatapi-models", "the live free catalog — what is free and usable"),
+            ("/iteracompute-api-setup [key]", "store your IteraCompute API key"),
+            ("/iteracompute-models", "the live free catalog — what is free and usable"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin"),
             ("/models", "free models of an upstream — /models [source]"),
             ("/logfare-models", "fetch the live catalog; show what is up"),
@@ -2309,6 +2324,10 @@ class ZimZillaApp(App):
         # the others: the fetch is the slow part and this is a render.
         bp_catalog = (bp_mod.cached_models()
                       if active == "beatapi" else None)
+        # IteraCompute's is fetched as well, and is read once here for the same
+        # reason as the others: the fetch is the slow part and this is a render.
+        ic_catalog = (ic_mod.cached_models()
+                      if active == "iteracompute" else None)
         # Logfare's is fetched too, and carries per-model health. Read once for
         # the same reason: the fetch is the slow part and this is a render.
         lf_catalog = sources_mod.catalog_for(self.cfg.base_url)
@@ -2333,7 +2352,7 @@ class ZimZillaApp(App):
             order = self._model_display_order(
                 models,
                 th_catalog or as_catalog or uno_catalog or ah_catalog
-                or bp_catalog)
+                or bp_catalog or ic_catalog)
             for m in order:
                 mark = "◉" if m == self.cfg.model else "○"
                 style = f"bold {p.accent}" if m == self.cfg.model else p.primary
@@ -2348,7 +2367,7 @@ class ZimZillaApp(App):
                             break
                 t.append(f"  {mark} {shown:<26}", style=style)
                 note = self._model_note(m, th_catalog, lf_catalog, as_catalog,
-                                        uno_catalog, bp_catalog)
+                                        uno_catalog, bp_catalog, ic_catalog)
                 t.append(note + "\n", style=p.dim)
             t.append("\n  usage: /model <name>\n", style=p.dim)
             # Say how current the list is, not merely that one exists. A cache
@@ -2392,6 +2411,13 @@ class ZimZillaApp(App):
                     "listed first. The free ids are\n"
                     "  limited-time and rate limited — they move\n",
                     style=p.dim)
+            elif active == "iteracompute":
+                t.append(
+                    f"  catalog {_catalog_clause(ic_mod.catalog_age(), ic_mod.CACHE_TTL)}"
+                    " — /iteracompute-models shows the\nfree ones; free models "
+                    "are listed first. The free tier is\n"
+                    "  a monthly token allowance on one model\n",
+                    style=p.dim)
             self.query_one(ChatPane).write_block(t)
             return
         name = args[0]
@@ -2426,7 +2452,8 @@ class ZimZillaApp(App):
         # It is also the source the operator is most likely to be on, so the
         # wrong answer was the common case rather than the corner.
         if active in ("tokenharbour", "openrouter", "unorouter", "antseed",
-                      "logfare", "aihubmix", "beatapi") and (
+                      "logfare", "aihubmix", "beatapi",
+                      "iteracompute") and (
                 models is None or check_name not in models):
             fetched = None
             if active == "tokenharbour":
@@ -2473,6 +2500,15 @@ class ZimZillaApp(App):
                     fetched, _ = bp_mod.fetch_models(creds[0] if creds else "")
                 else:
                     fetched = list(bp_catalog)
+            elif active == "iteracompute":
+                # Keyless as well: the Models endpoint is public. Fetched rather
+                # than read from the cache when the cache is cold or expired, so
+                # a live model is not refused against a stale list.
+                if ic_catalog is None:
+                    creds = ic_mod.load_credentials()
+                    fetched, _ = ic_mod.fetch_models(creds[0] if creds else "")
+                else:
+                    fetched = list(ic_catalog)
             elif active == "logfare":
                 if lf_catalog is None:
                     # The status API is public — no key, so this works before
@@ -2491,6 +2527,8 @@ class ZimZillaApp(App):
                     ah_catalog = fetched
                 elif active == "beatapi":
                     bp_catalog = fetched
+                elif active == "iteracompute":
+                    ic_catalog = fetched
                 elif active == "logfare":
                     lf_catalog = fetched
                 models = tuple(m.id for m in fetched)
@@ -2525,11 +2563,12 @@ class ZimZillaApp(App):
     def _model_display_order(self, models, catalog) -> list[str]:
         """The /model list, free models first.
 
-        Only the hosted gateways have a free tier, and only their catalogs can
-        tell free from paid — so the caller passes whichever one is live. For
-        every other source the catalog is None and this is the declared order
-        unchanged, so the sort never reorders a list it has no prices for, which
-        would look like a bug in Logfare's catalog.
+        Only the sources with a priced catalog have a free tier, and only their
+        catalogs can tell free from paid — so the caller passes whichever one is
+        live. That is the hosted gateways and IteraCompute, whose local proxy
+        fronts a free Qwen tier. For every other source the catalog is None and
+        this is the declared order unchanged, so the sort never reorders a list
+        it has no prices for, which would look like a bug in Logfare's catalog.
         """
         ids = list(models)
         if not catalog:
@@ -2545,7 +2584,8 @@ class ZimZillaApp(App):
         return head + frees + rest
 
     def _model_note(self, name: str, catalog, lf_catalog=None,
-                    as_catalog=None, uno_catalog=None, bp_catalog=None) -> str:
+                    as_catalog=None, uno_catalog=None, bp_catalog=None,
+                    ic_catalog=None) -> str:
         """The price/context note beside a model in /model.
 
         TokenHarbour's catalog is authoritative for its own models — it is the
@@ -2576,6 +2616,8 @@ class ZimZillaApp(App):
             live = uno_mod.price_for(name, uno_catalog)
         if live is None:
             live = bp_mod.price_for(name, bp_catalog)
+        if live is None:
+            live = ic_mod.price_for(name, ic_catalog)
         if live is not None:
             pin, pout = live
             note = "free" if (pin == 0.0 and pout == 0.0) \
@@ -2611,7 +2653,13 @@ class ZimZillaApp(App):
     def _cmd_cost(self, args=None) -> None:
         p = self.palette
         a = self.agent
-        pin, pout = price_for(self.cfg.model)
+        # The catalog's rate, when the active source publishes one, so the
+        # accounting matches the note beside the model in /model. A gateway's
+        # own free model would otherwise be billed at DEFAULT_PRICE here while
+        # /model called it free — the same discrepancy `Agent._prices` exists to
+        # avoid in the per-turn figures.
+        found = sources_mod.catalog_price_for(self.cfg.base_url, self.cfg.model)
+        pin, pout = found if found is not None else price_for(self.cfg.model)
         t = Text()
         t.append("  SESSION ACCOUNTING\n\n", style=f"bold {p.accent}")
         for label, value in [
@@ -2642,6 +2690,10 @@ class ZimZillaApp(App):
         a = self.agent
         window = a.context_window()
         from_catalog = window != self.cfg.context_window
+        # The ceiling the turn actually uses, which is the catalog's figure when
+        # the model publishes one and the configured value otherwise. Reporting
+        # `cfg.max_tokens` here would name a number the agent does not send.
+        ceiling = a.output_ceiling()
         used = a._last_input_tokens
         t = Text()
         t.append("  SESSION LIMITS\n\n", style=f"bold {p.accent}")
@@ -2654,8 +2706,10 @@ class ZimZillaApp(App):
             ("auto-compact", "on" if self.cfg.auto_compact else "off",
              f"compacts at {self.cfg.compact_at:.0%} of the window"
              if self.cfg.auto_compact else "/compact still works by hand"),
-            ("output ceiling", f"{self.cfg.max_tokens:,}",
-             "per reply; a reply cut off here is reported as truncated"),
+            ("output ceiling", f"{ceiling:,}",
+             "per reply; a reply cut off here is reported as truncated"
+             + (" (the model's published limit)" if ceiling != self.cfg.max_tokens
+                else "")),
             ("rounds before pause", f"{self.cfg.max_iterations}",
              "continues automatically while the turn is progressing"),
             ("hard round limit", f"{self.cfg.max_rounds}",
@@ -2839,12 +2893,26 @@ class ZimZillaApp(App):
                 ("unorouter", uno_mod, "UnoRouter", "/unorouter-api-setup"),
                 ("aihubmix", ah_mod, "AIHubMix", "/aihubmix-api-setup"),
                 ("beatapi", bp_mod, "BeatAPI", "/beatapi-api-setup"),
+                ("iteracompute", ic_mod, "IteraCompute",
+                 "/iteracompute-api-setup"),
             ):
+                # IteraCompute has a local proxy, so when its profile exists it
+                # is already listed above by discover() — with a port and a live
+                # health state, which is more than this row could say. Listing
+                # it twice would make one source look like two.
+                if _kind in found:
+                    continue
                 creds = _mod.load_credentials()
                 mark = "◉" if active == _kind else "○"
                 style = f"bold {p.accent}" if active == _kind else p.primary
                 t.append(f"  {mark} {_kind:<12}", style=style)
-                t.append(f"      hosted  {_label:<12} ", style=p.primary)
+                if _kind == "iteracompute":
+                    # Not hosted: it is a local proxy whose profile is simply
+                    # missing, so the port is the honest detail to show.
+                    t.append(f":{ic_mod.PROXY_PORT}  {_label:<12} ",
+                             style=p.primary)
+                else:
+                    t.append(f"      hosted  {_label:<12} ", style=p.primary)
                 if creds is None:
                     t.append(f"no key — {_setup}\n", style=p.amber)
                 else:
@@ -2879,6 +2947,7 @@ class ZimZillaApp(App):
             t.append("\n  switch with  /zim-logfare,  /zim-tokenharbour,\n"
                      "                 /zim-openrouter,  /zim-unorouter,\n"
                      "                 /zim-aihubmix,  /zim-beatapi,\n"
+                     "                 /zim-iteracompute,\n"
                      "                 or  /zim-antseed\n",
                      style=p.dim)
             # Any route that is present but parked is named once here, so the
@@ -2892,6 +2961,15 @@ class ZimZillaApp(App):
 
         src = found.get(key)
         if src is None:
+            # IteraCompute is the one local proxy with no shipped profile: it is
+            # missing until the operator sets their own key, so the generic
+            # "profile, config or service missing" would leave them with no next
+            # step. Name the command that creates it.
+            if key == "iteracompute":
+                self._sys_line(
+                    "IteraCompute is not set up on this machine — set your key "
+                    "with /iteracompute-api-setup <key>", warn=True)
+                return
             self._sys_line(
                 f"source '{key}' is not available — profile, config or service missing",
                 warn=True,
@@ -2971,12 +3049,25 @@ class ZimZillaApp(App):
     async def _verify_model_for(self, src, name: str) -> tuple[str, str | None]:
         """``(model_to_use, replaced_name_or_None)`` for a just-started source.
 
-        Only Logfare publishes a catalog, and only Logfare's local proxy has a
-        profile that can go stale, so this is where the check belongs. A fetch
-        that fails leaves the stored name alone: an unreachable status API is
-        not evidence that a model was retired, and refusing to switch on it
-        would be worse than the 404 it is trying to prevent.
+        Logfare and IteraCompute both publish a catalog, and both have a local
+        proxy whose profile can go stale — IteraCompute's more so, because its
+        free tier is one model and the one on offer turns over. A fetch that
+        fails leaves the stored name alone: an unreachable catalog is not
+        evidence that a model was retired, and refusing to switch on it would
+        be worse than the 404 it is trying to prevent.
         """
+        if src.key == "iteracompute":
+            # The catalog, not the health feed: this is what says which ids the
+            # proxy can actually forward, and image entries are excluded by
+            # `model_ids` so a switch cannot land on one.
+            ids, _ = await asyncio.to_thread(ic_mod.model_ids)
+            if not ids:
+                return name, None
+            if name in ids:
+                return name, None
+            if src.model in ids:
+                return src.model, name
+            return name, None
         if src.key != "logfare":
             return name, None
         models, _ = await asyncio.to_thread(lf_mod.fetch_models)
@@ -3132,6 +3223,18 @@ class ZimZillaApp(App):
         """
         lf_mod.fetch_models()
 
+    @work(exclusive=True, thread=True)
+    def _warm_iteracompute_catalog(self) -> None:
+        """Fetch IteraCompute's catalog once at startup, silently.
+
+        Silent for the same reason the Logfare warm-up is: a launch that cannot
+        reach the public catalog is still a working launch, /model falls back to
+        the declared list, and /iteracompute-models reports the failure on
+        demand. A catalog that is merely fresh is not news.
+        """
+        creds = ic_mod.load_credentials()
+        ic_mod.fetch_models(creds[0] if creds else "")
+
     def _show_logfare_models(self, models, err: str) -> None:
         p = self.palette
         if models is None:
@@ -3234,6 +3337,13 @@ class ZimZillaApp(App):
             return ah_mod, "AIHubMix"
         if kind == "beatapi":
             return bp_mod, "BeatAPI"
+        # Not a hosted gateway: IteraCompute has no Messages endpoint, so the
+        # session talks to a local proxy and `/zim-iteracompute` goes through
+        # `_cmd_zim_source` like Logfare. It is listed here only so
+        # `/iteracompute-api-setup` can share the key-handling code, which is
+        # the same read/write against a mode-600 profile.
+        if kind == "iteracompute":
+            return ic_mod, "IteraCompute"
         if kind == "antseed":
             return as_mod, "AntSeed"
         return None
@@ -3286,7 +3396,8 @@ class ZimZillaApp(App):
                 return
             t.append("  set it with  ", style=p.dim)
             t.append(f"/{kind}-api-setup <key>\n", style=f"bold {p.primary}")
-            if kind in ("openrouter", "unorouter", "aihubmix", "beatapi"):
+            if kind in ("openrouter", "unorouter", "aihubmix", "beatapi",
+                        "iteracompute"):
                 # Worth saying plainly: this catalog is public, so the free list
                 # and a model choice work before any key exists. The key is only
                 # needed to actually send a message.
@@ -3525,7 +3636,8 @@ class ZimZillaApp(App):
                 return
 
         known = {"logfare", "tokenjuice", "tokenharbour", "openrouter",
-                 "unorouter", "antseed", "aihubmix", "beatapi"}
+                 "unorouter", "antseed", "aihubmix", "beatapi",
+                 "iteracompute"}
         if key not in known:
             self._sys_line(
                 f"unknown upstream: {key} — try one of "
@@ -3594,6 +3706,12 @@ class ZimZillaApp(App):
             # the listing matches this account's reachable families.
             creds = bp_mod.load_credentials()
             return bp_mod.usable_free_models(creds[0] if creds else "")
+        if kind == "iteracompute":
+            # Keyless too: /v1/models answers with no credential, which is what
+            # lets /iteracompute-models work before the key is set. Sent when
+            # present so the listing matches this account.
+            creds = ic_mod.load_credentials()
+            return ic_mod.usable_free_models(creds[0] if creds else "")
         if kind == "tokenharbour":
             creds = th_mod.load_credentials()
             if creds is None:
@@ -3623,6 +3741,7 @@ class ZimZillaApp(App):
             return
         label = {"openrouter": "OPENROUTER", "unorouter": "UNOROUTER",
                  "aihubmix": "AIHUBMIX", "beatapi": "BEATAPI",
+                 "iteracompute": "ITERACOMPUTE",
                  "tokenharbour": "TOKENHARBOUR", "logfare": "LOGFARE",
                  "antseed": "ANTSEED"}.get(kind, kind.upper())
         t = Text()
@@ -3646,6 +3765,13 @@ class ZimZillaApp(App):
                     "  (the catalog is live and the free tier is a limited-time\n"
                     "  offer — an empty list means none are on right now, not "
                     "that the\n  source is broken)\n", style=p.dim)
+            if kind == "iteracompute":
+                t.append(
+                    "  (the catalog is live; free means the gateway's own "
+                    "is_free flag.\n  The free tier is one model with a monthly "
+                    "token allowance, so an\n  empty list means none is offered "
+                    "right now — not that the source is\n  broken)\n",
+                    style=p.dim)
         else:
             for m in models:
                 mark = "◉" if m.id == self.cfg.model else "○"
@@ -3745,6 +3871,17 @@ class ZimZillaApp(App):
                 "capabilities, so\n  the flag beside a free model is borrowed "
                 "from its paid sibling — advisory,\n  and used only to order "
                 "the list, never to hide a model\n", style=p.dim)
+        if kind == "iteracompute":
+            # The two facts the gateway's own docs state, both of which change
+            # how a reader should treat this list.
+            t.append(
+                "  free = the catalog's own is_free · the free tier is 30M "
+                "tokens per UTC\n  month on the free model, shared by every "
+                "key on the account\n", style=p.dim)
+            t.append(
+                "  context shown is the free tier's 128K cap, not the model's "
+                "larger\n  window: an API key does not say which tier the "
+                "account is on\n", style=p.dim)
         self.query_one(ChatPane).write_block(t)
         self._refresh_model_choices()
 
@@ -6811,6 +6948,7 @@ class ZimZillaApp(App):
             ("/zim-unorouter", "switch upstream to UnoRouter", "zim-unorouter"),
             ("/zim-aihubmix", "switch upstream to AIHubMix", "zim-aihubmix"),
             ("/zim-beatapi", "switch upstream to BeatAPI", "zim-beatapi"),
+            ("/zim-iteracompute", "switch upstream to IteraCompute", "zim-iteracompute"),
             ("/zim-antseed", "switch upstream to AntSeed", "zim-antseed"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin",
              "antseed-models"),
@@ -6832,6 +6970,10 @@ class ZimZillaApp(App):
              "beatapi-api-setup"),
             ("/beatapi-models", "the live free catalog — what is free and usable",
              "beatapi-models"),
+            ("/iteracompute-api-setup", "store your IteraCompute API key",
+             "iteracompute-api-setup"),
+            ("/iteracompute-models", "the live free catalog — what is free and usable",
+             "iteracompute-models"),
             ("/models", "free models of an upstream — /models [source]", "models"),
             ("/logfare-models", "fetch the live catalog; show what is up",
              "logfare-models"),

@@ -142,9 +142,9 @@ up right now, with uptime, and `/model` offers the same list. The proxy config
 also carries a wildcard route, so a model Logfare adds later works without
 waiting for a ZimZilla release.
 
-Other upstreams are `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`,
-`/zim-aihubmix`, `/zim-beatapi` and `/zim-antseed`, each with your own credential
-or none at all.
+Other upstreams are `/zim-iteracompute`, `/zim-tokenharbour`,
+`/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`, `/zim-beatapi` and
+`/zim-antseed`, each with your own credential or none at all.
 
 To configure setup yourself later, or to install somewhere other than the
 default:
@@ -625,13 +625,14 @@ or a colour diff of the change, and three keys:
 
 ZimZilla speaks the Anthropic Messages protocol to whatever `ANTHROPIC_BASE_URL`
 points at, so it can run against a local LiteLLM proxy, a hosted gateway or a
-peer-to-peer marketplace without any code caring which. Eight sources are wired
+peer-to-peer marketplace without any code caring which. Nine sources are wired
 up:
 
 | Source | Endpoint | Key | How it starts |
 |---|---|---|---|
 | **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, all chat models |
 | **Token Juice** | `:4000` | discovered | its own local proxy — under construction |
+| **IteraCompute** | `:4002` | yours | its own local proxy — free Qwen tier |
 | **TokenHarbour** | `tokenharbor.ai` | yours | hosted — nothing to start |
 | **OpenRouter** | `openrouter.ai` | yours | hosted — nothing to start |
 | **UnoRouter** | `api.unorouter.com` | yours | hosted — nothing to start |
@@ -639,9 +640,10 @@ up:
 | **BeatAPI** | `direct.beatapi.io` | yours | hosted — nothing to start |
 | **AntSeed** | `:8377` | **none** | `antseed buyer start` — a local buyer on a P2P network |
 
-Switch with `/zim-logfare`, `/zim-tokenharbour`, `/zim-openrouter`,
-`/zim-unorouter`, `/zim-aihubmix`, `/zim-beatapi` or `/zim-antseed`; the choice
-is remembered, so the next launch comes back to the one that was working.
+Switch with `/zim-logfare`, `/zim-iteracompute`, `/zim-tokenharbour`,
+`/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`, `/zim-beatapi` or
+`/zim-antseed`; the choice is remembered, so the next launch comes back to the
+one that was working.
 
 Logfare is a full switch target: the shipped key makes it work with no signup,
 and it serves every chat model on Logfare's catalog. The key is shared, so its
@@ -819,6 +821,63 @@ Entries do disappear: `glm-5.3-flash:free` was gone from the catalog within the
 hour it was measured, and `deepseek-v4.1-flash:free` is gone now. The list falls
 through to the next name and then to the catalog's own order, so a vanished entry
 costs one lookup rather than a broken switch.
+
+### IteraCompute
+
+IteraCompute (`api.iteracompute.com`) serves an **OpenAI-compatible** API only —
+`/v1/messages` answers `404 edge_route_not_allowed` — so it runs behind the same
+kind of local LiteLLM translation proxy as Logfare and Token Juice, on `:4002`.
+The proxy is not optional here; it is what turns an OpenAI endpoint into
+something ZimZilla can talk to.
+
+Set your key once:
+
+```
+/iteracompute-api-setup yourkeyhere
+```
+
+That writes `~/.zimzilla/iteracompute/source` (mode 600), the same profile
+format as every other source, and the launcher starts the proxy from
+`~/.zimzilla/iteracompute/start-litellm.sh`. Then:
+
+```
+/zim-iteracompute          # switch (starts the proxy), and fetch the free list
+/iteracompute-models       # the free catalog again, any time
+/models iteracompute       # the same set, through the generic command
+/model qwen/qwen3.8-27b    # switch to the free model
+```
+
+**The catalog is public**, so `/iteracompute-models` and `/models iteracompute`
+work *before* you have a key — the key is only needed to send a message. The
+free list is filtered on the catalog's own `is_free` flag, and image entries are
+excluded because they publish no context window and cannot answer a turn.
+
+**The free tier is an allowance, not a rate limit.** It is 30M tokens per UTC
+calendar month on the free model, shared by every key on the account, and a Free
+account may queue when GPU capacity is busy. Exhausted allowances, full queues
+and queue timeouts return `429`; honour `Retry-After` rather than retrying into
+it. Net completed recharge of $10 or $50 unlocks Starter or Pro, whose limits
+are larger.
+
+**Model ids are `provider/model` and are forwarded verbatim.** The proxy carries
+a `*` wildcard, so a model added upstream works without a release here, and the
+gateway's docs are explicit that no `iteracompute/` prefix belongs on the id.
+
+**The proxy pins Chat Completions.** LiteLLM's default for an `openai/`
+deployment is to send `/v1/messages` through the **Responses API** — measured
+with litellm 1.105.1, the upstream received `POST /v1/responses`. IteraCompute
+documents Chat Completions for Qwen and says nothing about Responses, so the
+shipped config sets `use_chat_completions_url_for_anthropic_messages: true` and
+the upstream gets `POST /v1/chat/completions` for streaming and non-streaming
+requests alike. Tool calls round-trip into Anthropic `tool_use` blocks, which is
+what lets the agent drive it.
+
+**The catalog's limits are used, not just displayed.** The free model publishes
+`max_output_tokens: 8192`, while ZimZilla's default asks for 32768 — so the
+agent clamps its output ceiling to the catalog's figure, and a turn does not
+fail on a request the upstream would reject. The free account tier's context is
+128K per the docs, smaller than the model's own window, so compaction plans
+against the conservative 128K.
 
 ### BeatAPI
 
@@ -1049,9 +1108,12 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/zim-beatapi` | switch upstream to BeatAPI — hosted, free models, native Messages |
 | `/beatapi-api-setup <key>` | store your BeatAPI API key |
 | `/beatapi-models` | the live free catalog — what is free and usable |
+| `/zim-iteracompute` | switch upstream to IteraCompute — local proxy, free models, OpenAI-only upstream |
+| `/iteracompute-api-setup <key>` | store your IteraCompute API key |
+| `/iteracompute-models` | the live free catalog — what is free and usable |
 | `/zim-antseed` | switch upstream to AntSeed — the local buyer, free peers, no key |
 | `/antseed-models` | list AntSeed's free models, each with the peer to pin |
-| `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `aihubmix`, `beatapi`, `antseed` |
+| `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `aihubmix`, `beatapi`, `iteracompute`, `antseed` |
 | `/zim-source` | show every upstream and its status |
 | `/reverse-engineer <file>` | map an artifact (`.apk`, `.zip`, `.exe`, `.sh`, binary), then ask what you want changed |
 | `/reverse-engineer <file> --map` | map it only — no model turn, nothing sent |

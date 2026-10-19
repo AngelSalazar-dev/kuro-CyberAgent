@@ -196,6 +196,7 @@ _CREDENTIAL_PROFILES = (
     ("unorouter", "UnoRouter", "ANTHROPIC_AUTH_TOKEN"),
     ("aihubmix", "AIHubMix", "ANTHROPIC_AUTH_TOKEN"),
     ("beatapi", "BeatAPI", "ANTHROPIC_AUTH_TOKEN"),
+    ("iteracompute", "IteraCompute", "ANTHROPIC_AUTH_TOKEN"),
     ("ldxhub", "LDXHub", "LDXHUB_API_KEY"),
     ("shodan", "Shodan", "SHODAN_API_KEY"),
 )
@@ -764,9 +765,13 @@ class Agent:
         #: compaction means compaction is not shrinking the prompt — retrying
         #: would just spend another request to fail the same way.
         overflow_retried = False
-        #: The output ceiling this turn's calls ask for. Starts at the configured
-        #: value and is raised only by the reasoning-exhaustion retry below.
-        ceiling = self.cfg.max_tokens
+        #: The output ceiling this turn's calls ask for. Starts at the model's
+        #: real limit — the catalog's ``max_output_tokens`` when it publishes
+        #: one, else the configured value — and is raised only by the
+        #: reasoning-exhaustion retry below. Asking for more than the model
+        #: allows is a request the upstream rejects, so the configured default
+        #: must not win over a published limit.
+        ceiling = self.output_ceiling()
         #: One reasoning-exhaustion retry per turn, for the same reason as the
         #: overflow retry: a model that spends a doubled ceiling on reasoning and
         #: still emits nothing is not going to answer on a third attempt, and
@@ -890,7 +895,7 @@ class Agent:
             if usage is not None:
                 tin = getattr(usage, "input_tokens", 0) or 0
                 tout = getattr(usage, "output_tokens", 0) or 0
-                pin, pout = price_for(self.cfg.model)
+                pin, pout = self._prices()
                 cost = (tin / 1e6) * pin + (tout / 1e6) * pout
                 turn_in += tin
                 turn_out += tout
@@ -952,7 +957,17 @@ class Agent:
                 # leave the transcript ending on an assistant message that says
                 # nothing.
                 del self.messages[depth:]
-                raised = min(ceiling * 2, MAX_OUTPUT_CEILING)
+                # Clamped to the model's own limit as well: doubling past a
+                # published ``max_output_tokens`` would be a request the
+                # upstream rejects, and when the ceiling already equals that
+                # limit the retry is a guaranteed repeat — so ``raised`` is not
+                # greater than ``ceiling`` and the loop breaks honestly instead.
+                # Only a *published* limit clamps: `output_ceiling()` falls back
+                # to `cfg.max_tokens`, and using that here would cap the retry at
+                # the very number it is trying to escape.
+                published = self.published_output_ceiling()
+                raised = min(ceiling * 2, MAX_OUTPUT_CEILING,
+                             published if published else ceiling * 2)
                 retrying = not reasoning_retried and raised > ceiling
                 yield {
                     "type": "reasoning_exhausted",
@@ -1230,7 +1245,7 @@ class Agent:
 
         attempt = 0
         max_attempts = 5
-        ceiling = self.cfg.max_tokens if max_tokens is None else max_tokens
+        ceiling = self.output_ceiling() if max_tokens is None else max_tokens
         while True:
             try:
                 kwargs: dict = {
@@ -1537,6 +1552,57 @@ class Agent:
             found = None
         return found or self.cfg.context_window
 
+    def published_output_ceiling(self) -> int | None:
+        """The active model's own output limit, or ``None`` when none is published.
+
+        Distinct from :meth:`output_ceiling`, which falls back to
+        ``cfg.max_tokens``. That fallback is right for sizing a request but
+        wrong for deciding whether a retry can ask for more room: it would cap
+        the retry at the ceiling it is trying to escape, so a model with no
+        published limit could never retry at all. Only a *published* limit is a
+        real cap.
+        """
+        try:
+            from . import sources as sources_mod
+            return sources_mod.max_output_for(self.cfg.base_url, self.cfg.model)
+        except Exception:  # noqa: BLE001 - a lookup must not break a turn
+            return None
+
+    def output_ceiling(self) -> int:
+        """The most output tokens the active model will accept, or the config's.
+
+        ``cfg.max_tokens`` is one number for every model, and it is larger than
+        some models allow: IteraCompute's free ``qwen/qwen3.8-27b`` publishes
+        ``max_output_tokens: 8192``, while the default asks for 32768. The
+        upstream rejects the larger request, so a turn on that source would
+        fail before it began. The catalog publishes the real ceiling, so it
+        wins when it is known.
+
+        Never raises, for the same reason :meth:`context_window` never does: a
+        cold cache or an unknown source means the configured value, which is
+        what every model without a published limit has always used.
+        """
+        return self.published_output_ceiling() or self.cfg.max_tokens
+
+    def _prices(self) -> tuple[float, float]:
+        """``(in, out)`` per Mtok for the current model.
+
+        The live catalog first: it is the gateway's own rate, and it is the only
+        place that knows a ``provider/model`` id is free. The local estimate
+        table is keyed by this harness's names, so it would bill IteraCompute's
+        ``qwen/qwen3.8-27b`` at ``DEFAULT_PRICE`` — a model the operator was
+        told costs nothing. The estimate is the fallback, unchanged.
+
+        Never raises, for the same reason the other lookups never do: a pricing
+        lookup must not break a turn.
+        """
+        try:
+            from . import sources as sources_mod
+            found = sources_mod.catalog_price_for(self.cfg.base_url, self.cfg.model)
+        except Exception:  # noqa: BLE001 - a lookup must not break a turn
+            found = None
+        return found if found is not None else price_for(self.cfg.model)
+
     def _should_compact(self, window: int) -> bool:
         """Whether the prompt is close enough to the window to compact first."""
         if not self.cfg.auto_compact:
@@ -1682,7 +1748,7 @@ class Agent:
         if usage is not None:
             tin = getattr(usage, "input_tokens", 0) or 0
             tout = getattr(usage, "output_tokens", 0) or 0
-            pin, pout = price_for(self.cfg.model)
+            pin, pout = self._prices()
             cost = (tin / 1e6) * pin + (tout / 1e6) * pout
             self.session_input_tokens += tin
             self.session_output_tokens += tout
