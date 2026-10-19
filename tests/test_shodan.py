@@ -409,6 +409,68 @@ def test_prompt_paid() -> None:
 
 
 # ---------------------------------------------------------------------------
+# the environment note — the model must know where the key lives
+# ---------------------------------------------------------------------------
+
+def test_environment_note() -> None:
+    """The system prompt must name the Shodan profile, in every mode.
+
+    This is the fix for a real failure: asked to run a Shodan search, the model
+    replied that there was no SHODAN_API_KEY in the environment and no shodan
+    CLI installed, while the key sat on disk and four commands already read it.
+    A prompt that does not say where the key is invites that answer back.
+    """
+    from zimzilla.agent import Agent
+    from zimzilla.config import Config
+
+    # A key on disk, and a prompt built the way a live session builds it.
+    shodan_mod.save_key("a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6")
+    shodan_mod._SESSION_KEY = None
+
+    cfg = Config.from_env(workdir=Path("/tmp"), api_key="x",
+                          base_url="http://localhost:4001", mode="auto")
+    prompt = Agent(cfg).system_prompt()
+
+    check("env: the note names the state directory",
+          str(shodan_mod.PROFILE.parent.parent) in prompt, "")
+    check("env: the note names the shodan profile",
+          "/shodan/source" in prompt)
+    check("env: the note tells the model the key is set",
+          "a key is set" in prompt)
+    check("env: the note names the /shodan-* commands",
+          "/shodan-cam-search" in prompt)
+    check("env: the note warns not to ask for an export",
+          "do not ask for the key to be exported" in prompt)
+    check("env: the note explains the free-plan gate",
+          "403" in prompt and "count" in prompt)
+    check("env: the note names the other profiles too",
+          "/tokenharbour/source" in prompt and "/ldxhub/source" in prompt)
+
+    # Every mode must carry it, not just the default one — the failure could
+    # happen in any of them.
+    for mode in ("plan", "edits", "zim", "danger", "uncensored"):
+        cfg = Config.from_env(workdir=Path("/tmp"), api_key="x",
+                              base_url="http://localhost:4001", mode=mode)
+        p = Agent(cfg).system_prompt()
+        check(f"env: {mode} mode carries the note", "/shodan/source" in p)
+
+    # With the key deleted the note must say so rather than claim one exists —
+    # stale "a key is set" is worse than no note at all.
+    saved = shodan_mod.PROFILE.read_text()
+    shodan_mod.PROFILE.unlink()
+    try:
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SHODAN_API_KEY", None)
+            cfg = Config.from_env(workdir=Path("/tmp"), api_key="x",
+                                  base_url="http://localhost:4001", mode="auto")
+            p = Agent(cfg).system_prompt()
+        check("env: with no key the note says so", "no key set yet" in p)
+    finally:
+        shodan_mod.PROFILE.write_text(saved)
+        shodan_mod.PROFILE.chmod(0o600)
+
+
+# ---------------------------------------------------------------------------
 # wiring
 # ---------------------------------------------------------------------------
 
@@ -463,6 +525,7 @@ def main() -> int:
     test_result_errors()
     test_prompt_free()
     test_prompt_paid()
+    test_environment_note()
     test_wiring()
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

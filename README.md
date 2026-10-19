@@ -1426,6 +1426,13 @@ The key is never echoed back — the confirmation shows the file and the last fo
 characters. Setting a key also prints **which plan it is on**, because that
 decides what a search can return.
 
+The model is told where that key lives. Every system prompt carries an
+environment block naming the state directory, each provider's profile path and
+the commands that use them — so a model asked to investigate Shodan names the
+`/shodan-*` command to run instead of replying that `SHODAN_API_KEY` is not
+exported and no `shodan` CLI is installed. The key is on disk and the harness
+reads it; the prompt says so.
+
 ### The plan decides the shape, not the query
 
 This is the part worth knowing before you file a bug against a search. Shodan's

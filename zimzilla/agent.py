@@ -180,6 +180,46 @@ and searching the web. Work directly and decisively:
 The working directory is {workdir}. All file paths are relative to it.
 {scope_note}"""
 
+#: Credential profiles the harness keeps, as ``(module, label, env var)``. The
+#: path is read off the module rather than written here, so a profile that moves
+#: cannot leave the model pointing at where it used to be.
+_CREDENTIAL_PROFILES = (
+    ("tokenharbour", "TokenHarbour", "ANTHROPIC_AUTH_TOKEN"),
+    ("openrouter", "OpenRouter", "ANTHROPIC_AUTH_TOKEN"),
+    ("unorouter", "UnoRouter", "ANTHROPIC_AUTH_TOKEN"),
+    ("aihubmix", "AIHubMix", "ANTHROPIC_AUTH_TOKEN"),
+    ("beatapi", "BeatAPI", "ANTHROPIC_AUTH_TOKEN"),
+    ("ldxhub", "LDXHub", "LDXHUB_API_KEY"),
+    ("shodan", "Shodan", "SHODAN_API_KEY"),
+)
+
+#: What the model is told about the harness's own layout — its state directory,
+#: where credentials live, and which built-in commands do the jobs it might
+#: otherwise be asked to improvise.
+#:
+#: This block exists because of a real failure: asked to run a Shodan search,
+#: the model answered "there's no SHODAN_API_KEY in the environment and no
+#: shodan CLI installed" — while the key sat on disk and four commands already
+#: used it. A model that does not know the layout invents a setup step that is
+#: wrong; one that does directs the operator to the command that is right.
+ENVIRONMENT_PROMPT = """
+ENVIRONMENT — the harness's own layout. Check this before telling the operator
+something is missing:
+
+- State directory: {state}. (Override with ZIMZILLA_HOME.) Sessions, recon
+  cases, hunt campaigns and archived reports live under it.
+- Credentials are mode-600 `source` profiles in that directory — one file per
+  provider, each a single `export VAR="…"` line the harness reads by itself.
+  Never ask the operator to export a key or install a CLI for a capability the
+  harness already has; the profile is already on disk:
+{profiles}
+- Long security jobs have a slash command. Slash commands are operator-entered,
+  so you cannot run one — when a task needs one, name the command instead of
+  reproducing it by hand: /osint (recon), /bug-hunt (a scouting wave), /ad
+  (Active Directory), /crack (offline hashes), /reverse-engineer, and the
+  /shodan-* family below.
+{shodan}"""
+
 # Appended per-mode so the model knows what it is and is not allowed to do.
 MODE_PROMPTS = {
     "auto": (
@@ -497,6 +537,7 @@ class Agent:
 
     def system_prompt(self) -> str:
         scope_note = self._scope_note()
+        env_note = self._environment_note()
 
         if self.cfg.mode == "zim":
             # Zim mode is governed by the operator's AGENTS file.
@@ -504,17 +545,82 @@ class Agent:
             if agents:
                 return (
                     f"{agents}\n\n---\n{scope_note}\n"
-                    f"The working directory is {self.cfg.workdir}."
+                    f"The working directory is {self.cfg.workdir}.\n{env_note}"
                 )
 
         if self.cfg.mode == "uncensored":
             # Whole-prompt replacement, not an appendix. See UNCENSORED_PROMPT.
+            # The environment note is still appended: it is a statement of fact
+            # about where things are, not an instruction that could conflict.
             return UNCENSORED_PROMPT.format(
                 workdir=self.cfg.workdir, scope_note=scope_note
-            )
+            ) + "\n" + env_note
 
         base = SYSTEM_PROMPT.format(workdir=self.cfg.workdir, scope_note=scope_note)
-        return base + MODE_PROMPTS.get(self.cfg.mode, "")
+        return base + env_note + MODE_PROMPTS.get(self.cfg.mode, "")
+
+    def _environment_note(self) -> str:
+        """What the model is told about the harness's own files and commands.
+
+        Built from the modules rather than hard-coded, so a profile that moves
+        updates the prompt with it. Each provider's path is read off its own
+        ``PROFILE`` constant; a module that will not import is skipped rather
+        than allowed to break the whole prompt.
+        """
+        import importlib
+
+        state = self.cfg.state_dir
+        profiles: list[str] = []
+        for module_name, label, var in _CREDENTIAL_PROFILES:
+            path = None
+            try:
+                module = importlib.import_module(f".{module_name}", package="zimzilla")
+                path = getattr(module, "PROFILE", None)
+            except Exception:  # noqa: BLE001 - a missing profile is not fatal
+                path = None
+            where = path if path is not None else (state / module_name / "source")
+            profiles.append(f"    - {label:<12} {where}  (export {var}=…)")
+
+        shodan_note = self._shodan_note(state)
+        return ENVIRONMENT_PROMPT.format(
+            state=state,
+            profiles="\n".join(profiles),
+            shodan=shodan_note,
+        )
+
+    def _shodan_note(self, state: Path) -> str:
+        """The Shodan specifics: where the key is, and what the plan allows.
+
+        Read from the profile so the model is told "a key is set" rather than
+        having to re-derive it — the exact question it got wrong before.
+        """
+        try:
+            from . import shodan as shodan_mod
+        except Exception:  # noqa: BLE001
+            return ""
+        creds = None
+        try:
+            creds = shodan_mod.load_credentials()
+        except Exception:  # noqa: BLE001
+            creds = None
+        if creds is None:
+            state_line = ("no key set yet — /shodan-api-setup <key> writes one, "
+                          "or export SHODAN_API_KEY")
+        else:
+            _, origin = creds
+            state_line = f"a key is set ({origin})"
+        return (
+            f"- Shodan: {state_line}. The commands /shodan-api-setup,\n"
+            "  /shodan-cam-search, /shodan-scada-search, /shodan-db-search,\n"
+            "  /shodan-rdp-search, /shodan-router-search, /shodan-vuln-search and\n"
+            "  /shodan-search read the key from that profile themselves. On\n"
+            "  Shodan's free (oss) plan /shodan/host/search is gated at\n"
+            "  membership — every query answers 403 — but /shodan/host/count\n"
+            "  still returns totals and facets, which is what those commands\n"
+            "  use. To investigate Shodan, tell the operator which /shodan-*\n"
+            "  command to run; do not ask for the key to be exported, and do\n"
+            "  not say the harness lacks it."
+        )
 
     def _scope_note(self) -> str:
         """What the model is told about its target scope.
