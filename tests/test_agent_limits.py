@@ -606,6 +606,22 @@ def test_rate_limit_classification() -> None:
               _rate_limited("Too many requests.",
                             {"x-th-free-resets": "2026-10-25T12:52:37+00:00"})))
 
+    # Logfare, through its bundled proxy. Measured 2026-10-19: the body is
+    # "Your account has reached its request budget. Try again later." and
+    # LiteLLM forwards NO retry-after, so neither the wording list nor the
+    # header check recognised it. Every model on the shared key is spent at
+    # once, which makes "another free model will answer now" the one piece of
+    # advice that is certainly wrong.
+    logfare_429 = _rate_limited(
+        "litellm.RateLimitError: RateLimitError: OpenAIException - "
+        '{"error":{"type":"rate_limit_error","message":"Your account has '
+        'reached its request budget. Try again later.","code":null}}')
+    check("429: Logfare's exhausted budget is a window",
+          _rate_limit_is_a_window(logfare_429))
+    logfare_msg = Agent._friendly_error(logfare_429)
+    check("429: Logfare's budget does not send the operator to another model",
+          "Another free model" not in logfare_msg, logfare_msg)
+
     detail = _rate_limit_detail(_rate_limited(
         "Hourly rate limit reached.",
         {"x-th-plan": "free", "x-th-free-used-pct": "71",

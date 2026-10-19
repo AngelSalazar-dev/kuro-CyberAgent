@@ -71,6 +71,13 @@ MAX_OUTPUT_CEILING = 131072
 _WINDOW_WORDS = (
     "per-minute", "per minute", "hourly", "per hour", "daily", "per day",
     "weekly", "per week", "allowance", "quota", "come back",
+    # Logfare's own wording, and the one this list missed. Its shared key
+    # answers "Your account has reached its request budget. Try again later."
+    # with no Retry-After at all on the proxied path, so a 429 carrying that
+    # body fell through to the burst branch — five exponential retries against
+    # a budget that resets at 00:00 UTC, then a message telling the operator to
+    # pick another model, when every model on the key is spent.
+    "request budget", "budget",
 )
 
 
