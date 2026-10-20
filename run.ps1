@@ -1,4 +1,4 @@
-﻿# run.ps1 â€” run Kuro straight from the checkout on Windows.
+﻿# run.ps1 - run Kuro straight from the checkout on Windows.
 #
 # The real launcher lives in packaging/; it needs KURO_ROOT to point at the
 # checkout (its own directory is packaging/). This shim does exactly that, so
@@ -14,8 +14,8 @@
 # If you installed with install.ps1, a `kuro` command is already on your PATH
 # and this shim is not needed.
 #
-# (The repo root cannot be named `kuro` â€” that name belongs to the Python
-# package directory â€” hence run.ps1.)
+# (The repo root cannot be named `kuro` - that name belongs to the Python
+# package directory - hence run.ps1.)
 #
 # See packaging\kuro.ps1 for the configuration knobs.
 

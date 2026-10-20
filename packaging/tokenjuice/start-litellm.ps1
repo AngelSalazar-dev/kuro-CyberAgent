@@ -1,4 +1,4 @@
-﻿# start-litellm.ps1 â€” run the LiteLLM translation proxy for Kuro on Windows.
+﻿# start-litellm.ps1 - run the LiteLLM translation proxy for Kuro on Windows.
 #
 #   Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4001 --â–¶ Logfare (OpenAI)
 #
@@ -27,7 +27,7 @@ $PID_FILE   = $env:LITELLM_PID_FILE -or "$env:TEMP\litellm-tj.pid"
 $HOST       = $env:LITELLM_HOST -or '127.0.0.1'
 
 # NOTE: litellm reads the env var LITELLM_LOG as its *log level* ("INFO",
-# "DEBUG"), so it must never carry a file path â€” doing so crashes it at import
+# "DEBUG"), so it must never carry a file path - doing so crashes it at import
 # with "module 'logging' has no attribute '/tmp/...'". The log-file path lives
 # in LITELLM_LOGFILE. A path-valued LITELLM_LOG is still accepted for
 # backwards compatibility, but is stripped before litellm is launched.
@@ -59,7 +59,7 @@ function log   { Write-Host "[liteLLM] $args" -ForegroundColor Cyan }
 function err   { Write-Error "[liteLLM] $args" }
 
 # A pidfile is only a number, and pids get reused. Confirm the recorded pid is
-# actually a litellm serving THIS config before believing it â€” otherwise a stale
+# actually a litellm serving THIS config before believing it - otherwise a stale
 # file makes do_start report a false "already running" and leaves the route
 # pointing at a port nothing is answering on.
 function pid_is_our_proxy {
@@ -112,8 +112,8 @@ function port_owner_pids {
 # port plus "is a litellm" reclaims those without guessing at a path that has
 # changed since.
 #
-# Both conditions must hold before anything is signalled â€” it must be a litellm,
-# and it must hold this port â€” so an unrelated service on :$PORT is never a
+# Both conditions must hold before anything is signalled - it must be a litellm,
+# and it must hold this port - so an unrelated service on :$PORT is never a
 # target. Takes an optional signal name, defaulting to TERM.
 function kill_port_orphans {
   param([string]$sig = 'TERM')
@@ -153,7 +153,7 @@ function do_stop {
       log "not tracked as running."
       return 0
     }
-    log "no pid file, but something is still serving :$PORT â€” reclaiming it"
+    log "no pid file, but something is still serving :$PORT - reclaiming it"
     # Precise case first: a proxy of ours whose cmdline names this exact config.
     try {
       $litellm_procs = Get-Process litellm -ErrorAction SilentlyContinue
@@ -202,7 +202,7 @@ function do_start {
     exit 1
   }
   if (-not (Test-Path -Path $CONFIG -PathType Leaf)) { err "config not found: $CONFIG"; exit 1 }
-  if (-not (Test-Path -Path $ENV_FILE -PathType Leaf)) { err "profile not found: $ENV_FILE â€” run ./setup.ps1 first"; exit 1 }
+  if (-not (Test-Path -Path $ENV_FILE -PathType Leaf)) { err "profile not found: $ENV_FILE - run ./setup.ps1 first"; exit 1 }
 
   # Load the profile and export everything it defines (no key is echoed).
   # The profile is POSIX shell syntax; translate `export KEY="VALUE"` lines.
@@ -248,7 +248,7 @@ function do_start {
     }
     Start-Sleep -Seconds 1
   }
-  err "proxy did not become healthy within 180s â€” last log lines:"
+  err "proxy did not become healthy within 180s - last log lines:"
   Get-Content -Path $LOG -Tail 20 -ErrorAction SilentlyContinue | Write-Error
   exit 1
 }

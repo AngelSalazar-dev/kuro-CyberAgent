@@ -1,14 +1,14 @@
-﻿# setup.ps1 â€” configure the Logfare route for Kuro on Windows.
+﻿# setup.ps1 - configure the Logfare route for Kuro on Windows.
 #
 #   .\setup.ps1
 #
-# Finds a Logfare credential â€” an existing profile, then $ANTHROPIC_AUTH_TOKEN â€”
+# Finds a Logfare credential - an existing profile, then $ANTHROPIC_AUTH_TOKEN -
 # writes the profile to %USERPROFILE%\.kuro\logfare\source, installs the
 # LiteLLM proxy if it is missing, starts it, and verifies the route end to end.
 #
 # It never prompts. If there is no key it does not invent one: the route is
 # installed and left unstarted, and the script says where a key goes. A
-# credential committed to this repository is not a credential â€” it is a public
+# credential committed to this repository is not a credential - it is a public
 # budget that anyone can spend, and it cannot be taken back out of the history
 # of everyone who cloned it. So none ships.
 #
@@ -28,7 +28,7 @@ $PORT        = [int]($env:LITELLM_PORT -or 4001)
 
 # The interpreter that carries Kuro's dependencies.
 #
-# Prefer the checkout's own venv â€” the one install.ps1 builds â€” so `.\setup.ps1`
+# Prefer the checkout's own venv - the one install.ps1 builds - so `.\setup.ps1`
 # works with no activation after a global install. Then an activated venv
 # ($VIRTUAL_ENV), then a python on PATH. This script never creates a venv.
 $self_dir = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
@@ -45,18 +45,18 @@ if (Test-Path -Path $venv_py -PathType Leaf) {
 }
 
 function bold   { Write-Host $args -ForegroundColor White }
-function step   { Write-Host "`nâ–¸ $args" -ForegroundColor Cyan }
-function ok     { Write-Host "  âœ” $args" -ForegroundColor Green }
-function warn   { Write-Warning "  âš  $args" }
-function die    { Write-Error "  âœ– $args" -ErrorAction Stop }
+function step   { Write-Host "`n-> $args" -ForegroundColor Cyan }
+function ok     { Write-Host "  [OK] $args" -ForegroundColor Green }
+function warn   { Write-Warning "  [WARN] $args" }
+function die    { Write-Error "  [ERR] $args" -ErrorAction Stop }
 function note   { Write-Host "      $args" -ForegroundColor Cyan }
 
-bold "â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®"
-bold "â”‚  KURO Â· setup                          â”‚"
-bold "â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯"
+bold "â*­----------------------------------------------â*®"
+bold "|  KURO Â· setup                          |"
+bold "â*°----------------------------------------------â*¯"
 
 if (-not $PY) {
-  die "no python on PATH â€” create a venv, activate it, then: pip install -r requirements.txt"
+  die "no python on PATH - create a venv, activate it, then: pip install -r requirements.txt"
 }
 if (-not (Get-Command curl -ErrorAction SilentlyContinue)) {
   die "curl is required."
@@ -68,14 +68,14 @@ if (-not (Get-Command curl -ErrorAction SilentlyContinue)) {
 # Check the THIRD-PARTY dependencies, not `import kuro`: kuro is
 # imported from the checkout itself (see PYTHONPATH below), so `import kuro`
 # would succeed from the source tree even in a bare venv with nothing
-# installed â€” passing the check that exists to catch exactly that. The deps are
+# installed - passing the check that exists to catch exactly that. The deps are
 # what the user's `pip install -r requirements.txt` actually provides.
 try {
   Push-Location -Path 'C:\' -ErrorAction Stop
   $null = & $PY -c 'import anthropic, textual, rich, yaml'
   Pop-Location
 } catch {
-  Write-Host "`n  âœ– Kuro dependencies are not installed for $PY`n" -ForegroundColor Red
+  Write-Host "`n  [ERR] Kuro dependencies are not installed for $PY`n" -ForegroundColor Red
   Write-Host "  Activate your venv and install them, then re-run .\setup.ps1:`n"
   note "python -m venv .venv & .\.venv\Scripts\Activate.ps1"
   note "pip install -r requirements.txt"
@@ -91,7 +91,7 @@ $KEY = ''
 $KEY_SRC = ''
 
 # A Logfare key starts with `lfu_`. Only a key with that prefix is trusted
-# automatically â€” a shell often has ANTHROPIC_AUTH_TOKEN exported for a
+# automatically - a shell often has ANTHROPIC_AUTH_TOKEN exported for a
 # *different* provider (another proxy, another vendor), and silently adopting
 # it would point the harness at the wrong service with no visible symptom.
 function is_logfare_key { param($k) return $k -match '^lfu_' }
@@ -103,7 +103,7 @@ foreach ($candidate in @($PROFILE, (Join-Path $env:USERPROFILE 'logfare\source')
   if (-not (Test-Path -Path $candidate -PathType Leaf)) { continue }
   $found = & { . $candidate 2>$null; $env:ANTHROPIC_AUTH_TOKEN }
   if (is_logfare_key $found) { $KEY = $found; $KEY_SRC = $candidate; break }
-  elseif ($found) { warn "ignoring $candidate â€” its token is not a Logfare key (no lfu_ prefix)" }
+  elseif ($found) { warn "ignoring $candidate - its token is not a Logfare key (no lfu_ prefix)" }
 }
 
 # 2. The ambient token, but only when it is genuinely a Logfare key.
@@ -115,7 +115,7 @@ if (-not $KEY -and (is_logfare_key $env:ANTHROPIC_AUTH_TOKEN)) {
 # 3. Nothing else. There is deliberately no shipped key: packaging/logfare/source
 #    is a template whose token is a placeholder, so a key committed there would
 #    be public, spendable by anyone, and impossible to unpublish. A fresh install
-#    therefore finishes without a Logfare credential and says how to add one â€”
+#    therefore finishes without a Logfare credential and says how to add one -
 #    `/logfare-api-setup <key>` in the TUI, or the profile file directly.
 #
 #    A profile that already exists is never overwritten, so anyone with their own
@@ -123,9 +123,9 @@ if (-not $KEY -and (is_logfare_key $env:ANTHROPIC_AUTH_TOKEN)) {
 
 if ($KEY) {
   ok "using the credential from $KEY_SRC"
-  if ($KEY -notmatch '^lfu_') { warn "that key does not start with 'lfu_' â€” continuing anyway" }
+  if ($KEY -notmatch '^lfu_') { warn "that key does not start with 'lfu_' - continuing anyway" }
 } else {
-  warn "no Logfare key found â€” installing the route without starting it"
+  warn "no Logfare key found - installing the route without starting it"
   warn "get one at https://logfare.ai (they start with 'lfu_'), then either"
   warn "  run  /logfare-api-setup <key>  in the TUI, or"
   warn "  write it to $PROFILE"
@@ -140,14 +140,14 @@ if (-not (Test-Path -Path $LOG_DIR -PathType Container)) {
 # umask equivalent: create the file with restrictive ACLs. On Windows we just
 # write it; the operator should restrict ACLs manually if sharing the machine.
 {
-  '# Kuro â€” Logfare profile (generated by setup.ps1)'
+  '# Kuro - Logfare profile (generated by setup.ps1)'
   '# Treat this file as a credential. Never commit it.'
   ''
   "export ANTHROPIC_BASE_URL=`"http://localhost:$PORT`""
   if ($KEY) {
     "export ANTHROPIC_AUTH_TOKEN=`"$KEY`""
   } else {
-    '# No key yet â€” /logfare-api-setup <key> in the TUI writes this line.'
+    '# No key yet - /logfare-api-setup <key> in the TUI writes this line.'
     'export ANTHROPIC_AUTH_TOKEN=""'
   }
   'export ANTHROPIC_MODEL="deepseek-v4.1-flash"'
@@ -156,7 +156,7 @@ if (-not (Test-Path -Path $LOG_DIR -PathType Container)) {
   '# and clears any real API key inherited from the shell.'
   'export ANTHROPIC_API_KEY=""'
   ''
-  '# Model aliases â€” the models Logfare currently serves.'
+  '# Model aliases - the models Logfare currently serves.'
   '# Logfare retires models without notice; /logfare-models in the TUI'
   '# lists what is live right now.'
   'export MODEL_DEFAULT="deepseek-v4.1-flash"'
@@ -174,14 +174,14 @@ step "Checking the proxy files"
 # These are shipped artifacts, not user config: the catalog and the manager are
 # maintained in packaging/ and an install has to track them. Copying only when
 # the file is *missing* left every existing install frozen at whatever it first
-# received â€” so a fix in packaging/ (a required config key, a pidfile guard)
+# received - so a fix in packaging/ (a required config key, a pidfile guard)
 # never reached the copy that actually runs, and the proxy kept failing on a bug
 # that was already fixed in the tree. Sync on content instead, but keep a .bak
 # of any locally-edited copy rather than silently overwriting someone's work.
 function sync_shipped {
   param([string]$src, [string]$dst, [switch]$force)
   if (-not (Test-Path -Path $src -PathType Leaf)) {
-    warn "missing from packaging/: $(Split-Path -Leaf $src) â€” leaving $dst alone"
+    warn "missing from packaging/: $(Split-Path -Leaf $src) - leaving $dst alone"
     return
   }
   if (-not (Test-Path -Path $dst -PathType Leaf)) {
@@ -190,7 +190,7 @@ function sync_shipped {
   } elseif ((Get-FileHash -Path $src -Algorithm SHA256).Hash -ne (Get-FileHash -Path $dst -Algorithm SHA256).Hash) {
     Copy-Item -Path $dst -Destination "$dst.bak" -Force
     Copy-Item -Path $src -Destination $dst -Force
-    warn "$(Split-Path -Leaf $dst) updated â€” previous copy kept at $dst.bak"
+    warn "$(Split-Path -Leaf $dst) updated - previous copy kept at $dst.bak"
   } else {
     ok "$(Split-Path -Leaf $dst) up to date"
   }
@@ -201,14 +201,14 @@ sync_shipped -src (Join-Path $SELF 'packaging\logfare\start-litellm.ps1') -dst $
 
 # The Token Juice route is a sibling install, not a variant: its own port,
 # profile and manager. This step lays the files down and seeds a profile when
-# one can be found â€” it does not start anything, and the route is used on
+# one can be found - it does not start anything, and the route is used on
 # demand via /zim-tokenjuice.
 #
 # No credential ships in the tree. `source` was committed here once, holding a
 # live key; that is a leak on a public repo and it is not coming back. The
 # route is seeded from, in order: an existing ~/.kuro profile (left alone),
 # a $ANTHROPIC_AUTH_TOKEN that already looks like a Token Juice key, or nothing
-# â€” and in that last case it is simply not discovered, so /zim-tokenjuice
+# - and in that last case it is simply not discovered, so /zim-tokenjuice
 # reports the route as unavailable instead of failing later at request time.
 $TJ_DIR = Join-Path $KURO_HOME 'tokenjuice'
 if (Test-Path -Path (Join-Path $SELF 'packaging\tokenjuice') -PathType Container) {
@@ -224,7 +224,7 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\tokenjuice') -PathType Container
     ok "tokenjuice profile in place ($tj_source)"
   } elseif ($env:ANTHROPIC_AUTH_TOKEN -match '^tj_') {
     {
-      '# Kuro â€” Token Juice profile (generated by setup.ps1)'
+      '# Kuro - Token Juice profile (generated by setup.ps1)'
       '# Treat this file as a credential. Never commit it.'
       ''
       'export ANTHROPIC_BASE_URL="http://localhost:4000"'
@@ -234,24 +234,24 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\tokenjuice') -PathType Container
     } | Set-Content -Path $tj_source -Encoding UTF8
     ok "tokenjuice profile written from $env:ANTHROPIC_AUTH_TOKEN"
   } else {
-    warn "no Token Juice credential â€” the :4000 route will not be discovered"
+    warn "no Token Juice credential - the :4000 route will not be discovered"
     note "to enable /zim-tokenjuice, write your tj_ key to:"
     note "  $tj_source"
     note "the format is in $(Join-Path $TJ_DIR 'source.example')"
   }
   ok "installed tokenjuice route (:4000)"
 } else {
-  warn "no tokenjuice packaging â€” /zim-tokenjuice will be unavailable"
+  warn "no tokenjuice packaging - /zim-tokenjuice will be unavailable"
 }
 
 # The IteraCompute route is a sibling install like Token Juice: its own port,
 # profile and manager. This step lays the files down and seeds a profile only
-# when a key can be found â€” it does not start anything, and the route is used on
+# when a key can be found - it does not start anything, and the route is used on
 # demand via /zim-iteracompute.
 #
 # IteraCompute serves the OpenAI protocol only, so the proxy is not optional:
 # a session pointed straight at the upstream 404s every turn. No credential
-# ships in the tree, and none could â€” the key is per-account. The route is
+# ships in the tree, and none could - the key is per-account. The route is
 # seeded from an existing ~/.kuro profile (left alone) or a
 # $ANTHROPIC_AUTH_TOKEN that looks like an IteraCompute key; with neither it is
 # not discovered, and `/zim-iteracompute` names /iteracompute-api-setup rather
@@ -273,7 +273,7 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\iteracompute') -PathType Contain
     # with another provider's key would fail at request time with a 401 the
     # operator has no reason to connect to this file.
     {
-      '# Kuro â€” IteraCompute profile (generated by setup.ps1)'
+      '# Kuro - IteraCompute profile (generated by setup.ps1)'
       '# Treat this file as a credential. Never commit it.'
       ''
       'export ANTHROPIC_BASE_URL="http://localhost:4002"'
@@ -289,7 +289,7 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\iteracompute') -PathType Contain
   }
   ok "installed iteracompute route (:4002)"
 } else {
-  warn "no iteracompute packaging â€” /zim-iteracompute will be unavailable"
+  warn "no iteracompute packaging - /zim-iteracompute will be unavailable"
 }
 
 # The InfronAI route is the same shape as IteraCompute's, one port over: its own
@@ -298,7 +298,7 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\iteracompute') -PathType Contain
 #
 # InfronAI does serve the Anthropic protocol natively, but its free models are
 # `openai`-endpoint only in the catalog, so the proxy is not optional for the
-# free tier. No credential ships in the tree, and none could â€” the key is
+# free tier. No credential ships in the tree, and none could - the key is
 # per-account, and a free account still needs a $5 balance. The route is seeded
 # from a $ANTHROPIC_AUTH_TOKEN only when the environment is already aimed at
 # InfronAI; with neither that nor an existing profile it is not discovered, and
@@ -320,7 +320,7 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\infronai') -PathType Container) 
     # another provider's key would fail at request time with a 401 the operator
     # has no reason to connect to this file.
     {
-      '# Kuro â€” InfronAI profile (generated by setup.ps1)'
+      '# Kuro - InfronAI profile (generated by setup.ps1)'
       '# Treat this file as a credential. Never commit it.'
       ''
       'export ANTHROPIC_BASE_URL="http://localhost:4003"'
@@ -336,14 +336,14 @@ if (Test-Path -Path (Join-Path $SELF 'packaging\infronai') -PathType Container) 
   }
   ok "installed infronai route (:4003)"
 } else {
-  warn "no infronai packaging â€” /zim-infronai will be unavailable"
+  warn "no infronai packaging - /zim-infronai will be unavailable"
 }
 
 # The doctrine file zim mode follows. Installed into KURO_HOME so that
 # `kuro --mode zim` works from ANY directory: without a copy here, a session
 # opened in an unrelated project finds no AGENTS.md and silently falls back to
-# the default prompt. A project's own AGENTS.md still wins â€” the workdir is
-# searched first â€” so this is a fallback, not an override.
+# the default prompt. A project's own AGENTS.md still wins - the workdir is
+# searched first - so this is a fallback, not an override.
 #
 # Synced on content like the proxy files, but a locally-edited copy is kept as
 # .bak rather than overwritten silently: the operator may have tuned their
@@ -352,7 +352,7 @@ $aggr_src = Join-Path $SELF 'AGENTS.md'
 if (Test-Path -Path $aggr_src -PathType Leaf) {
   sync_shipped -src $aggr_src -dst (Join-Path $KURO_HOME 'AGENTS.md')
 } else {
-  warn "no AGENTS.md in the checkout â€” zim mode will fall back to the default prompt"
+  warn "no AGENTS.md in the checkout - zim mode will fall back to the default prompt"
 }
 
 # --- 3b. pagekite (worldwide /phish forwarder) -------------------------------
@@ -371,7 +371,7 @@ if (Test-Path -Path $pk_src -PathType Leaf) {
     Invoke-WebRequest -Uri 'https://pagekite.net/pk/pagekite.py' -OutFile (Join-Path $PK_DIR 'pagekite.py') -ErrorAction Stop
     ok "downloaded $(Join-Path $PK_DIR 'pagekite.py')"
   } catch {
-    warn "could not download pagekite.py â€” /phish will fall back to cloudflared/ngrok"
+    warn "could not download pagekite.py - /phish will fall back to cloudflared/ngrok"
   }
 }
 $pk_name = Join-Path $KURO_HOME 'pagekite.name'
@@ -407,21 +407,21 @@ if (Get-Command litellm -ErrorAction SilentlyContinue) {
   # Both floors are load-bearing, and they live here rather than in
   # requirements.txt because this is the environment that has to satisfy them.
   #
-  # litellm[proxy]>=1.100.1 â€” the harness talks to this proxy over Anthropic's
+  # litellm[proxy]>=1.100.1 - the harness talks to this proxy over Anthropic's
   # /v1/messages, and every Logfare model is registered as `openai/<name>`.
   # Older litellm only served /v1/messages for provider == anthropic, so an
   # openai/* model raised "Anthropic messages provider config not found for
-  # model: ..." â€” a 500 on the one route Kuro actually uses, while
+  # model: ..." - a 500 on the one route Kuro actually uses, while
   # /v1/chat/completions kept working and made the proxy look healthy.
   #
-  # uvloop>=0.22.1 â€” litellm hardcodes uvicorn's event loop to uvloop on Linux
-  # (litellm/proxy/proxy_cli.py::_get_loop_type â€” not configurable, no flag or
+  # uvloop>=0.22.1 - litellm hardcodes uvicorn's event loop to uvloop on Linux
+  # (litellm/proxy/proxy_cli.py::_get_loop_type - not configurable, no flag or
   # env var overrides it). On Windows, uvloop is not used (uvloop is Linux-only),
   # so this is skipped there; the flag is kept for parity but only installed
   # when not on Windows.
-  & $PROXY_PY -m pip install --quiet --disable-pip-version-check "litellm[proxy]>=1.100.1" < $null
+  & $PROXY_PY -m pip install --quiet --disable-pip-version-check "litellm[proxy]>=1.100.1" 
   if (-not [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Unix) {
-    try { & $PROXY_PY -m pip install --quiet --disable-pip-version-check "uvloop>=0.22.1" < $null } catch { }
+    try { & $PROXY_PY -m pip install --quiet --disable-pip-version-check "uvloop>=0.22.1"  } catch { }
   }
   ok "litellm installed into $PROXY_VENV"
 }
@@ -430,16 +430,16 @@ if (Get-Command litellm -ErrorAction SilentlyContinue) {
 
 if (-not $KEY) {
   step "Skipping the proxy start"
-  warn "no key to send â€” start it later with $SERVICE start"
+  warn "no key to send - start it later with $SERVICE start"
 } else {
   step "Starting the proxy on :$PORT"
-  # Reuse anything already healthy on the port â€” the user may already run a
+  # Reuse anything already healthy on the port - the user may already run a
   # proxy (another tool, or an earlier install) and starting a second one would
   # only fail to bind.
   try {
     $code = (Invoke-RestMethod -Uri "http://127.0.0.1:$PORT/health/liveliness" -Method Get -MaximumTimeoutMilliseconds 2000 -ErrorAction SilentlyContinue).StatusCode
     if ($code -eq 200) {
-      ok "a proxy is already serving :$PORT â€” reusing it"
+      ok "a proxy is already serving :$PORT - reusing it"
     } else {
       throw "HTTP $code"
     }
@@ -448,7 +448,7 @@ if (-not $KEY) {
       & $SERVICE start
       ok "proxy healthy on :$PORT"
     } catch {
-      warn "proxy did not start â€” see $env:TEMP\litellm-zim.log"
+      warn "proxy did not start - see $env:TEMP\litellm-zim.log"
       warn "continuing; the launcher will retry on next run."
     }
   }
@@ -482,7 +482,7 @@ function probe {
 }
 $CODE = probe
 if ($CODE -ne 200) {
-  Write-Host "  upstream busy (HTTP $CODE) â€” retrying once..."
+  Write-Host "  upstream busy (HTTP $CODE) - retrying once..."
   Start-Sleep -Seconds 3
   $CODE = probe
 }
@@ -499,9 +499,9 @@ Remove-Item -Path "$env:TEMP\zim-setup-probe.json" -Force -ErrorAction SilentlyC
 # --- done --------------------------------------------------------------------
 
 Write-Host ""
-bold "â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®"
-bold "â”‚  setup complete.                             â”‚"
-bold "â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯"
+bold "â*­----------------------------------------------â*®"
+bold "|  setup complete.                             |"
+bold "â*°----------------------------------------------â*¯"
 Write-Host ""
 Write-Host "    kuro                 # launch (starts the proxy if needed)"
 Write-Host "    kuro -C C:\proj      # run against another directory"
