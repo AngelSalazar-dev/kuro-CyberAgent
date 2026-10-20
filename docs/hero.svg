@@ -79,38 +79,8 @@
     </g>
 
     <!-- Kuro wordmark -->
-    <g filter="url(#glow)" class="halo">
-      <!-- K -->
-      <g class="gl" style="animation-delay:0.00s">
-        <rect x="384" y="126" width="38" height="19"/>
-        <rect x="384" y="164" width="38" height="19"/>
-        <rect x="384" y="202" width="38" height="19"/>
-        <rect x="384" y="145" width="50" height="19"/>
-        <rect x="434" y="164" width="50" height="19"/>
-        <rect x="384" y="183" width="50" height="19"/>
-      </g>
-      <!-- U -->
-      <g class="gl" style="animation-delay:0.11s">
-        <rect x="470" y="126" width="38" height="97"/>
-        <rect x="508" y="126" width="38" height="97"/>
-        <rect x="470" y="221" width="76" height="19"/>
-      </g>
-      <!-- R -->
-      <g class="gl" style="animation-delay:0.22s">
-        <rect x="560" y="126" width="38" height="97"/>
-        <rect x="560" y="126" width="76" height="19"/>
-        <rect x="560" y="164" width="76" height="19"/>
-        <rect x="560" y="202" width="76" height="19"/>
-        <rect x="598" y="202" width="40" height="97"/>
-      </g>
-      <!-- O -->
-      <g class="gl" style="animation-delay:0.33s">
-        <rect x="654" y="126" width="38" height="97"/>
-        <rect x="692" y="126" width="38" height="97"/>
-        <rect x="654" y="126" width="76" height="19"/>
-        <rect x="654" y="202" width="76" height="19"/>
-      </g>
-    </g>
+    <!-- Kuro wordmark -->
+    <text x="640" y="175" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="110" font-weight="900" fill="url(#kuroGrad)" filter="url(#glow)" letter-spacing="8">KURO</text>
 
     <g opacity="0.5"><line x1="0" y1="0" x2="1280" y2="0" stroke="#0a1a0d"/><line x1="0" y1="26" x2="1280" y2="26" stroke="#0a1a0d"/><line x1="0" y1="52" x2="1280" y2="52" stroke="#0a1a0d"/><line x1="0" y1="78" x2="1280" y2="78" stroke="#0a1a0d"/><line x1="0" y1="104" x2="1280" y2="104" stroke="#0a1a0d"/><line x1="0" y1="130" x2="1280" y2="130" stroke="#0a1a0d"/><line x1="0" y1="156" x2="1280" y2="156" stroke="#0a1a0d"/><line x1="0" y1="182" x2="1280" y2="182" stroke="#0a1a0d"/><line x1="0" y1="208" x2="1280" y2="208" stroke="#0a1a0d"/><line x1="0" y1="234" x2="1280" y2="234" stroke="#0a1a0d"/><line x1="0" y1="260" x2="1280" y2="260" stroke="#0a1a0d"/><line x1="0" y1="286" x2="1280" y2="286" stroke="#0a1a0d"/><line x1="0" y1="312" x2="1280" y2="312" stroke="#0a1a0d"/><line x1="0" y1="338" x2="1280" y2="338" stroke="#0a1a0d"/><line x1="0" y1="364" x2="1280" y2="364" stroke="#0a1a0d"/><line x1="0" y1="390" x2="1280" y2="390" stroke="#0a1a0d"/><line x1="0" y1="416" x2="1280" y2="416" stroke="#0a1a0d"/></g>
     <g opacity="0.32"><text class="rain" x="17" y="-150" style="animation-duration:7.95s;animation-delay:-2.37s">123B1612D</text>
