@@ -77,6 +77,41 @@
       <circle cx="90" cy="86" r="10" fill="#ffffff"/>
       <path d="M 78 142 Q 90 164 102 142" fill="none" stroke="url(#kuroGrad)" stroke-width="7" stroke-linecap="round" opacity="0.8"/>
     </g>
+
+    <!-- Kuro wordmark -->
+    <g filter="url(#glow)" class="halo">
+      <!-- K -->
+      <g class="gl" style="animation-delay:0.00s">
+        <rect x="384" y="126" width="38" height="19"/>
+        <rect x="384" y="164" width="38" height="19"/>
+        <rect x="384" y="202" width="38" height="19"/>
+        <rect x="384" y="145" width="50" height="19"/>
+        <rect x="434" y="164" width="50" height="19"/>
+        <rect x="384" y="183" width="50" height="19"/>
+      </g>
+      <!-- U -->
+      <g class="gl" style="animation-delay:0.11s">
+        <rect x="470" y="126" width="38" height="97"/>
+        <rect x="508" y="126" width="38" height="97"/>
+        <rect x="470" y="221" width="76" height="19"/>
+      </g>
+      <!-- R -->
+      <g class="gl" style="animation-delay:0.22s">
+        <rect x="560" y="126" width="38" height="97"/>
+        <rect x="560" y="126" width="76" height="19"/>
+        <rect x="560" y="164" width="76" height="19"/>
+        <rect x="560" y="202" width="76" height="19"/>
+        <rect x="598" y="202" width="40" height="97"/>
+      </g>
+      <!-- O -->
+      <g class="gl" style="animation-delay:0.33s">
+        <rect x="654" y="126" width="38" height="97"/>
+        <rect x="692" y="126" width="38" height="97"/>
+        <rect x="654" y="126" width="76" height="19"/>
+        <rect x="654" y="202" width="76" height="19"/>
+      </g>
+    </g>
+
     <g opacity="0.5"><line x1="0" y1="0" x2="1280" y2="0" stroke="#0a1a0d"/><line x1="0" y1="26" x2="1280" y2="26" stroke="#0a1a0d"/><line x1="0" y1="52" x2="1280" y2="52" stroke="#0a1a0d"/><line x1="0" y1="78" x2="1280" y2="78" stroke="#0a1a0d"/><line x1="0" y1="104" x2="1280" y2="104" stroke="#0a1a0d"/><line x1="0" y1="130" x2="1280" y2="130" stroke="#0a1a0d"/><line x1="0" y1="156" x2="1280" y2="156" stroke="#0a1a0d"/><line x1="0" y1="182" x2="1280" y2="182" stroke="#0a1a0d"/><line x1="0" y1="208" x2="1280" y2="208" stroke="#0a1a0d"/><line x1="0" y1="234" x2="1280" y2="234" stroke="#0a1a0d"/><line x1="0" y1="260" x2="1280" y2="260" stroke="#0a1a0d"/><line x1="0" y1="286" x2="1280" y2="286" stroke="#0a1a0d"/><line x1="0" y1="312" x2="1280" y2="312" stroke="#0a1a0d"/><line x1="0" y1="338" x2="1280" y2="338" stroke="#0a1a0d"/><line x1="0" y1="364" x2="1280" y2="364" stroke="#0a1a0d"/><line x1="0" y1="390" x2="1280" y2="390" stroke="#0a1a0d"/><line x1="0" y1="416" x2="1280" y2="416" stroke="#0a1a0d"/></g>
     <g opacity="0.32"><text class="rain" x="17" y="-150" style="animation-duration:7.95s;animation-delay:-2.37s">123B1612D</text>
       <text class="rain" x="55" y="-150" style="animation-duration:3.74s;animation-delay:-0.54s">D1371C171</text>
@@ -113,15 +148,6 @@
       <text class="rain" x="1200" y="-150" style="animation-duration:6.42s;animation-delay:-3.19s">69E58B081</text>
       <text class="rain" x="1233" y="-150" style="animation-duration:3.49s;animation-delay:-3.03s">6F7E3DFC9</text></g>
 
-    <g filter="url(#glow)" class="halo"><g class="gl" style="animation-delay:0.00s"><rect x="118" y="126" width="114" height="19"/><rect x="194" y="145" width="38" height="19"/><rect x="174" y="164" width="38" height="19"/><rect x="156" y="183" width="38" height="19"/><rect x="136" y="202" width="38" height="19"/><rect x="118" y="221" width="114" height="19"/></g>
-      <g class="gl" style="animation-delay:0.11s"><rect x="250" y="126" width="114" height="19"/><rect x="288" y="145" width="38" height="19"/><rect x="288" y="164" width="38" height="19"/><rect x="288" y="183" width="38" height="19"/><rect x="288" y="202" width="38" height="19"/><rect x="250" y="221" width="114" height="19"/></g>
-      <g class="gl" style="animation-delay:0.22s"><rect x="384" y="126" width="38" height="19"/><rect x="460" y="126" width="38" height="19"/><rect x="384" y="145" width="114" height="19"/><rect x="384" y="164" width="114" height="19"/><rect x="384" y="183" width="38" height="19"/><rect x="460" y="183" width="38" height="19"/><rect x="384" y="202" width="38" height="19"/><rect x="460" y="202" width="38" height="19"/><rect x="384" y="221" width="38" height="19"/><rect x="460" y="221" width="38" height="19"/></g>
-      <g class="gl" style="animation-delay:0.33s"><rect x="516" y="126" width="114" height="19"/><rect x="592" y="145" width="38" height="19"/><rect x="574" y="164" width="38" height="19"/><rect x="554" y="183" width="38" height="19"/><rect x="536" y="202" width="38" height="19"/><rect x="516" y="221" width="114" height="19"/></g>
-      <g class="gl" style="animation-delay:0.44s"><rect x="650" y="126" width="114" height="19"/><rect x="688" y="145" width="38" height="19"/><rect x="688" y="164" width="38" height="19"/><rect x="688" y="183" width="38" height="19"/><rect x="688" y="202" width="38" height="19"/><rect x="650" y="221" width="114" height="19"/></g>
-      <g class="gl" style="animation-delay:0.55s"><rect x="782" y="126" width="38" height="19"/><rect x="782" y="145" width="38" height="19"/><rect x="782" y="164" width="38" height="19"/><rect x="782" y="183" width="38" height="19"/><rect x="782" y="202" width="38" height="19"/><rect x="782" y="221" width="114" height="19"/></g>
-      <g class="gl" style="animation-delay:0.66s"><rect x="916" y="126" width="38" height="19"/><rect x="916" y="145" width="38" height="19"/><rect x="916" y="164" width="38" height="19"/><rect x="916" y="183" width="38" height="19"/><rect x="916" y="202" width="38" height="19"/><rect x="916" y="221" width="114" height="19"/></g>
-      <g class="gl" style="animation-delay:0.77s"><rect x="1068" y="126" width="76" height="19"/><rect x="1048" y="145" width="38" height="19"/><rect x="1124" y="145" width="38" height="19"/><rect x="1048" y="164" width="114" height="19"/><rect x="1048" y="183" width="38" height="19"/><rect x="1124" y="183" width="38" height="19"/><rect x="1048" y="202" width="38" height="19"/><rect x="1124" y="202" width="38" height="19"/><rect x="1048" y="221" width="38" height="19"/><rect x="1124" y="221" width="38" height="19"/></g></g>
-
     <rect class="band" x="0" y="110" width="300" height="146"
           fill="url(#band)" style="mix-blend-mode:screen"/>
     <rect class="sweep" x="0" y="0" width="1280" height="90" fill="url(#scan)"/>
@@ -129,10 +155,9 @@
     <text class="tag" x="640" y="288" text-anchor="middle">net.shell // autonomous coding agent</text>
     <rect class="cur" x="872" y="273" width="10" height="18" fill="#7dffb0"/>
 
-    <text class="meta" x="640" y="332" text-anchor="middle">terminal-native Â· streaming Â· tool-using Â· scope-aware</text>
+    <text class="meta" x="640" y="332" text-anchor="middle">terminal-native · streaming · tool-using · scope-aware</text>
     <text class="meta" x="640" y="360" text-anchor="middle" opacity="0.8">by Angel Salazar / Kuro</text>
 
     <rect x="0.5" y="0.5" width="1279" height="419" rx="10" fill="none" stroke="#0c5a22" stroke-opacity="0.55"/>
   </g>
 </svg>
-
