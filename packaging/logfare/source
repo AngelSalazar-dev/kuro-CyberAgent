@@ -1,21 +1,28 @@
-# ZimZilla — Logfare profile
+# ZimZilla — Logfare profile (template)
 #
-# Committed on purpose. This carries a shared Logfare key so that a fresh clone
-# can start a session without signing up for one — and so `/zim-logfare` has a
-# credential to switch back to. setup.sh reuses it when it finds no other.
+# This file ships WITHOUT a credential on purpose. It used to carry a key, and
+# a key in a public repository is not a credential: it is a shared budget that
+# anyone can spend, and once it is in the history it cannot be taken back out of
+# everyone's clone. So the token below is a placeholder and nothing else.
 #
-# It is not a secret in any meaningful sense: it is in this repository's public
-# history. What it is, is shared — every install uses it, against one per-account
-# budget (20/min, 500/hour, 2500/day, three concurrent). Exhausting that budget
-# gets a 429 with a Retry-After until the UTC day rolls over, which the harness
-# reports rather than retries. Your own key is the way to a larger allowance.
+# Put your own key in one of two places — either is fine, and both are read
+# before this file:
 #
-# Your own key always wins. setup.sh looks at ~/.zimzilla/logfare/source first
-# (mode 600), then $ANTHROPIC_AUTH_TOKEN, and only then at this file. Get a key
-# at https://logfare.ai — they start with `lfu_`.
+#   ~/.zimzilla/logfare/source   mode 600, written by `/logfare-api-setup <key>`
+#                                in the TUI, or by setup.sh from a key it found
+#   $ANTHROPIC_AUTH_TOKEN        exported in the shell
+#
+# Get a key at https://logfare.ai — they start with `lfu_`. Without one, the
+# harness still starts and `/logfare-models` still works (that catalog is
+# public); the first turn is what needs the key.
+#
+# The rest of this file is load-bearing and is copied into the operator's own
+# profile the first time a key is set: the base URL the proxy listens on, the
+# model aliases, and the empty ANTHROPIC_API_KEY that keeps the token
+# authoritative when a real key is inherited from the shell.
 
 export ANTHROPIC_BASE_URL="http://localhost:4001"
-export ANTHROPIC_AUTH_TOKEN="***REMOVED***"
+export ANTHROPIC_AUTH_TOKEN="lfu_REPLACE_ME"
 export ANTHROPIC_MODEL="deepseek-v4.1-flash"
 
 # Load-bearing: an empty string keeps ANTHROPIC_AUTH_TOKEN authoritative and

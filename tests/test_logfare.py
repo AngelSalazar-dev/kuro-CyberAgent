@@ -329,14 +329,34 @@ def test_profile_key(tmp: Path) -> None:
 
     with mock.patch.object(lf, "PROFILE", profile), \
          mock.patch.dict(os.environ, {"ANTHROPIC_AUTH_TOKEN": ""}):
+        # packaging/logfare/source ships a placeholder, and a placeholder must
+        # never be handed upstream as if it were a key: that turns "you have not
+        # set one yet" into a 401 that reads like a broken account.
+        check("key: the shipped template is not a credential",
+              lf.load_credentials() is None, str(lf.load_credentials()))
+        check("key: has_key agrees", not lf.has_key())
+
+    # A shipped profile that carries a real token is still honoured, and says so
+    # by origin — that is how a maintainer ships a key on purpose, with its own
+    # budget and the knowledge that it is public.
+    shipped_real = tmp / "shipped-with-key"
+    shipped_real.parent.mkdir(parents=True, exist_ok=True)
+    shipped_real.write_text(
+        'export ANTHROPIC_AUTH_TOKEN="lfu_shipped_key_0123456789abcd"\n'
+        'export ANTHROPIC_MODEL="deepseek-v4.1-flash"\n'
+        'export ANTHROPIC_API_KEY=""\n'
+        'export MODEL_QWEN="qwen-3.8-27b"\n', encoding="utf-8")
+    with mock.patch.object(lf, "PROFILE", profile), \
+         mock.patch.object(lf, "SHIPPED_PROFILE", shipped_real), \
+         mock.patch.dict(os.environ, {"ANTHROPIC_AUTH_TOKEN": ""}):
         # The shipped profile is the fallback, and says so by origin.
         creds = lf.load_credentials()
-        check("key: the shipped key is found", creds is not None)
+        check("key: a shipped key with a real token is found", creds is not None)
         check("key: reported as the shipped one",
-              creds is not None and creds[2] == str(lf.SHIPPED_PROFILE),
+              creds is not None and creds[2] == str(shipped_real),
               str(creds and creds[2]))
 
-        # An environment token beats the shared key...
+        # An environment token beats the shipped key...
         with mock.patch.dict(os.environ,
                              {"ANTHROPIC_AUTH_TOKEN": "env-token-0123456789"}):
             creds = lf.load_credentials()

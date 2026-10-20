@@ -3539,12 +3539,12 @@ class ZimZillaApp(App):
     def _cmd_logfare_key(self, args) -> None:
         """/logfare-api-setup [key] — use your own Logfare key.
 
-        Logfare's shipped key is shared by every install, so its budget is
-        shared too: 20/min, 500/hour, 2500/day, three concurrent, then a 429
-        with a Retry-After until the UTC day rolls over. Your own key is the way
-        past that, and it goes here — ``~/.zimzilla/logfare/source``, mode 600 —
-        which the launcher, ``/zim-logfare`` and the proxy all read before the
-        shipped file.
+        No Logfare key ships in this repository, so this is where the first one
+        comes from. It goes to ``~/.zimzilla/logfare/source``, mode 600, which
+        the launcher, ``/zim-logfare`` and the proxy all read. Logfare applies a
+        per-account budget — 20/min, 500/hour, 2500/day, three concurrent, then
+        a 429 with a Retry-After until the UTC day rolls over — and a second key
+        is a second budget.
 
         Nothing is echoed. The confirmation names the last four characters,
         which tells two keys apart and is not enough to be one.
@@ -3556,6 +3556,9 @@ class ZimZillaApp(App):
             t.append("  LOGFARE API KEY\n\n", style=f"bold {p.accent}")
             if creds is None:
                 t.append("  no key found.\n\n", style=p.amber)
+                t.append("  get one at    ", style=p.dim)
+                t.append("https://logfare.ai", style=p.primary)
+                t.append("  (they start with lfu_)\n\n", style=p.dim)
             else:
                 token, _, origin = creds
                 shared = str(origin) == str(lf_mod.SHIPPED_PROFILE)

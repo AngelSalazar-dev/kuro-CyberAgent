@@ -122,18 +122,21 @@ If `~/.local/bin` is not on your `PATH`, the installer prints the line to add.
 Re-running the same command updates an existing install.
 
 The installer finishes by running `./setup.sh`, which configures the route
-without asking you anything: it seeds `~/.zimzilla/logfare/source` from the
-shared key shipped in `packaging/logfare/source`, so a new install is a session
-away with no signup. Put your own key in that file (or export `lfu_…` as
-`ANTHROPIC_AUTH_TOKEN`) whenever you want the shared one gone — an existing
-profile is never overwritten.
+without asking you anything — and without inventing a credential. No Logfare key
+ships in this repository, and `packaging/logfare/source` is a template whose
+token is a placeholder. Get a key at https://logfare.ai (`lfu_…`), then either
+run `/logfare-api-setup <key>` in the TUI or put it in
+`~/.zimzilla/logfare/source` yourself (mode 600). A profile that already exists
+is never overwritten, and `setup.sh` installs everything else either way.
 
-The shared key is exactly that, shared. Every install uses it against one
-per-account budget — **20 requests/minute, 500/hour, 2,500/day, three
-concurrent** — and a busy day can exhaust it. When that happens Logfare answers
-`429` with a `Retry-After` (the budget resets at 00:00 UTC); ZimZilla reports the
-wait rather than retrying into it. Your own key has its own budget; put one in
-the profile whenever you want more headroom.
+Until a key is set, the harness starts and `/logfare-models` still works — that
+catalog is public. The first *turn* is what needs the key, and it says so
+instead of failing at the upstream.
+
+Logfare applies a per-account budget — **20 requests/minute, 500/hour,
+2,500/day, three concurrent**. Exhausting it gets a `429` with a `Retry-After`
+(the budget resets at 00:00 UTC); ZimZilla reports the wait rather than retrying
+into it. A second key is a second budget.
 
 **Logfare is a full route, not just the starting point.** `/zim-logfare` switches
 back to it from any other upstream, and the choice is remembered. Every chat
@@ -212,9 +215,9 @@ a fallback, never preferred over a named entry.
 Two upstream behaviours are worth knowing before you pick one. **Premium models
 need a one-time training opt-in** on the Logfare account; until it is granted the
 upstream answers `403 training_optin_required`, which is the account's state and
-not a fault in ZimZilla. And **the shared key has a daily request budget**, so a
+not a fault in ZimZilla. And **the key has a daily request budget**, so a
 busy day answers `429` with a `Retry-After` until 00:00 UTC — the harness reports
-the wait instead of retrying into it, and your own key has its own budget.
+the wait instead of retrying into it.
 
 ### Updates
 
@@ -630,7 +633,7 @@ up:
 
 | Source | Endpoint | Key | How it starts |
 |---|---|---|---|
-| **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, all chat models |
+| **Logfare** | `:4001` | yours | the bundled proxy — the default, all chat models |
 | **Token Juice** | `:4000` | discovered | direct (proxy on `:4000` if asked) — under construction |
 | **IteraCompute** | `:4002` | yours | direct (proxy on `:4002` if asked) — free Qwen tier |
 | **InfronAI** | `:4003` | yours | direct (proxy on `:4003` if asked) — free tier, $5 balance required |
@@ -650,13 +653,12 @@ The four routes with a local proxy are reached **directly** by default — the
 proxy is a translation shim, and the harness speaks both protocols now. Add
 `proxy` to go through it: `/zim-iteracompute proxy`.
 
-Logfare is a full switch target: the shipped key makes it work with no signup,
-and it serves every chat model on Logfare's catalog. The key is shared, so its
-request budget is shared too — see [Install](#install) for the numbers, and use
-`/logfare-models` to see what is up right now. `/logfare-api-setup <key>` swaps
-in your own key (`lfu_…` from https://logfare.ai) and shows you the last four
-characters of whichever key is in force, so it is obvious whether you are on the
-shared one. On a direct endpoint the new key is live immediately; through the
+Logfare is a full switch target: it serves every chat model on Logfare's
+catalog, and `/logfare-models` shows what is up right now. You need your own key
+(`lfu_…` from https://logfare.ai) — none ships in this repository, because a key
+committed to a public repo is a budget anyone can spend. `/logfare-api-setup
+<key>` stores it and shows the last four characters of whichever key is in
+force, so it is obvious which credential a turn will use. On a direct endpoint the new key is live immediately; through the
 local proxy the proxy is restarted, because that is where LiteLLM reads the key
 from at start-up. Token Juice is the one route still
 listed by `/zim-source` as **under construction**, because its upstream keeps
@@ -2252,8 +2254,8 @@ requirements.txt`.
 
 **`no credentials found`** — run `./setup.sh`, then source the profile it
 writes: `set -a; . ~/.zimzilla/logfare/source; set +a`. Or just launch with
-`./run.sh`, which does that for you. A fresh install should not see this: the
-shipped key seeds the profile on the first `setup.sh`.
+`./run.sh`, which does that for you. A fresh install sees it until you set a
+key: run `/logfare-api-setup <key>` with one from https://logfare.ai.
 
 **`the endpoint rejected the model name`** — run `/model` for valid names.
 

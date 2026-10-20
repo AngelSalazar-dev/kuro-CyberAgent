@@ -60,6 +60,20 @@ SHIPPED_PROFILE = DEFAULT_ROOT / "packaging" / "logfare" / "source"
 #: key of an unexpected shape is worth more stored than refused.
 KEY_PREFIX = "lfu_"
 
+#: Strings that mean "nobody has put a key here yet". The shipped profile is a
+#: template now, so its token is one of these — and a template must never be
+#: mistaken for a credential, or the harness sends `lfu_REPLACE_ME` upstream and
+#: reports the 401 as if the account were broken.
+PLACEHOLDERS = ("replace_me", "your_key", "yourkey", "example", "changeme")
+
+
+def is_placeholder_token(value: str | None) -> bool:
+    """Whether *value* is a template marker rather than a real key."""
+    low = (value or "").strip().lower()
+    if not low:
+        return True
+    return any(marker in low for marker in PLACEHOLDERS)
+
 #: The endpoint that answers "what is up". ``hours`` only sets the uptime window.
 STATUS_PATH = "/v1/status"
 
@@ -289,14 +303,14 @@ def load_credentials() -> tuple[str, str, str] | None:
     """
     values = _read_exports(PROFILE)
     token = values.get("ANTHROPIC_AUTH_TOKEN", "")
-    if token:
+    if token and not is_placeholder_token(token):
         return token, values.get("ANTHROPIC_MODEL", ""), str(PROFILE)
     token = os.environ.get("ANTHROPIC_AUTH_TOKEN", "").strip()
-    if token:
+    if token and not is_placeholder_token(token):
         return token, os.environ.get("ANTHROPIC_MODEL", ""), "$ANTHROPIC_AUTH_TOKEN"
     values = _read_exports(SHIPPED_PROFILE)
     token = values.get("ANTHROPIC_AUTH_TOKEN", "")
-    if token:
+    if token and not is_placeholder_token(token):
         return token, values.get("ANTHROPIC_MODEL", ""), str(SHIPPED_PROFILE)
     return None
 

@@ -186,13 +186,15 @@ def test_launcher_falls_back_to_path_python(td: Path) -> None:
           path_py is not None and path_py in err, err.strip()[-300:])
 
 
-def test_setup_seeds_a_key_without_prompting(td: Path) -> None:
-    """A fresh install must not stop to ask for a Logfare key.
+def test_setup_installs_without_a_key_and_without_prompting(td: Path) -> None:
+    """A fresh install must neither stop to ask for a key nor invent one.
 
-    The install path is `curl … | bash` and then `zimzilla`. A prompt for a
-    third-party signup in the middle of that is the friction the shipped key
-    exists to remove, so setup.sh has to find a credential on its own — from the
-    profile in the checkout — and finish with no terminal attached.
+    The install path is `curl … | bash` and then `zimzilla`, so a prompt for a
+    third-party signup in the middle of that is friction worth avoiding. But the
+    other half matters just as much: no credential ships in the tree, because a
+    key committed to a public repository is spendable by anyone and cannot be
+    unpublished. setup.sh therefore installs the route, writes a profile with no
+    token in it, and says where a key goes — with no terminal attached.
 
     Run in a throwaway HOME with stdin closed. Every network step is stubbed
     (the proxy is never started, nothing is fetched): what is asserted is the
@@ -203,13 +205,11 @@ def test_setup_seeds_a_key_without_prompting(td: Path) -> None:
     zhome = home / ".zimzilla"
     checkout = td / "checkout"
     (checkout / "packaging" / "logfare").mkdir(parents=True)
-    # The shipped profile, as it lands in a clone. A recognisable shape rather
-    # than the real key: this test must not depend on a live credential.
-    (checkout / "packaging" / "logfare" / "source").write_text(
-        'export ANTHROPIC_BASE_URL="http://localhost:4001"\n'
-        'export ANTHROPIC_AUTH_TOKEN="lfu_test_only_not_a_real_key"\n'
-        'export ANTHROPIC_MODEL="deepseek-v4.1-flash"\n'
-    )
+    # The shipped profile, as it lands in a clone: the real template, placeholder
+    # and all. Copying it rather than inventing one means this test fails if a
+    # live key is ever committed to that path again.
+    shutil.copy(ROOT / "packaging" / "logfare" / "source",
+                checkout / "packaging" / "logfare" / "source")
     shutil.copy(ROOT / "setup.sh", checkout / "setup.sh")
     os.chmod(checkout / "setup.sh", 0o755)
     # setup.sh refuses to configure a proxy for an interpreter that cannot run
@@ -254,16 +254,23 @@ def test_setup_seeds_a_key_without_prompting(td: Path) -> None:
           combined.strip()[-400:])
 
     profile = zhome / "logfare" / "source"
-    check("setup: writes the profile from the shipped key",
-          profile.is_file()
-          and "lfu_test_only_not_a_real_key" in profile.read_text(),
+    text = profile.read_text() if profile.is_file() else ""
+    check("setup: writes a profile so the launcher has one", profile.is_file(),
           str(profile))
+    check("setup: the profile carries no key", 'ANTHROPIC_AUTH_TOKEN=""' in text,
+          text[:200])
+    check("setup: no placeholder is copied into the profile",
+          "REPLACE_ME" not in text, text[:200])
+    check("setup: it says where a key goes",
+          "/logfare-api-setup" in combined and "logfare.ai" in combined,
+          combined.strip()[-400:])
+    check("setup: no key means the proxy is not started",
+          "Skipping the proxy start" in combined, combined.strip()[-400:])
     check("setup: the profile is mode 600",
           profile.is_file() and (profile.stat().st_mode & 0o777) == 0o600,
           oct(profile.stat().st_mode & 0o777) if profile.is_file() else "missing")
 
-    # The shipped key is a fallback, not an override: a personal credential in
-    # the environment must still win.
+    # A personal credential in the environment is still picked up.
     personal = td / "home-setup2"
     personal.mkdir()
     env2 = base_env(personal)
@@ -276,7 +283,7 @@ def test_setup_seeds_a_key_without_prompting(td: Path) -> None:
                    stdin=subprocess.DEVNULL, capture_output=True, text=True,
                    timeout=120)
     written = (personal / ".zimzilla" / "logfare" / "source")
-    check("setup: a personal key in the environment beats the shipped one",
+    check("setup: a personal key in the environment is written to the profile",
           written.is_file() and "lfu_personal_key_should_win" in written.read_text(),
           written.read_text()[:120] if written.is_file() else "missing")
 
@@ -287,7 +294,7 @@ def main() -> int:
         ctx = test_install_layout(td)
         test_launcher_prefers_bundled_venv(ctx)
         test_launcher_falls_back_to_path_python(td)
-        test_setup_seeds_a_key_without_prompting(td)
+        test_setup_installs_without_a_key_and_without_prompting(td)
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

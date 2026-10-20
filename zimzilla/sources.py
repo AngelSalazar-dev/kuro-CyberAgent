@@ -40,7 +40,9 @@ is the local proxy plumbing and the selection record
 (``~/.zimzilla/current-source``).
 
 Nothing here echoes a key. Credentials live in each source's profile file, mode
-600, except Logfare's shared one in ``packaging/logfare/source``.
+600. Logfare's ``packaging/logfare/source`` is a template, not a credential: it
+ships a placeholder so the shape of the file is visible, and the operator's own
+key goes in ``~/.zimzilla/logfare/source``.
 """
 
 from __future__ import annotations
@@ -212,13 +214,12 @@ def _host_of(url: str) -> str:
 # remembered selection of it is refused by `current_key` — so a stale
 # `current-source` cannot drag a session back onto it.
 #
-# Logfare is deliberately NOT parked. It was, while the shipped key looked like
-# a starting point only; but the key is the project's own published credential,
-# every install is meant to run on it, and `/zim-logfare` has to be a route the
-# operator can come back to. What the shared key cannot do is carry unlimited
-# traffic — Logfare's free budget is per account, and exhausting it answers 429
-# with a Retry-After. That is a runtime condition to report, not a reason to
-# hide the route.
+# Logfare is deliberately NOT parked. It is the default route and `/zim-logfare`
+# has to be somewhere the operator can come back to, even before a key is set —
+# the catalog is public, so the route can answer "what is up" with no credential
+# at all. Its budget is per account and exhausting it answers 429 with a
+# Retry-After; that is a runtime condition to report, not a reason to hide the
+# route.
 UNDER_CONSTRUCTION: dict[str, str] = {
     "tokenjuice": (
         "the upstream keeps renaming its model id, and the last rename took "
@@ -907,6 +908,13 @@ def load_profile(src: Source) -> dict[str, str]:
             value = value[1:-1]
         if name:
             out[name] = value
+    # A template is not a credential. The shipped Logfare profile carries
+    # `lfu_REPLACE_ME` so the file's shape is visible in the checkout; sending
+    # that upstream would turn "you have not set a key yet" into a 401 that
+    # looks like the account is broken.
+    from . import logfare as lf_mod
+    if lf_mod.is_placeholder_token(out.get("ANTHROPIC_AUTH_TOKEN", "")):
+        out.pop("ANTHROPIC_AUTH_TOKEN", None)
     return out
 
 

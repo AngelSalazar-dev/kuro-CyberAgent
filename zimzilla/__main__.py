@@ -327,9 +327,10 @@ def main(argv: list[str] | None = None) -> int:
             "  For a plain OpenAI-compatible endpoint, OPENAI_API_KEY and\n"
             "  OPENAI_BASE_URL are read too (add --protocol openai if the URL\n"
             "  does not make it obvious).\n"
-            "  For the local Logfare route, source ZimZilla's own profile:\n"
-            "      set -a; . ~/.zimzilla/logfare/source; set +a\n"
-            "  Or just run `./setup.sh` once, then launch with `zimzilla`.",
+            "  For the local Logfare route, no key ships with the repository —\n"
+            "  get one at https://logfare.ai and set it with `/logfare-api-setup`\n"
+            "  in the TUI, or write it to ~/.zimzilla/logfare/source (mode 600).\n"
+            "  Then source that profile: set -a; . ~/.zimzilla/logfare/source; set +a",
             file=sys.stderr,
         )
         return 2
