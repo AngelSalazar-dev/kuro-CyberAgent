@@ -4,6 +4,10 @@
       <feGaussianBlur stdDeviation="7" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
+    <linearGradient id="kuroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ff41"/>
+      <stop offset="100%" stop-color="#00cc33"/>
+    </linearGradient>
     <linearGradient id="rainfade" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#00ff41" stop-opacity="0.9"/>
       <stop offset="100%" stop-color="#00ff41" stop-opacity="0.04"/>
@@ -64,6 +68,15 @@
 
   <g clip-path="url(#frame)">
     <rect width="1280" height="420" fill="#040704"/>
+
+    <!-- Kuro avatar (Claude-style) -->
+    <g transform="translate(60, 60)">
+      <circle cx="90" cy="90" r="78" fill="none" stroke="url(#kuroGrad)" stroke-width="10" opacity="0.9"/>
+      <circle cx="90" cy="90" r="48" fill="none" stroke="url(#kuroGrad)" stroke-width="4" opacity="0.5"/>
+      <path d="M 90 52 Q 90 52 70 78 L 90 110 L 110 78 Q 110 78 90 52 Z" fill="url(#kuroGrad)" filter="url(#glow)"/>
+      <circle cx="90" cy="86" r="10" fill="#ffffff"/>
+      <path d="M 78 142 Q 90 164 102 142" fill="none" stroke="url(#kuroGrad)" stroke-width="7" stroke-linecap="round" opacity="0.8"/>
+    </g>
     <g opacity="0.5"><line x1="0" y1="0" x2="1280" y2="0" stroke="#0a1a0d"/><line x1="0" y1="26" x2="1280" y2="26" stroke="#0a1a0d"/><line x1="0" y1="52" x2="1280" y2="52" stroke="#0a1a0d"/><line x1="0" y1="78" x2="1280" y2="78" stroke="#0a1a0d"/><line x1="0" y1="104" x2="1280" y2="104" stroke="#0a1a0d"/><line x1="0" y1="130" x2="1280" y2="130" stroke="#0a1a0d"/><line x1="0" y1="156" x2="1280" y2="156" stroke="#0a1a0d"/><line x1="0" y1="182" x2="1280" y2="182" stroke="#0a1a0d"/><line x1="0" y1="208" x2="1280" y2="208" stroke="#0a1a0d"/><line x1="0" y1="234" x2="1280" y2="234" stroke="#0a1a0d"/><line x1="0" y1="260" x2="1280" y2="260" stroke="#0a1a0d"/><line x1="0" y1="286" x2="1280" y2="286" stroke="#0a1a0d"/><line x1="0" y1="312" x2="1280" y2="312" stroke="#0a1a0d"/><line x1="0" y1="338" x2="1280" y2="338" stroke="#0a1a0d"/><line x1="0" y1="364" x2="1280" y2="364" stroke="#0a1a0d"/><line x1="0" y1="390" x2="1280" y2="390" stroke="#0a1a0d"/><line x1="0" y1="416" x2="1280" y2="416" stroke="#0a1a0d"/></g>
     <g opacity="0.32"><text class="rain" x="17" y="-150" style="animation-duration:7.95s;animation-delay:-2.37s">123B1612D</text>
       <text class="rain" x="55" y="-150" style="animation-duration:3.74s;animation-delay:-0.54s">D1371C171</text>
@@ -117,7 +130,7 @@
     <rect class="cur" x="872" y="273" width="10" height="18" fill="#7dffb0"/>
 
     <text class="meta" x="640" y="332" text-anchor="middle">terminal-native Â· streaming Â· tool-using Â· scope-aware</text>
-    <text class="meta" x="640" y="360" text-anchor="middle" opacity="0.8">by Mr-Destroyer / ZIM</text>
+    <text class="meta" x="640" y="360" text-anchor="middle" opacity="0.8">by Angel Salazar / Kuro</text>
 
     <rect x="0.5" y="0.5" width="1279" height="419" rx="10" fill="none" stroke="#0c5a22" stroke-opacity="0.55"/>
   </g>

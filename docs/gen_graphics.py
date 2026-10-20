@@ -131,7 +131,7 @@ sub_y = 288
     <rect class="cur" x="{W/2 + 232:.0f}" y="{sub_y-15}" width="10" height="18" fill="{ACCENT}"/>
 
     <text class="meta" x="{W/2:.0f}" y="332" text-anchor="middle">terminal-native Â· streaming Â· tool-using Â· scope-aware</text>
-    <text class="meta" x="{W/2:.0f}" y="360" text-anchor="middle" opacity="0.8">by Mr-Destroyer / ZIM</text>
+    <text class="meta" x="{W/2:.0f}" y="360" text-anchor="middle" opacity="0.8">by Angel Salazar / Kuro</text>
 
     <rect x="0.5" y="0.5" width="{W-1}" height="{H-1}" rx="10" fill="none" stroke="{DIM}" stroke-opacity="0.55"/>
   </g>

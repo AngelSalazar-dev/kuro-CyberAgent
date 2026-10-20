@@ -1,7 +1,7 @@
 ﻿#!/usr/bin/env bash
 # install.sh â€” one-line installer for Kuro.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Mr-Destroyer/Kuro/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/AngelSalazar-dev/kuro-CyberAgent/main/install.sh | bash
 #
 # Clones Kuro into ~/.local/share/kuro, builds a virtualenv there and
 # installs the dependencies into it, then drops a `kuro` launcher into
@@ -20,7 +20,7 @@
 #
 # Environment overrides (all optional):
 #   KURO_REPO          git URL to install from
-#                          (default https://github.com/Mr-Destroyer/Kuro.git)
+#                          (default https://github.com/AngelSalazar-dev/kuro-CyberAgent.git)
 #   KURO_INSTALL_DIR   where the checkout and venv live
 #                          (default ${XDG_DATA_HOME:-~/.local/share}/kuro)
 #   KURO_BIN_DIR       where the `kuro` launcher is written
@@ -35,7 +35,7 @@
 
 set -euo pipefail
 
-REPO="${KURO_REPO:-https://github.com/Mr-Destroyer/Kuro.git}"
+REPO="${KURO_REPO:-https://github.com/AngelSalazar-dev/kuro-CyberAgent.git}"
 INSTALL_DIR="${KURO_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/kuro}"
 BIN_DIR="${KURO_BIN_DIR:-$HOME/.local/bin}"
 KURO_HOME="${KURO_HOME:-$HOME/.kuro}"

@@ -183,7 +183,7 @@ class BootScreen(Screen):
         if self._phase != "banner":
             t.append("\n")
             t.append("  author     ", style=self.palette.dim)
-            t.append("Mr-Destroyer / ZIM\n", style=self.palette.primary)
+            t.append("Angel Salazar / Kuro\n", style=self.palette.primary)
             t.append("  youtube    ", style=self.palette.dim)
             t.append("@Study_Hard69\n", style=self.palette.primary)
             t.append("  instagram  ", style=self.palette.dim)

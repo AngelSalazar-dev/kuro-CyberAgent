@@ -7,14 +7,16 @@
 It reads your repo, runs commands, writes files, chases down bugs and
 keeps going until the job is done â€” while you watch it work.
 
-<sub>by **Mr-Destroyer / ZIM**</sub>
+<sub>by **Angel Salazar / Kuro**</sub>
 
 ![python](https://img.shields.io/badge/python-3.11%2B-00ff41?style=flat-square&labelColor=040704)
-![platform](https://img.shields.io/badge/platform-linux-00ff41?style=flat-square&labelColor=040704)
+![platform](https://img.shields.io/badge/platform-windows%7Clinux-00ff41?style=flat-square&labelColor=040704)
 ![interface](https://img.shields.io/badge/interface-terminal-00ff41?style=flat-square&labelColor=040704)
 ![status](https://img.shields.io/badge/status-active-00ff41?style=flat-square&labelColor=040704)
 
 </div>
+
+<img src="docs/kuro-avatar.svg" alt="Kuro avatar" width="160" style="border-radius:50%">
 
 <img src="docs/terminal.svg" alt="a KURO session" width="900">
 
@@ -104,7 +106,7 @@ want; it works out the steps, does them, and shows you everything it did.
 One line:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mr-Destroyer/Kuro/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AngelSalazar-dev/kuro-CyberAgent/main/install.sh | bash
 ```
 
 That clones Kuro into `~/.local/share/kuro`, builds its own virtualenv
@@ -2374,6 +2376,6 @@ actually serving.
 ---
 
 <div align="center">
-<sub>Built by <b>Mr-Destroyer / ZIM</b> Â· yt <b>@Study_Hard69</b> Â· ig <b>zimthegoat</b></sub>
+<sub>Built by <b>Angel Salazar / Kuro</b> · GitHub <b>@AngelSalazar-dev</b></sub>
 </div>
 

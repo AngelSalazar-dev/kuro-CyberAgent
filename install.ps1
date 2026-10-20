@@ -18,7 +18,7 @@
 #
 # Environment overrides (all optional):
 #   KURO_REPO          git URL to install from
-#                          (default https://github.com/Mr-Destroyer/Kuro.git)
+#                          (default https://github.com/AngelSalazar-dev/kuro-CyberAgent.git)
 #   KURO_INSTALL_DIR   where the checkout and venv live
 #                          (default %LOCALAPPDATA%\kuro)
 #   KURO_BIN_DIR       where the `kuro` launcher is written
@@ -28,7 +28,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$REPO        = $env:KURO_REPO        -or 'https://github.com/Mr-Destroyer/Kuro.git'
+$REPO        = $env:KURO_REPO        -or 'https://github.com/AngelSalazar-dev/kuro-CyberAgent.git'
 $INSTALL_DIR = $env:KURO_INSTALL_DIR -or (Join-Path $env:LOCALAPPDATA 'kuro')
 $BIN_DIR     = $env:KURO_BIN_DIR     -or (Join-Path $env:USERPROFILE 'bin')
 $KURO_HOME = $env:KURO_HOME -or (Join-Path $env:USERPROFILE '.kuro')

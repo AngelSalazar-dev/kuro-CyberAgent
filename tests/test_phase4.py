@@ -104,7 +104,7 @@ def _stub_agent(mode: str, workdir: Path):
 
 async def test_identity(wd: Path) -> None:
     sp = Agent(_cfg(wd)).system_prompt()
-    check("identity names Kuro", "Kuro" in sp and "ZIM (Mr-Destroyer)" in sp)
+    check("identity names Kuro", "Kuro" in sp and "Kuro (Angel Salazar)" in sp)
     check("identity disclaims other products", 'NOT "Claude"' in sp)
 
     dsp = Agent(_cfg(wd, mode="danger")).system_prompt()
