@@ -268,6 +268,38 @@ def main(argv: list[str] | None = None) -> int:
             _mod.apply_to(cfg)
             break
 
+    # A local-proxy source is a translation shim in front of an
+    # OpenAI-compatible upstream, and the harness speaks Chat Completions
+    # itself now. When the session was launched on a source's proxy — the
+    # launcher exports that from the profile — go straight to the upstream
+    # instead: same key, same catalog, one fewer hop, and tool calls that arrive
+    # as the model emitted them rather than reassembled by a bridge.
+    #
+    # Guarded on the endpoint *being* that proxy, so a deliberate --base-url or
+    # ANTHROPIC_BASE_URL is never overridden, and on protocol being "auto", so
+    # an explicit --protocol anthropic is honoured.
+    if cfg.protocol == "auto":
+        _active = sources_mod.active_key(cfg.base_url)
+        _src = sources_mod.discover().get(_active) if _active else None
+        _route = sources_mod.direct_route(_src) if _src is not None else None
+        if (_src is not None and _route is not None
+                and cfg.base_url.rstrip("/") == _src.base_url):
+            # The profile's model is often blank (it is stored, not derived), so
+            # the name here can be the default of a different source. Fall back
+            # to the declared default of *this* one rather than sending an alias
+            # the upstream has never served.
+            _model = cfg.model
+            if _model not in _route.models and _model != _src.model:
+                _model = _src.model
+            cfg.model = _route.upstream_model(_model)
+            cfg.base_url = _route.base_url
+            cfg.protocol = "openai"
+            print(
+                f"zimzilla: {_src.label} is reachable directly — using "
+                f"{_route.base_url} (Chat Completions), no local proxy.",
+                file=sys.stderr,
+            )
+
     # The split is not silent. A stale scope.yaml would otherwise leave the
     # operator believing the guard is armed when nothing is loaded at all —
     # and the old file's meaning cannot be carried over, because an allow-list

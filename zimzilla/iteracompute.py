@@ -1,16 +1,20 @@
-"""IteraCompute — a free-model upstream behind a local LiteLLM proxy.
+"""IteraCompute — a free-model upstream, reached directly by default.
 
 IteraCompute (``https://api.iteracompute.com``) is **OpenAI-compatible only**.
 Measured on this box, 2026-10-19: ``POST /v1/messages`` answers ``404
 edge_route_not_allowed``; several guessed Anthropic-compat paths and
 subdomains do the same or do not resolve. So it cannot be a hosted gateway the
-way TokenHarbour or BeatAPI is — ZimZilla speaks the Anthropic Messages
-protocol, and there is nothing here that speaks it back.
+way TokenHarbour or BeatAPI is — nothing here speaks the Anthropic Messages
+protocol back.
 
 What makes it a source is the same arrangement Logfare and Token Juice use: a
 local LiteLLM proxy on :4002 translates ``/v1/messages`` into ``/v1/chat/
-completions`` at ``https://api.iteracompute.com/v1``. The proxy is what the
-session talks to; this module is the catalog and the credential.
+completions`` at ``https://api.iteracompute.com/v1``. Since the harness grew a
+native Chat Completions transport (``zimzilla.openai_compat``), the proxy is no
+longer the route a switch takes: ``/zim-iteracompute`` reads this source's proxy
+config for the upstream URL and the model ids and goes straight there, with the
+proxy left as ``/zim-iteracompute proxy``. This module is still the catalog and
+the credential, and the proxy still works if the operator asks for it.
 
 The gateway's own docs state the contract:
 

@@ -631,9 +631,9 @@ up:
 | Source | Endpoint | Key | How it starts |
 |---|---|---|---|
 | **Logfare** | `:4001` | shipped (shared) | the bundled proxy — the default, all chat models |
-| **Token Juice** | `:4000` | discovered | its own local proxy — under construction |
-| **IteraCompute** | `:4002` | yours | its own local proxy — free Qwen tier |
-| **InfronAI** | `:4003` | yours | its own local proxy — free model tier, $5 balance required |
+| **Token Juice** | `:4000` | discovered | direct (proxy on `:4000` if asked) — under construction |
+| **IteraCompute** | `:4002` | yours | direct (proxy on `:4002` if asked) — free Qwen tier |
+| **InfronAI** | `:4003` | yours | direct (proxy on `:4003` if asked) — free tier, $5 balance required |
 | **TokenHarbour** | `tokenharbor.ai` | yours | hosted — nothing to start |
 | **OpenRouter** | `openrouter.ai` | yours | hosted — nothing to start |
 | **UnoRouter** | `api.unorouter.com` | yours | hosted — nothing to start |
@@ -645,6 +645,10 @@ Switch with `/zim-logfare`, `/zim-iteracompute`, `/zim-infronai`,
 `/zim-tokenharbour`, `/zim-openrouter`, `/zim-unorouter`, `/zim-aihubmix`,
 `/zim-beatapi` or `/zim-antseed`; the choice is remembered, so the next launch
 comes back to the one that was working.
+
+The four routes with a local proxy are reached **directly** by default — the
+proxy is a translation shim, and the harness speaks both protocols now. Add
+`proxy` to go through it: `/zim-iteracompute proxy`.
 
 Logfare is a full switch target: the shipped key makes it work with no signup,
 and it serves every chat model on Logfare's catalog. The key is shared, so its
@@ -664,7 +668,14 @@ wrong the symptom is not "the proxy is broken", it is "the model cannot use
 tools".
 
 So ZimZilla also speaks Chat Completions **directly**, for any endpoint that
-serves it. No proxy, no translation:
+serves it. No proxy, no translation. This is not an opt-in: every source that
+has a local proxy is switched to directly — `/zim-iteracompute` reads the
+proxy's own config for the upstream URL and model ids and connects there, and
+the same happens at launch, so a session started on `:4002` moves to
+`api.iteracompute.com/v1` before the first turn. `proxy` after the command
+brings the hop back for the times it earns its keep: `/zim-iteracompute proxy`.
+
+Point at any other Chat Completions host with:
 
 ```
 /openai-endpoint https://logfare.ai/v1 deepseek-v4.1-flash
@@ -893,7 +904,7 @@ format as every other source, and the launcher starts the proxy from
 `~/.zimzilla/iteracompute/start-litellm.sh`. Then:
 
 ```
-/zim-iteracompute          # switch (starts the proxy), and fetch the free list
+/zim-iteracompute          # switch (direct; add `proxy` for :4002), free list
 /iteracompute-models       # the free catalog again, any time
 /models iteracompute       # the same set, through the generic command
 /model qwen/qwen3.8-27b    # switch to the free model
@@ -956,7 +967,7 @@ every other source, and the launcher starts the proxy from
 `~/.zimzilla/infronai/start-litellm.sh`. Then:
 
 ```
-/zim-infronai              # switch (starts the proxy), and fetch the free list
+/zim-infronai              # switch (direct; add `proxy` for :4003), free list
 /infronai-models           # the free catalog again, any time
 /models infronai           # the same set, through the generic command
 /model deepseek/deepseek-v4.1-flash:free
@@ -1228,10 +1239,10 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/zim-beatapi` | switch upstream to BeatAPI — hosted, free models, native Messages |
 | `/beatapi-api-setup <key>` | store your BeatAPI API key |
 | `/beatapi-models` | the live free catalog — what is free and usable |
-| `/zim-iteracompute` | switch upstream to IteraCompute — local proxy, free models, OpenAI-only upstream |
+| `/zim-iteracompute [proxy]` | switch upstream to IteraCompute — direct Chat Completions; `proxy` for :4002 |
 | `/iteracompute-api-setup <key>` | store your IteraCompute API key |
 | `/iteracompute-models` | the live free catalog — what is free and usable |
-| `/zim-infronai` | switch upstream to InfronAI — local proxy, free models, OpenAI-only for every free model |
+| `/zim-infronai [proxy]` | switch upstream to InfronAI — direct Chat Completions; `proxy` for :4003 |
 | `/infronai-api-setup <key>` | store your InfronAI API key |
 | `/infronai-models` | the live free catalog — what is free and usable |
 | `/zim-antseed` | switch upstream to AntSeed — the local buyer, free peers, no key |

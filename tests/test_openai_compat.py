@@ -45,6 +45,7 @@ import anthropic  # noqa: E402
 import httpx2  # noqa: E402
 
 from zimzilla import openai_compat as oc  # noqa: E402
+from zimzilla import sources as sources_mod  # noqa: E402
 from zimzilla.agent import Agent  # noqa: E402
 from zimzilla.config import Config  # noqa: E402
 
@@ -753,6 +754,182 @@ def test_ui_commands(tmp: Path) -> None:
           str(after))
 
 
+def _fake_source(tmp: Path, key: str = "fake", *, model: str = "alias-one",
+                 body: str | None = None):
+    """A Source whose proxy config names an OpenAI-compatible upstream."""
+    cfg = tmp / f"{key}-litellm.yaml"
+    cfg.write_text(body if body is not None else (
+        "model_list:\n"
+        "  - model_name: alias-one\n"
+        "    litellm_params:\n"
+        "      model: openai/upstream-one\n"
+        "      api_base: https://upstream.example/v1\n"
+        "  - model_name: '*'\n"
+        "    litellm_params:\n"
+        "      model: openai/*\n"
+        "      api_base: https://upstream.example/v1\n"
+    ), encoding="utf-8")
+    profile = tmp / "source"
+    profile.write_text('export ANTHROPIC_AUTH_TOKEN="sk-test"\n'
+                       'export ANTHROPIC_MODEL="alias-one"\n', encoding="utf-8")
+    return sources_mod.Source(
+        key=key, label="Fake", port=4099, profile=profile,
+        service=tmp / "start-litellm.sh", config=cfg, model=model, root=tmp)
+
+
+def test_direct_route(tmp: Path) -> None:
+    """Each shipped proxy config yields the upstream it forwards to.
+
+    The config is the authority on purpose: it already spells out which id each
+    proxy alias maps to, so a model added there is reachable directly with no
+    second edit here.
+    """
+    shipped = ROOT / "packaging"
+    for key, model, url in (
+        ("logfare", "deepseek-v4.1-flash", "https://logfare.ai/v1"),
+        ("tokenjuice", "deepseek-v4.1-flash", "https://api.tokenjuice.ai/v1"),
+        ("iteracompute", "qwen/qwen3.8-27b", "https://api.iteracompute.com/v1"),
+        ("infronai", "deepseek/deepseek-v4.1-flash:free", "https://llm.onerouter.pro/v1"),
+    ):
+        src = sources_mod.Source(
+            key=key, label=key, port=0, profile=Path("/dev/null"),
+            service=Path("/dev/null"), config=shipped / key / "litellm-config.yaml",
+            model=model, root=ROOT)
+        route = sources_mod.direct_route(src)
+        check(f"route: {key} points at its own upstream",
+              route is not None and route.base_url == url,
+              str(route and route.base_url))
+
+    tj = sources_mod.Source(
+        key="tokenjuice", label="Token Juice", port=0, profile=Path("/dev/null"),
+        service=Path("/dev/null"),
+        config=shipped / "tokenjuice" / "litellm-config.yaml",
+        model="deepseek-v4.1-flash", root=ROOT)
+    route = sources_mod.direct_route(tj)
+    assert route is not None
+    check("route: the proxy alias is translated to the upstream id",
+          route.upstream_model("deepseek-v4.1-flash")
+          == "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          route.upstream_model("deepseek-v4.1-flash"))
+    check("route: an unmapped name is passed through",
+          route.upstream_model("other") == "other")
+
+    # Nothing to go direct to: no api_base, or a deployment that is not openai/.
+    for name, body in (
+        ("no api_base", "model_list:\n  - model_name: a\n    litellm_params:\n"
+                        "      model: openai/b\n"),
+        ("anthropic deployment", "model_list:\n  - model_name: a\n    litellm_params:\n"
+                                 "      model: anthropic/b\n"
+                                 "      api_base: https://x.example\n"),
+        ("not yaml at all", "\x00\x01 not: [yaml"),
+    ):
+        src = _fake_source(tmp, key="nope", body=body)
+        check(f"route: {name} yields no direct route",
+              sources_mod.direct_route(src) is None,
+              str(sources_mod.direct_route(src)))
+
+    src = _fake_source(tmp)
+    route = sources_mod.direct_route(src)
+    assert route is not None
+    check("route: the wildcard entry is not a model", "*" not in route.models,
+          str(route.models))
+    check("route: the alias maps to its upstream id",
+          route.models.get("alias-one") == "upstream-one", str(route.models))
+
+
+def test_active_key_direct(tmp: Path) -> None:
+    """A directly-reached source is still identified as that source."""
+    zhome = tmp / "zhome"
+    (zhome / "iteracompute").mkdir(parents=True)
+    (zhome / "iteracompute" / "start-litellm.sh").write_text("#!/bin/sh\n",
+                                                             encoding="utf-8")
+    (zhome / "iteracompute" / "source").write_text(
+        'export ANTHROPIC_AUTH_TOKEN="sk-test"\n', encoding="utf-8")
+    with mock.patch.object(sources_mod, "ZIMZILLA_HOME", zhome), \
+         mock.patch.object(sources_mod, "DEFAULT_HOME", tmp / "home"):
+        found = sources_mod.discover()
+        check("active: the source is discovered", "iteracompute" in found,
+              str(sorted(found)))
+        check("active: the upstream host identifies the source",
+              sources_mod.active_key("https://api.iteracompute.com/v1") == "iteracompute",
+              str(sources_mod.active_key("https://api.iteracompute.com/v1")))
+        check("active: a path on the same host too",
+              sources_mod.active_key("https://api.iteracompute.com/v1/chat/completions")
+              == "iteracompute")
+        check("active: an unrelated host is still unknown",
+              sources_mod.active_key("https://elsewhere.example/v1") is None,
+              str(sources_mod.active_key("https://elsewhere.example/v1")))
+        check("active: the proxy port still resolves by port",
+              sources_mod.active_key("http://localhost:4002") == "iteracompute",
+              str(sources_mod.active_key("http://localhost:4002")))
+
+
+def test_switch_direct(tmp: Path) -> None:
+    """Switching a source goes direct: no proxy start, upstream URL, alias map."""
+    from zimzilla.ui.app import ZimZillaApp
+
+    src = _fake_source(tmp, key="fake")
+    route = sources_mod.direct_route(src)
+    assert route is not None
+    cfg = Config.from_env(workdir=tmp, api_key="k", base_url="http://localhost:4001",
+                          model="alias-one")
+    app = ZimZillaApp(cfg)
+
+    def no_proxy(*a, **k):
+        raise AssertionError("the direct switch must not start a proxy")
+
+    async def go():
+        async with app.run_test(size=(110, 34)) as pilot:
+            with mock.patch.object(sources_mod, "ZIMZILLA_HOME", zhome), \
+                 mock.patch.object(sources_mod, "start_proxy", no_proxy), \
+                 mock.patch.object(oc, "probe", return_value=(True, "1 models")):
+                oc._MODEL_CACHE[oc._cache_key(route.base_url)] = ("upstream-one",)
+                await app._switch_direct(src, route)
+            await pilot.pause()
+            remembered = (zhome / "current-source").read_text(encoding="utf-8").strip()
+            return (cfg.base_url, cfg.protocol, cfg.model, cfg.auth_token,
+                    app.agent.protocol, remembered)
+
+    zhome = tmp / "zhome"
+    zhome.mkdir(exist_ok=True)
+
+    base_url, protocol, model, token, resolved, remembered = asyncio.run(go())
+    check("switch: the endpoint is the upstream, not the proxy",
+          base_url == "https://upstream.example/v1", base_url)
+    check("switch: the protocol is Chat Completions", protocol == "openai", protocol)
+    check("switch: the alias became the upstream id", model == "upstream-one", model)
+    check("switch: the key came from the profile", token == "sk-test", str(bool(token)))
+    check("switch: the agent resolves to openai", resolved == "openai", resolved)
+    check("switch: the choice is remembered for the next launch",
+          remembered == "fake", str(remembered))
+
+    # `/zim-<source> proxy` still asks for the hop, and the argument reaches the
+    # switch. `_switch_source` is stubbed: starting a proxy is not this test.
+    async def go2():
+        # Back on a proxy port, so the "already on it" guard cannot short-circuit
+        # the call before it reaches the switch.
+        cfg.base_url = "http://localhost:4001"
+        cfg.protocol = "auto"
+        async with app.run_test(size=(110, 34)) as pilot:
+            with mock.patch.object(sources_mod, "discover", return_value={"fake": src}), \
+                 mock.patch.object(ZimZillaApp, "_switch_source") as switch:
+                app._cmd_zim_source("fake", ["proxy"])
+                await pilot.pause()
+                with_proxy = switch.call_args
+                app._cmd_zim_source("fake", [])
+                await pilot.pause()
+                without = switch.call_args
+            return with_proxy, without
+
+    with_proxy, without = asyncio.run(go2())
+    check("switch: `proxy` asks for the proxy",
+          with_proxy is not None and with_proxy.kwargs.get("use_proxy") is True,
+          str(with_proxy))
+    check("switch: no argument goes direct",
+          without is not None and without.kwargs.get("use_proxy") is False,
+          str(without))
+
+
 def main() -> int:
     test_protocol_resolution()
     test_urls()
@@ -774,6 +951,12 @@ def main() -> int:
         test_agent_turn_over_openai(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         test_ui_commands(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_direct_route(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_active_key_direct(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        test_switch_direct(Path(tmp))
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} passed")

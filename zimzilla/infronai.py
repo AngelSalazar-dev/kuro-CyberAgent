@@ -1,4 +1,4 @@
-"""InfronAI — a free-model upstream behind a local LiteLLM proxy.
+"""InfronAI — a free-model upstream, reached directly by default.
 
 Infron (``https://infron.ai``, API at ``https://llm.onerouter.pro``) is a model
 marketplace that fronts a few hundred models behind one key. Measured on this
@@ -18,6 +18,13 @@ So this is the IteraCompute arrangement, not the UnoRouter one: a local LiteLLM
 proxy on :4003 translates ``/v1/messages`` into ``/v1/chat/completions`` at
 ``https://llm.onerouter.pro/v1``. 4001 is Logfare, 4000 is Token Juice and 4002
 is IteraCompute; this one must not collide with any of them.
+
+That proxy is no longer the route a switch takes. ``/zim-infronai`` reads the
+proxy's own config for the upstream URL and the ``:free`` model ids and talks
+Chat Completions to ``https://llm.onerouter.pro/v1`` directly, because the
+harness speaks that protocol itself now (``zimzilla.openai_compat``). The proxy
+remains as ``/zim-infronai proxy`` — it is still the thing that knows how to
+translate, and the config here is still what names the ids.
 
 **The proxy pins Chat Completions, and that is load-bearing here too.** LiteLLM
 1.x routes a ``/v1/messages`` request for an ``openai/`` deployment through the

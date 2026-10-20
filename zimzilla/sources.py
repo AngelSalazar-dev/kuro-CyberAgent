@@ -4,9 +4,10 @@ ZimZilla speaks the Anthropic Messages protocol to whatever ``ANTHROPIC_BASE_URL
 points at. That is the default, not the only option: an endpoint that serves
 Chat Completions can be reached directly instead, with no proxy in between —
 see :mod:`zimzilla.openai_compat`, ``/openai-endpoint`` and the ``protocol``
-field on :class:`zimzilla.config.Config`. Everything in this module is about the
-*proxy* routes; the direct route has no port, no profile and no service to
-discover, so it is deliberately not a ``Source``.
+field on :class:`zimzilla.config.Config`. A source is still the *proxy* route —
+port, profile, service — because that is what is discoverable and startable; its
+direct route is not a second Source but a property read out of the same config
+(:func:`direct_route`), and switching prefers it.
 
 Three local LiteLLM proxies front three different upstreams:
 
@@ -49,8 +50,13 @@ import re
 import subprocess
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+try:
+    import yaml
+except Exception:  # pragma: no cover - yaml is a hard dep, but stay importable
+    yaml = None
 
 ZIMZILLA_HOME = Path(os.environ.get("ZIMZILLA_HOME") or (Path.home() / ".zimzilla"))
 DEFAULT_HOME = Path.home()
@@ -77,6 +83,119 @@ class Source:
     @property
     def base_url(self) -> str:
         return f"http://localhost:{self.port}"
+
+
+@dataclass(frozen=True)
+class DirectRoute:
+    """A source's upstream, reached with no proxy in front of it.
+
+    Every ``Source`` in this tree is a local LiteLLM proxy in front of an
+    OpenAI-compatible upstream. The proxy exists to turn Anthropic Messages into
+    Chat Completions — which the harness now speaks itself — so the same
+    upstream is reachable directly: same key, same catalog, one fewer hop, and
+    tool calls that arrive as the model emitted them instead of reassembled by a
+    bridge.
+
+    ``base_url`` and the alias map are read out of the very config the proxy is
+    started with, so there is one copy of the truth. A model added there is
+    reachable directly with no second edit, and an alias that points somewhere
+    unexpected is forwarded as written rather than guessed at.
+    """
+
+    base_url: str
+    #: Proxy alias -> the id the upstream actually serves.
+    models: dict[str, str] = field(default_factory=dict)
+
+    def upstream_model(self, alias: str) -> str:
+        """The id to send upstream for *alias* — itself when it is unmapped.
+
+        Token Juice is why this exists: the proxy serves it as
+        ``deepseek-v4.1-flash`` while the upstream only answers to
+        ``deepseek-ai/DeepSeek-V4.1-Flash-1017``.
+        """
+        return self.models.get(alias, alias)
+
+
+#: Parsed routes, keyed by config path and mtime so an edited config is re-read.
+_DIRECT_CACHE: dict[tuple[str, float], DirectRoute | None] = {}
+
+
+def direct_route(src: Source | None) -> DirectRoute | None:
+    """The direct Chat Completions route for *src*, or None when it has none.
+
+    None is the honest answer for a config that cannot be read, that names no
+    ``api_base`` (AntSeed's local buyer has no upstream URL at all), or whose
+    deployments are not ``openai/`` providers. In each of those the proxy is the
+    only route, and the caller keeps using it.
+    """
+    if src is None or yaml is None:
+        return None
+    try:
+        mtime = src.config.stat().st_mtime
+    except OSError:
+        return None
+    cache_key = (str(src.config), mtime)
+    if cache_key in _DIRECT_CACHE:
+        return _DIRECT_CACHE[cache_key]
+    route: DirectRoute | None = None
+    try:
+        data = yaml.safe_load(src.config.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001 - a broken config is a "no direct route"
+        data = {}
+    entries = data.get("model_list") if isinstance(data, dict) else None
+    if isinstance(entries, list):
+        route = _route_from_entries(src, entries)
+    _DIRECT_CACHE[cache_key] = route
+    return route
+
+
+def _route_from_entries(src: Source, entries: list) -> DirectRoute | None:
+    """Build a :class:`DirectRoute` from a proxy's ``model_list``.
+
+    Only ``openai/`` deployments count. That is the whole point of the exercise
+    — an ``anthropic/`` or ``responses/`` deployment is a different wire
+    protocol, and sending Chat Completions at it would be the mistake this is
+    meant to avoid.
+    """
+    models: dict[str, str] = {}
+    alias_bases: dict[str, str] = {}
+    base_counts: dict[str, int] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        alias = entry.get("model_name")
+        params = entry.get("litellm_params")
+        if not isinstance(alias, str) or not isinstance(params, dict):
+            continue
+        model = params.get("model")
+        base = params.get("api_base")
+        if not isinstance(model, str) or not model.startswith("openai/"):
+            continue
+        if not isinstance(base, str) or not base.startswith("http"):
+            continue
+        base = base.rstrip("/")
+        base_counts[base] = base_counts.get(base, 0) + 1
+        upstream = model[len("openai/"):]
+        if alias == "*" or not upstream or upstream == "*":
+            continue
+        alias_bases[alias] = base
+        models[alias] = upstream
+    if not base_counts:
+        return None
+    # The declared default's own api_base wins: a config may front two upstreams
+    # and `src.model` is the one string that says which of them is meant.
+    base_url = alias_bases.get(src.model)
+    if base_url is None:
+        base_url = max(base_counts, key=lambda b: base_counts[b])
+    return DirectRoute(base_url=base_url, models=models)
+
+
+def _host_of(url: str) -> str:
+    """The host in *url*, lowercased, without userinfo or port. ``""`` if none."""
+    match = re.match(r"^[a-z][a-z0-9+.-]*://([^/?#]+)", (url or "").strip().lower())
+    if not match:
+        return ""
+    return match.group(1).split("@")[-1].split(":")[0]
 
 
 # Sources that are installed, still discovered, and still listed by
@@ -741,6 +860,17 @@ def active_key(base_url: str) -> str | None:
     # (which only knows the two LiteLLM proxies) and return None.
     if as_mod.is_antseed(base_url):
         return "antseed"
+    # A source reached directly, with no proxy in the middle: identified by the
+    # upstream host its own config names. Without this the session would look
+    # source-less — `/zim-source` would not mark the route, `/model` would fall
+    # back to the default snapshot, and switching to the source it is already on
+    # would redo the work instead of saying so.
+    host = _host_of(base_url)
+    if host and host not in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        for key, src in discover().items():
+            route = direct_route(src)
+            if route is not None and _host_of(route.base_url) == host:
+                return key
     m = re.search(r":(\d{2,5})(?:/|$)", base_url or "")
     if not m:
         return None

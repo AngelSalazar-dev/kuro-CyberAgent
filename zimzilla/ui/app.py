@@ -2090,8 +2090,8 @@ class ZimZillaApp(App):
             "reverse-engineer": lambda a: self._cmd_reverse_engineer(a),
             "reverse-engineer-tools": lambda a: self._cmd_reverse_engineer_tools(a),
             "zim-opencode": lambda a: self._cmd_zim_opencode(a),
-            "zim-logfare": lambda a: self._cmd_zim_source("logfare"),
-            "zim-tokenjuice": lambda a: self._cmd_zim_source("tokenjuice"),
+            "zim-logfare": lambda a: self._cmd_zim_source("logfare", a),
+            "zim-tokenjuice": lambda a: self._cmd_zim_source("tokenjuice", a),
             "zim-tokenharbour": lambda a: self._cmd_zim_tokenharbour(a),
             "zim-openrouter": lambda a: self._cmd_zim_gateway("openrouter"),
             "zim-antseed": lambda a: self._cmd_zim_gateway("antseed"),
@@ -2108,11 +2108,11 @@ class ZimZillaApp(App):
             "zim-beatapi": lambda a: self._cmd_zim_gateway("beatapi"),
             "beatapi-api-setup": lambda a: self._cmd_gateway_key("beatapi", a),
             "beatapi-models": lambda a: self._cmd_models(["beatapi"]),
-            "zim-iteracompute": lambda a: self._cmd_zim_source("iteracompute"),
+            "zim-iteracompute": lambda a: self._cmd_zim_source("iteracompute", a),
             "iteracompute-api-setup": lambda a: self._cmd_gateway_key(
                 "iteracompute", a),
             "iteracompute-models": lambda a: self._cmd_models(["iteracompute"]),
-            "zim-infronai": lambda a: self._cmd_zim_source("infronai"),
+            "zim-infronai": lambda a: self._cmd_zim_source("infronai", a),
             "infronai-api-setup": lambda a: self._cmd_gateway_key(
                 "infronai", a),
             "infronai-models": lambda a: self._cmd_models(["infronai"]),
@@ -2156,8 +2156,8 @@ class ZimZillaApp(App):
             ("/zim-unorouter", "switch upstream to UnoRouter    (hosted, free models)"),
             ("/zim-aihubmix", "switch upstream to AIHubMix     (hosted, free models)"),
             ("/zim-beatapi", "switch upstream to BeatAPI      (hosted, free models)"),
-            ("/zim-iteracompute", "switch upstream to IteraCompute (local proxy, free models)"),
-            ("/zim-infronai", "switch upstream to InfronAI   (local proxy, free models)"),
+            ("/zim-iteracompute [proxy]", "switch upstream to IteraCompute (direct; `proxy` to go via :4002)"),
+            ("/zim-infronai [proxy]", "switch upstream to InfronAI (direct; `proxy` to go via :4003)"),
             ("/zim-antseed", "switch upstream to AntSeed (local buyer, free peers)"),
             ("/zim-source", "show upstream sources and their status"),
             ("/protocol [auto|anthropic|openai]", "which wire protocol the endpoint speaks"),
@@ -2888,9 +2888,11 @@ class ZimZillaApp(App):
     # upstream's daily budget — a 429 that the turn path reports rather than
     # retries — but that is a reason to say so when it happens, not a reason to
     # refuse the route. Only Token Juice is parked (sources.UNDER_CONSTRUCTION).
-    def _cmd_zim_source(self, key: str | None) -> None:
+    def _cmd_zim_source(self, key: str | None, args: list[str] | None = None) -> None:
+        """/zim-<source> [proxy] — switch upstream, directly when possible."""
         p = self.palette
         found = sources_mod.discover()
+        use_proxy = any(str(a).strip().lower() == "proxy" for a in (args or []))
 
         if key is None:
             # Bare /zim-source: just show what is available and which is live.
@@ -3034,14 +3036,35 @@ class ZimZillaApp(App):
             return
 
         if sources_mod.active_key(self.cfg.base_url) == key:
-            self._sys_line(f"already on {src.label} (:{src.port})", ok=True)
-            return
+            on_proxy = self.cfg.base_url.rstrip("/") == src.base_url
+            # `proxy` asks for the hop explicitly, so being on the direct route
+            # already is not a reason to refuse it — and vice versa.
+            if on_proxy == use_proxy:
+                where = f":{src.port}" if on_proxy else "directly"
+                self._sys_line(f"already on {src.label} ({where})", ok=True)
+                return
 
-        self._switch_source(src)
+        self._switch_source(src, use_proxy=use_proxy)
 
     @work(exclusive=True)
-    async def _switch_source(self, src) -> None:
-        """Start the target proxy if needed, then rebuild the client on it."""
+    async def _switch_source(self, src, use_proxy: bool = False) -> None:
+        """Rebuild the client on *src* — directly, unless the proxy is asked for.
+
+        A source is a local LiteLLM proxy in front of an OpenAI-compatible
+        upstream, and its config already names that upstream. The harness speaks
+        Chat Completions itself now, so the proxy is a hop that costs a
+        round-trip per streamed chunk and reassembles tool calls on the way —
+        the one thing that must not be reassembled. Direct is therefore the
+        default; `proxy` is there for the cases the proxy still earns its keep
+        (a local audit of the traffic, or an upstream that needs its translation
+        for a model whose Chat Completions route is broken).
+        """
+        route = None if use_proxy else sources_mod.direct_route(src)
+        if route is not None:
+            await self._switch_direct(src, route)
+            return
+        if use_proxy:
+            self._sys_line(f"{src.label}: using the local proxy, as asked")
         p = self.palette
         self.busy = True
         bar = self.query_one(StatusBar)
@@ -3098,6 +3121,90 @@ class ZimZillaApp(App):
 
         sources_mod.set_current(src.key)
         self._refresh_after_source_change(src.label, f":{src.port}, {detail}")
+
+    async def _switch_direct(self, src, route) -> None:
+        """Point the session at the source's upstream, with no proxy between.
+
+        The key comes from the same profile the proxy would have used, so this
+        changes the route and nothing else. The model is translated through the
+        proxy config's alias map — the upstream answers to its own ids, not the
+        proxy's — and checked against the live catalog while the switch is
+        already paying for a round-trip, because these lineups turn over and a
+        retired name fails as a 404 on the first turn instead of here.
+        """
+        self.busy = True
+        bar = self.query_one(StatusBar)
+        bar.set_activity(f"switching to {src.label}", busy=True)
+        self._sys_line(
+            f"switching to {src.label} — direct, no proxy ({route.base_url})…")
+        token: str | None = None
+        chosen = route.upstream_model(src.model)
+        replaced: str | None = None
+        ok, detail = False, "catalog not checked"
+        try:
+            profile = sources_mod.load_profile(src)
+            token = profile.get("ANTHROPIC_AUTH_TOKEN") or None
+            if not token:
+                self._sys_line(
+                    f"{src.label} profile has no ANTHROPIC_AUTH_TOKEN: "
+                    f"{src.profile}", warn=True)
+                return
+            wanted = profile.get("ANTHROPIC_MODEL") or src.model
+            chosen, replaced, ok, detail = await asyncio.to_thread(
+                self._probe_direct, src, route, route.upstream_model(wanted), token)
+        finally:
+            self.busy = False
+            bar.set_activity("idle", busy=False)
+            bar.render_bar()
+            self.query_one("#input", Input).focus()
+
+        self.cfg.base_url = route.base_url
+        self.cfg.protocol = "openai"
+        self.cfg.auth_token = token
+        self.cfg.api_key = ""          # empty, so the auth_token stays authoritative
+        self.cfg.model = chosen
+        self.agent._client = None
+        if replaced:
+            self._sys_line(
+                f"{replaced} is no longer served by {src.label} — "
+                f"using {chosen}", warn=True)
+        if not ok:
+            # An unreachable catalog is not evidence that the model was retired,
+            # and refusing to switch on it would be worse than the 404 it is
+            # trying to prevent.
+            self._sys_line(f"  catalog check failed: {detail}", warn=True)
+        sources_mod.set_current(src.key)
+        self._refresh_after_source_change(
+            src.label, f"direct, no proxy · {route.base_url}")
+
+    def _probe_direct(self, src, route, chosen: str, token: str | None):
+        """``(model, replaced, ok, detail)`` for a direct route. Blocking.
+
+        Runs on the worker thread: it makes two network calls (the Models route
+        and, for the free lineups, the catalog the fallback is picked from) and
+        touches no widget.
+        """
+        from .. import openai_compat as oa_mod
+
+        ok, detail = oa_mod.probe(route.base_url, token)
+        ids = oa_mod.cached_ids(route.base_url)
+        if not ids or chosen in ids:
+            return chosen, None, ok, detail
+        declared = route.upstream_model(src.model)
+        if declared in ids:
+            return declared, chosen, ok, detail
+        # Neither the stored name nor the declared default survives: the lineup
+        # moved. Prefer whatever is free right now over leaving a paid name in
+        # place that the account may not be funded for.
+        mod = {"iteracompute": ic_mod, "infronai": inf_mod}.get(src.key)
+        if mod is not None:
+            try:
+                fresh = mod.default_free_model()
+            except Exception:  # noqa: BLE001 - a fallback must not fail the switch
+                fresh = None
+            if fresh and fresh in ids:
+                return fresh, chosen, ok, detail
+        return ids[0], chosen, ok, detail
 
     async def _verify_model_for(self, src, name: str) -> tuple[str, str | None]:
         """``(model_to_use, replaced_name_or_None)`` for a just-started source.
@@ -3410,11 +3517,13 @@ class ZimZillaApp(App):
             return ah_mod, "AIHubMix"
         if kind == "beatapi":
             return bp_mod, "BeatAPI"
-        # Not a hosted gateway: IteraCompute has no Messages endpoint, so the
-        # session talks to a local proxy and `/zim-iteracompute` goes through
-        # `_cmd_zim_source` like Logfare. It is listed here only so
-        # `/iteracompute-api-setup` can share the key-handling code, which is
-        # the same read/write against a mode-600 profile.
+        # Not a hosted gateway: IteraCompute has no Messages endpoint, so it is
+        # a local proxy source — `/zim-iteracompute` goes through
+        # `_cmd_zim_source` like Logfare, and (since the harness speaks Chat
+        # Completions) lands on the upstream directly rather than on the proxy.
+        # It is listed here so `/iteracompute-api-setup` can share the
+        # key-handling code, which is the same read/write against a mode-600
+        # profile.
         if kind == "iteracompute":
             return ic_mod, "IteraCompute"
         # Same case again: a local proxy, so `/zim-infronai` goes through
