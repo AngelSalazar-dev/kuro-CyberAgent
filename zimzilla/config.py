@@ -179,12 +179,20 @@ def price_for(model: str) -> tuple[float, float]:
     suffix check is cheaper than trusting a future provider to avoid it. A model
     that is genuinely paid can never carry either, so this cannot mis-price a
     real charge.
+
+    The comparison is case-insensitive because upstream ids are not written in
+    this table's style: a direct OpenAI-compatible endpoint is called with the
+    provider's own id — ``deepseek-ai/DeepSeek-V4.1-Flash-1017`` — and a
+    case-sensitive prefix test billed it at DEFAULT_PRICE, four times its real
+    rate, in the one display the operator uses to judge cost.
     """
-    base = model.split("/")[-1]
+    base = model.split("/")[-1].lower()
     if base.endswith("-free") or base.endswith(":free"):
         return (0.0, 0.0)
     if model in PRICING:
         return PRICING[model]
+    if model.lower() in PRICING:
+        return PRICING[model.lower()]
     # Tolerate dated suffixes / provider prefixes.
     for name, price in PRICING.items():
         if base == name or base.startswith(name) or name.startswith(base):
@@ -200,6 +208,23 @@ class Config:
     api_key: str | None = None
     auth_token: str | None = None
     model: str = DEFAULT_MODEL
+    #: Which wire protocol to speak to ``base_url``: ``"auto"``, ``"anthropic"``
+    #: or ``"openai"``. Auto is the default and resolves from the endpoint (see
+    #: ``openai_compat.resolve_protocol``), so an existing setup keeps working
+    #: untouched while a Chat Completions host is recognised without a flag.
+    #:
+    #: This is a transport choice, not a source choice: the same upstream can
+    #: usually be reached either way — directly over Chat Completions, or
+    #: through one of the local LiteLLM proxies that translates Messages into
+    #: it. Direct is faster and keeps tool calls intact; the proxy exists for
+    #: endpoints that have no Messages route at all.
+    protocol: str = "auto"
+    #: Whether the OpenAI-compatible transport asks for a streamed reply. On by
+    #: default — a turn is watched token by token, which is the whole point of
+    #: the TUI. Set ``ZIMZILLA_OPENAI_STREAM=0`` for an endpoint whose streaming
+    #: is broken; the transport also falls back automatically when the server
+    #: says streaming is unsupported.
+    openai_stream: bool = True
     workdir: Path = field(default_factory=Path.cwd)
     unsafe: bool = False
     # Target scope. `allow_path` is the operator's declared, authorised targets
@@ -311,14 +336,32 @@ class Config:
 
     @classmethod
     def from_env(cls, **overrides) -> "Config":
-        """Build a config from the environment, with explicit overrides winning."""
+        """Build a config from the environment, with explicit overrides winning.
+
+        The ``ANTHROPIC_*`` variables win over ``OPENAI_*`` because that is
+        what every existing profile and launcher exports. The ``OPENAI_*``
+        fallbacks exist so a session can be pointed at a plain Chat Completions
+        endpoint the way any other OpenAI tool is configured — ``OPENAI_BASE_URL``
+        plus ``OPENAI_API_KEY`` — without inventing an Anthropic-shaped
+        environment for a protocol that is not Anthropic's.
+        """
         cfg = cls(
-            base_url=os.environ.get("ANTHROPIC_BASE_URL", DEFAULT_BASE_URL).rstrip("/"),
-            api_key=os.environ.get("ANTHROPIC_API_KEY") or None,
+            base_url=(os.environ.get("ANTHROPIC_BASE_URL")
+                      or os.environ.get("OPENAI_BASE_URL")
+                      or DEFAULT_BASE_URL).rstrip("/"),
+            api_key=os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("OPENAI_API_KEY") or None,
             auth_token=os.environ.get("ANTHROPIC_AUTH_TOKEN") or None,
             model=os.environ.get("ZIMZILLA_MODEL")
             or os.environ.get("ANTHROPIC_MODEL")
+            or os.environ.get("OPENAI_MODEL")
             or DEFAULT_MODEL,
+            protocol=os.environ.get("ZIMZILLA_PROTOCOL") or "auto",
+            # Explicitly 0/1 rather than truthy-string: "0" is a perfectly
+            # ordinary value for an environment variable and reading it as
+            # true would make the opt-out impossible to express.
+            openai_stream=os.environ.get("ZIMZILLA_OPENAI_STREAM", "1").strip()
+            not in ("0", "false", "no", "off"),
         )
         for key, value in overrides.items():
             if value is not None:

@@ -246,9 +246,10 @@ def is_infronai(base_url: str | None) -> bool:
     """Whether *base_url* points at this source's local proxy.
 
     Matched by port on loopback only. ``llm.onerouter.pro`` deliberately does
-    **not** match: the free models are ``openai``-endpoint only, so a session
-    aimed at the upstream cannot serve the models this source is for, and
-    calling it "InfronAI" would hide that.
+    **not** match: this predicate answers "is the session on the proxy route",
+    and the upstream is not that route. The upstream is reachable — over Chat
+    Completions, with ``/openai-endpoint`` or ``--protocol openai`` — but it is
+    a direct endpoint, not an InfronAI *source* with a proxy to manage.
     """
     url = (base_url or "").strip()
     return (f"localhost:{PROXY_PORT}" in url

@@ -444,8 +444,38 @@ class Agent:
 
     # ---- client -----------------------------------------------------------
     @property
+    def protocol(self) -> str:
+        """The wire protocol this session is actually using.
+
+        ``cfg.protocol`` is what the operator asked for and may be ``"auto"``;
+        this is the resolved answer, so the UI and the error messages can name
+        what is really on the wire instead of echoing a preference.
+        """
+        from . import openai_compat
+
+        return openai_compat.resolve_protocol(self.cfg.base_url, self.cfg.protocol)
+
+    @property
     def client(self):
         if self._client is None:
+            if self.protocol == "openai":
+                # Chat Completions directly: no proxy hop, and the tool calls
+                # arrive exactly as the model emitted them. The client exposes
+                # the same ``messages.stream``/``messages.create`` surface and
+                # raises the same ``anthropic`` exceptions, so everything the
+                # loop does above this line is unchanged.
+                from . import openai_compat
+
+                self._client = openai_compat.Client(
+                    base_url=self.cfg.base_url,
+                    # A bearer token is the OpenAI convention, and it is the
+                    # same credential the local proxies are started with.
+                    api_key=self.cfg.auth_token or self.cfg.api_key,
+                    timeout=self.cfg.request_timeout,
+                    stream=self.cfg.openai_stream,
+                )
+                return self._client
+
             import anthropic
 
             kwargs = {
@@ -883,7 +913,7 @@ class Agent:
                         # prompt.
                         continue
                 yield {"type": "error",
-                       "message": self._friendly_error(e, self.cfg.base_url)}
+                       "message": self._friendly_error(e, self.cfg.base_url, self.cfg.protocol)}
                 await self._pop_last_user_if_dangling()
                 break
 
@@ -1399,11 +1429,13 @@ class Agent:
         return "the configured timeout"
 
     @staticmethod
-    def _friendly_error(e: Exception, base_url: str | None = None) -> str:
+    def _friendly_error(e: Exception, base_url: str | None = None,
+                       protocol: str = "auto") -> str:
         import anthropic
 
         if isinstance(e, anthropic.AuthenticationError):
-            return "authentication failed — check ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY."
+            return ("authentication failed — check ANTHROPIC_AUTH_TOKEN / "
+                    "ANTHROPIC_API_KEY (or OPENAI_API_KEY).")
         if isinstance(e, anthropic.NotFoundError):
             return (
                 "model or endpoint not found (404). If you switched models, the "
@@ -1508,8 +1540,23 @@ class Agent:
                 )
             return f"bad request: {msg[:300]}"
         if isinstance(e, anthropic.APIConnectionError):
+            where = e.request.url if getattr(e, "request", None) else "?"
+            # Which protocol was on the wire decides what to check. Telling an
+            # operator to start the LiteLLM proxy when the session is aimed at
+            # a Chat Completions host is the wrong machine entirely.
+            try:
+                from . import openai_compat as oa_mod
+                chat = (base_url
+                        and oa_mod.resolve_protocol(base_url, protocol) == "openai")
+            except Exception:  # noqa: BLE001 - a hint must not raise
+                chat = False
+            if chat:
+                return (
+                    f"cannot reach the OpenAI-compatible endpoint at {where}. "
+                    "Check the base URL and port, and that the server is up."
+                )
             return (
-                f"cannot reach the API endpoint at {e.request.url if getattr(e,'request',None) else '?'}. "
+                f"cannot reach the API endpoint at {where}. "
                 "Is the LiteLLM proxy running?"
             )
         # A stall, not a failure: the connection was accepted and then went
@@ -1520,10 +1567,9 @@ class Agent:
                                     e, anthropic.APITimeoutError):
             return (
                 "the endpoint accepted the request then sent nothing for "
-                f"{Agent._timeout_hint(e)} — the proxy is up but stalled.\n"
-                "  Check the proxy log (e.g. /tmp/litellm-zim.log) for the "
-                "upstream error; a model that is not served or an upstream "
-                "timeout both look like this."
+                f"{Agent._timeout_hint(e)} — the server is up but stalled.\n"
+                "  Check its log for the upstream error; a model that is not "
+                "served or an upstream timeout both look like this."
             )
         # 402. A gateway that has run out of credit is not an auth failure and
         # not a bad request — it is a billing state with one obvious fix, and it
@@ -1758,7 +1804,7 @@ class Agent:
                     messages=[{"role": "user", "content": prompt}],
                 )
         except Exception as e:  # noqa: BLE001
-            return False, self._friendly_error(e, self.cfg.base_url)
+            return False, self._friendly_error(e, self.cfg.base_url, self.cfg.protocol)
 
         summary = "".join(
             b.text for b in msg.content if getattr(b, "type", "") == "text"

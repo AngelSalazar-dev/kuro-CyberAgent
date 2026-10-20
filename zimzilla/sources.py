@@ -1,7 +1,14 @@
 """Upstream "sources" — the LiteLLM proxies ZimZilla can talk through.
 
 ZimZilla speaks the Anthropic Messages protocol to whatever ``ANTHROPIC_BASE_URL``
-points at. Three local LiteLLM proxies front three different upstreams:
+points at. That is the default, not the only option: an endpoint that serves
+Chat Completions can be reached directly instead, with no proxy in between —
+see :mod:`zimzilla.openai_compat`, ``/openai-endpoint`` and the ``protocol``
+field on :class:`zimzilla.config.Config`. Everything in this module is about the
+*proxy* routes; the direct route has no port, no profile and no service to
+discover, so it is deliberately not a ``Source``.
+
+Three local LiteLLM proxies front three different upstreams:
 
     logfare       :4001  →  logfare.ai         (the default, shipped with the repo)
     tokenjuice    :4000  →  api.tokenjuice.ai  (deepseek-claude's endpoint)
@@ -199,7 +206,12 @@ def models_for(base_url: str) -> tuple[str, ...] | None:
     """
     key = active_key(base_url)
     if key is None:
-        return None
+        # A direct OpenAI-compatible endpoint is not a Source — it has no port,
+        # profile or service — but if it was probed, its own ids are the right
+        # answer for `/model`, and they are a cached read rather than a fetch.
+        from . import openai_compat as oa_mod
+        probed = oa_mod.cached_ids(base_url)
+        return probed or None
     if key == "logfare":
         from . import logfare as lf_mod
         cached = lf_mod.cached_ids()

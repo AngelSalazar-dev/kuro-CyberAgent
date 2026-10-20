@@ -653,6 +653,57 @@ request budget is shared too — see [Install](#install) for the numbers, and us
 listed by `/zim-source` as **under construction**, because its upstream keeps
 renaming its model id; the reason prints in full, and the route stays visible.
 
+### Two wire protocols, and skipping the proxy
+
+Everything above is reached over the **Anthropic Messages** protocol. The local
+LiteLLM proxies exist to translate that into **Chat Completions**, which is what
+almost every upstream actually serves. That translation costs two things: a hop
+between every streamed chunk, and tool-call fidelity — argument fragments
+re-assembled by a bridge, parallel calls collapsed, call ids lost. When it goes
+wrong the symptom is not "the proxy is broken", it is "the model cannot use
+tools".
+
+So ZimZilla also speaks Chat Completions **directly**, for any endpoint that
+serves it. No proxy, no translation:
+
+```
+/openai-endpoint https://logfare.ai/v1 deepseek-v4.1-flash
+/openai-endpoint https://api.tokenjuice.ai/v1 deepseek-ai/DeepSeek-V4.1-Flash-1017
+/openai-endpoint https://api.iteracompute.com/v1 qwen/qwen3.8-27b
+```
+
+Each command probes the Models route before the first turn, so a mistyped host or
+a missing `/v1` is answered in a second instead of after a failed turn. The key
+is whatever `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+already holds — no second credential to manage.
+
+Which protocol is used is decided per endpoint, and the decision is visible:
+
+| Endpoint | Protocol | Why |
+|---|---|---|
+| `localhost:4001` … `:4003` | Anthropic | these are the bundled LiteLLM proxies |
+| `localhost:8000/v1` | OpenAI | a local vLLM/Ollama is not one of them |
+| any URL ending in `/v1` | OpenAI | the near-universal convention |
+| `openrouter.ai`, `tokenharbor.ai`, `api.unorouter.com`, `aihubmix.com`, `direct.beatapi.io` | Anthropic | hosted gateways that speak Messages natively |
+| anything unrecognised | Anthropic | an existing setup keeps working |
+
+```
+/protocol                  # what is in use, and the exact route it calls
+/protocol openai           # pin it (also: anthropic, auto)
+zimzilla --base-url https://api.example.com/v1 --protocol openai -m my-model
+```
+
+Environment equivalents exist for a launcher or a shell profile:
+`ZIMZILLA_PROTOCOL=openai`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`.
+`ZIMZILLA_OPENAI_STREAM=0` turns streaming off for an endpoint that cannot do it
+properly; the transport also falls back on its own when a server says streaming
+is unsupported, or when it rejects `max_tokens` in favour of
+`max_completion_tokens`.
+
+Switching to a `/zim-*` source resets the protocol to `auto`: those endpoints are
+what they are, and a pinned protocol left over from a hand-typed URL would send
+the wrong request at them.
+
 ### TokenHarbour
 
 TokenHarbour is remote and needs a key of your own. Set it once:

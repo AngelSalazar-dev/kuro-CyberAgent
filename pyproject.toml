@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zimzilla"
 version = "1.0.0"
-description = "An agentic coding CLI over the Anthropic Messages API with a green-on-black hacker TUI."
+description = "An agentic coding CLI over the Anthropic Messages API or any OpenAI-compatible endpoint, with a green-on-black hacker TUI."
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.40",

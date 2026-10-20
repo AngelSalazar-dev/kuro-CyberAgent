@@ -2116,6 +2116,8 @@ class ZimZillaApp(App):
             "infronai-api-setup": lambda a: self._cmd_gateway_key(
                 "infronai", a),
             "infronai-models": lambda a: self._cmd_models(["infronai"]),
+            "protocol": lambda a: self._cmd_protocol(a),
+            "openai-endpoint": lambda a: self._cmd_openai_endpoint(a),
             "antseed-models": lambda a: self._cmd_models(["antseed"]),
             "models": lambda a: self._cmd_models(a),
             "logfare-models": lambda a: self._cmd_logfare_models(a),
@@ -2158,6 +2160,8 @@ class ZimZillaApp(App):
             ("/zim-infronai", "switch upstream to InfronAI   (local proxy, free models)"),
             ("/zim-antseed", "switch upstream to AntSeed (local buyer, free peers)"),
             ("/zim-source", "show upstream sources and their status"),
+            ("/protocol [auto|anthropic|openai]", "which wire protocol the endpoint speaks"),
+            ("/openai-endpoint <url> [model]", "talk Chat Completions to any OpenAI-compatible endpoint"),
             ("/tokenharbour-api-setup <key>", "store your TokenHarbour API key"),
             ("/tokenharbour-models", "fetch the live catalog; show what is free"),
             ("/openrouter-api-setup [key]", "store your OpenRouter API key (optional)"),
@@ -2985,7 +2989,10 @@ class ZimZillaApp(App):
             else:
                 t.append(f"key from {creds[2]} (document tools, not a source)\n",
                          style=p.accent)
-            t.append("\n  switch with  /zim-logfare,  /zim-tokenharbour,\n"
+            t.append("\n  wire protocol  ", style=p.dim)
+            t.append(f"{self.agent.protocol}", style=f"bold {p.accent}")
+            t.append(f"  ·  {self.cfg.base_url}\n", style=p.dim)
+            t.append("  switch with  /zim-logfare,  /zim-tokenharbour,\n"
                      "                 /zim-openrouter,  /zim-unorouter,\n"
                      "                 /zim-aihubmix,  /zim-beatapi,\n"
                      "                 /zim-iteracompute,  /zim-infronai,\n"
@@ -3067,6 +3074,10 @@ class ZimZillaApp(App):
             return
 
         self.cfg.base_url = src.base_url
+        # A local proxy speaks Messages by construction, whatever the operator
+        # had pinned before. Leaving a manual `protocol = openai` in place would
+        # send Chat Completions at a proxy that only serves /v1/messages.
+        self.cfg.protocol = "auto"
         self.cfg.auth_token = token
         self.cfg.api_key = ""          # empty, so the auth_token stays authoritative
         # The profile's model is *stored* — written by hand at setup and never
@@ -3667,6 +3678,10 @@ class ZimZillaApp(App):
         if applied is None:            # unreachable: creds was just checked
             self._sys_line(f"no {label} key found", warn=True)
             return
+        # Every hosted gateway in the tree speaks Messages. Re-resolve rather
+        # than inheriting a pinned protocol from an endpoint the operator has
+        # since left.
+        self.cfg.protocol = "auto"
         origin, model = applied
         self.agent._client = None      # rebuild against the new host
         mod.set_current(kind)
@@ -3677,6 +3692,122 @@ class ZimZillaApp(App):
         if not model:
             self._sys_line("fetching the free model list…")
             self._fetch_models(kind)
+
+    # ---- protocol / endpoint ------------------------------------------------
+    def _cmd_protocol(self, args) -> None:
+        """/protocol [auto|anthropic|openai] — the wire protocol in use.
+
+        The two protocols are not interchangeable at a given URL: a LiteLLM
+        proxy in this tree serves ``/v1/messages`` and answers 404 to
+        ``/v1/chat/completions``, while a bare OpenAI-compatible host does the
+        reverse. So this command reports the *resolved* protocol and the exact
+        route it will call, which is the pair that explains a 404.
+        """
+        from .. import openai_compat as oa_mod
+
+        choice = args[0].strip().lower() if args else ""
+        resolved = self.agent.protocol
+        if not choice:
+            route = (oa_mod.chat_completions_url(self.cfg.base_url)
+                     if resolved == "openai"
+                     else self.cfg.base_url.rstrip("/") + "/v1/messages")
+            self._sys_line(f"protocol {resolved}  ·  {route}", ok=True)
+            self._sys_line(
+                "  /protocol openai | anthropic | auto   —   "
+                "/openai-endpoint <url> [model] to point at a Chat Completions "
+                "host", ok=True)
+            return
+
+        if choice not in oa_mod.PROTOCOLS:
+            self._sys_line(
+                f"unknown protocol: {choice} — one of {', '.join(oa_mod.PROTOCOLS)}",
+                warn=True)
+            return
+
+        self.cfg.protocol = choice
+        # Drop the cached client: it was built for the old protocol and its
+        # error classes are part of that decision.
+        self.agent._client = None
+        resolved = self.agent.protocol
+        self._sys_line(f"protocol set to {choice} (resolved: {resolved})", ok=True)
+
+        if resolved == "openai" and oa_mod.is_local_proxy(self.cfg.base_url):
+            self._sys_line(
+                "  this endpoint is one of ZimZilla's local LiteLLM proxies and "
+                "speaks Messages only — point at the upstream directly with "
+                "/openai-endpoint <url> to skip the proxy", warn=True)
+
+    @work(exclusive=True)
+    async def _cmd_openai_endpoint(self, args) -> None:
+        """/openai-endpoint <url> [model] — talk Chat Completions, no proxy.
+
+        Sets the endpoint and pins the protocol, then probes the Models route
+        before the first turn: a mistyped host or a missing ``/v1`` is the most
+        common way this goes wrong, and both are answered here in a second
+        instead of after a failed turn that looks like a model problem.
+
+        The endpoint is deliberately not written to the ``current-source``
+        selection file. That file records a *source* the launcher can rebuild —
+        with a profile, a proxy and a known catalog. A hand-typed URL has none
+        of those, and remembering it would hijack the next launch if the
+        operator had only meant to try it.
+        """
+        from .. import openai_compat as oa_mod
+
+        parts = [str(p) for p in (args or [])]
+        if not parts:
+            self._sys_line(
+                f"endpoint {self.cfg.base_url}  ·  protocol {self.agent.protocol}"
+                f"  ·  model {self.cfg.model}", ok=True)
+            self._sys_line(
+                "  /openai-endpoint https://api.example.com/v1 <model>", ok=True)
+            return
+
+        url = parts[0].rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            self._sys_line(
+                f"not a URL: {url} — include http:// or https://", warn=True)
+            return
+        model = parts[1] if len(parts) > 1 else self.cfg.model
+
+        self.busy = True
+        bar = self.query_one(StatusBar)
+        bar.set_activity(f"probing {url}", busy=True)
+        self._sys_line(f"probing {oa_mod.models_url(url)}…")
+        try:
+            ok, detail = await asyncio.to_thread(
+                oa_mod.probe, url, self.cfg.auth_token or self.cfg.api_key)
+        finally:
+            self.busy = False
+            bar.set_activity("idle", busy=False)
+            bar.render_bar()
+            self.query_one("#input", Input).focus()
+
+        self.cfg.base_url = url
+        self.cfg.protocol = "openai"
+        self.cfg.model = model
+        self.agent._client = None
+        self.query_one(HeaderBar).set_model(self.cfg.display_model)
+        self.query_one(StatusBar).model = self.cfg.display_model
+        self.query_one(StatusBar).render_bar()
+        try:
+            self._completer().base_url = self.cfg.base_url
+        except NoMatches:
+            pass
+
+        self._sys_line(
+            f"endpoint set to {url}  ·  protocol openai  ·  model {model}", ok=True)
+        if ok:
+            self._sys_line(f"  {detail}", ok=True)
+        else:
+            # The endpoint stays set on purpose: a 401 here usually means the
+            # key, not the URL, and undoing the operator's command because a
+            # probe was refused would be the wrong guess made for them.
+            self._sys_line(f"  probe failed: {detail}", warn=True)
+            self._sys_line(
+                "  the endpoint is still set — set a key with "
+                "ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY if that is what it "
+                "refused", warn=True)
 
     def _cmd_models(self, args) -> None:
         """/models [source] — the free models of an upstream.

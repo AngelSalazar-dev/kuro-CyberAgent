@@ -30,6 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
         description="ZimZilla — an agentic coding CLI with a green-on-black hacker TUI.",
     )
     parser.add_argument("--model", "-m", default=None, help=f"model name (default: {DEFAULT_MODEL})")
+    parser.add_argument("--base-url", default=None,
+                        help="API endpoint (default: $ANTHROPIC_BASE_URL, then "
+                             "$OPENAI_BASE_URL, then the local Logfare proxy)")
+    parser.add_argument("--protocol", default=None,
+                        choices=["auto", "anthropic", "openai"],
+                        help="wire protocol for the endpoint: auto (default), "
+                             "anthropic Messages, or openai Chat Completions")
     parser.add_argument("--workdir", "-C", default=None, help="working directory (default: cwd)")
     parser.add_argument("--allow", default=None,
                         help="path to allow.yaml — declared targets; its presence runs tools unattended")
@@ -213,6 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     # including the boot screen.
     cfg = Config.from_env(
         model=args.model,
+        base_url=args.base_url,
+        protocol=args.protocol,
         workdir=workdir,
         allow_path=allow_path,
         deny_path=deny_path,
@@ -283,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "zimzilla: no credentials found.\n"
             "  Set ANTHROPIC_AUTH_TOKEN (preferred) or ANTHROPIC_API_KEY.\n"
+            "  For a plain OpenAI-compatible endpoint, OPENAI_API_KEY and\n"
+            "  OPENAI_BASE_URL are read too (add --protocol openai if the URL\n"
+            "  does not make it obvious).\n"
             "  For the local Logfare route, source ZimZilla's own profile:\n"
             "      set -a; . ~/.zimzilla/logfare/source; set +a\n"
             "  Or just run `./setup.sh` once, then launch with `zimzilla`.",
