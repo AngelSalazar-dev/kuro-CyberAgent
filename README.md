@@ -653,7 +653,12 @@ proxy is a translation shim, and the harness speaks both protocols now. Add
 Logfare is a full switch target: the shipped key makes it work with no signup,
 and it serves every chat model on Logfare's catalog. The key is shared, so its
 request budget is shared too — see [Install](#install) for the numbers, and use
-`/logfare-models` to see what is up right now. Token Juice is the one route still
+`/logfare-models` to see what is up right now. `/logfare-api-setup <key>` swaps
+in your own key (`lfu_…` from https://logfare.ai) and shows you the last four
+characters of whichever key is in force, so it is obvious whether you are on the
+shared one. On a direct endpoint the new key is live immediately; through the
+local proxy the proxy is restarted, because that is where LiteLLM reads the key
+from at start-up. Token Juice is the one route still
 listed by `/zim-source` as **under construction**, because its upstream keeps
 renaming its model id; the reason prints in full, and the route stays visible.
 
@@ -1247,6 +1252,7 @@ startup and then ignored. Rename it to `allow.yaml` or `out-of-scope.yaml`.
 | `/infronai-models` | the live free catalog — what is free and usable |
 | `/zim-antseed` | switch upstream to AntSeed — the local buyer, free peers, no key |
 | `/antseed-models` | list AntSeed's free models, each with the peer to pin |
+| `/logfare-api-setup [key]` | use your own Logfare key; the shipped one is shared by every install |
 | `/models [source]` | free models of an upstream — `logfare`, `tokenjuice`, `tokenharbour`, `openrouter`, `unorouter`, `aihubmix`, `beatapi`, `iteracompute`, `infronai`, `antseed` |
 | `/zim-source` | show every upstream and its status |
 | `/reverse-engineer <file>` | map an artifact (`.apk`, `.zip`, `.exe`, `.sh`, binary), then ask what you want changed |

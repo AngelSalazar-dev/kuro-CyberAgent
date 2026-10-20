@@ -2011,7 +2011,7 @@ class ZimZillaApp(App):
         "iteracompute-api-setup", "iteracompute-models", "zim-iteracompute",
         "infronai-api-setup", "infronai-models", "zim-infronai",
         "zim-antseed", "antseed-models",
-        "logfare-models",
+        "logfare-api-setup", "logfare-models",
         # The Shodan key is a mode-600 write and a local read, like every other
         # /<source>-api-setup; it starts no turn.
         "shodan-api-setup",
@@ -2120,6 +2120,7 @@ class ZimZillaApp(App):
             "openai-endpoint": lambda a: self._cmd_openai_endpoint(a),
             "antseed-models": lambda a: self._cmd_models(["antseed"]),
             "models": lambda a: self._cmd_models(a),
+            "logfare-api-setup": lambda a: self._cmd_logfare_key(a),
             "logfare-models": lambda a: self._cmd_logfare_models(a),
             "ldxhub-api-setup": lambda a: self._cmd_ldxhub_key(a),
             "ldxhub-models": lambda a: self._cmd_ldxhub_models(a),
@@ -2177,6 +2178,7 @@ class ZimZillaApp(App):
             ("/infronai-models", "the live free catalog — what is free and usable"),
             ("/antseed-models", "AntSeed's free models, and the peer to pin"),
             ("/models", "free models of an upstream — /models [source]"),
+            ("/logfare-api-setup [key]", "use your own Logfare key (the shipped one is shared)"),
             ("/logfare-models", "fetch the live catalog; show what is up"),
             ("/ldxhub-api-setup [key]", "store your LDXHub API key (document jobs)"),
             ("/ldxhub-models [service]", "LDXHub models/engines — pick the default per service"),
@@ -3533,6 +3535,112 @@ class ZimZillaApp(App):
         if kind == "antseed":
             return as_mod, "AntSeed"
         return None
+
+    def _cmd_logfare_key(self, args) -> None:
+        """/logfare-api-setup [key] — use your own Logfare key.
+
+        Logfare's shipped key is shared by every install, so its budget is
+        shared too: 20/min, 500/hour, 2500/day, three concurrent, then a 429
+        with a Retry-After until the UTC day rolls over. Your own key is the way
+        past that, and it goes here — ``~/.zimzilla/logfare/source``, mode 600 —
+        which the launcher, ``/zim-logfare`` and the proxy all read before the
+        shipped file.
+
+        Nothing is echoed. The confirmation names the last four characters,
+        which tells two keys apart and is not enough to be one.
+        """
+        p = self.palette
+        if not args:
+            creds = lf_mod.load_credentials()
+            t = Text()
+            t.append("  LOGFARE API KEY\n\n", style=f"bold {p.accent}")
+            if creds is None:
+                t.append("  no key found.\n\n", style=p.amber)
+            else:
+                token, _, origin = creds
+                shared = str(origin) == str(lf_mod.SHIPPED_PROFILE)
+                t.append("  in use   ", style=p.dim)
+                t.append(f"…{token[-4:]}  ", style=p.primary)
+                t.append("shared by every install\n" if shared else "yours\n",
+                         style=p.amber if shared else p.accent)
+                t.append("  from     ", style=p.dim)
+                t.append(origin + "\n", style=p.primary)
+                if shared:
+                    t.append("  one budget for all of them: ", style=p.dim)
+                    t.append(
+                        "20/min, 500/hour, 2500/day, 3 concurrent,\n"
+                        "  then a 429 until the UTC day rolls over.\n", style=p.dim)
+                    t.append("  your own key lifts that: ", style=p.dim)
+                    t.append("https://logfare.ai\n", style=p.primary)
+            t.append("\n  set it with  ", style=p.dim)
+            t.append("/logfare-api-setup <key>\n", style=f"bold {p.primary}")
+            t.append(f"  stored in     {lf_mod.PROFILE}\n", style=p.dim)
+            self.query_one(ChatPane).write_block(t)
+            return
+
+        key = str(args[0]).strip()
+        if not lf_mod.looks_like_key(key):
+            self._sys_line(
+                "that does not look like an API key — paste just the key, "
+                "not the whole `export` line", warn=True)
+            return
+        if not key.startswith(lf_mod.KEY_PREFIX):
+            # A hint, not a refusal: a real key of an unexpected shape is worth
+            # more stored than rejected, and a wrong key only costs one 401.
+            self._sys_line(
+                f"Logfare keys start with {lf_mod.KEY_PREFIX!r} — storing this "
+                "one anyway", warn=True)
+
+        direct = lf_mod.is_logfare(self.cfg.base_url)
+        live = direct or lf_mod.active_endpoint(self.cfg.base_url)
+        # Keep the model the session is on: setting a key is not a model choice.
+        path = lf_mod.save_key(key, self.cfg.model if live else "")
+        lf_mod.clear_cache()          # a new key means a new quota, refetch
+        self._sys_line(f"Logfare key saved (…{key[-4:]}) to {path}", ok=True)
+        if direct:
+            # Talking to logfare.ai itself: this client sends the key, so it is
+            # in force as soon as the client is rebuilt.
+            self.cfg.auth_token = key
+            self.cfg.api_key = ""
+            self.agent._client = None
+            self._sys_line("applied to this session — no restart", ok=True)
+        elif live:
+            # Through the local proxy: LiteLLM took its master key and its
+            # upstream key from the profile at start-up, so a restart with the
+            # new environment is the only way the new key becomes the key in use.
+            src = sources_mod.discover().get("logfare")
+            if src is None:
+                self._sys_line("no Logfare service to restart — the key applies "
+                               "on the next launch", warn=True)
+            else:
+                self._restart_proxy_for_key(src, key)
+        else:
+            self._sys_line("switch to it with /zim-logfare")
+
+    @work(exclusive=True)
+    async def _restart_proxy_for_key(self, src, key: str) -> None:
+        """Restart a source's proxy so it comes up holding the key just written."""
+        bar = self.query_one(StatusBar)
+        self.busy = True
+        bar.set_activity(f"restarting {src.label} proxy", busy=True)
+        self._sys_line(f"restarting the {src.label} proxy so it uses the new key…")
+        try:
+            ok, detail = await asyncio.to_thread(sources_mod.restart_proxy, src)
+        finally:
+            self.busy = False
+            bar.set_activity("idle", busy=False)
+            bar.render_bar()
+            self.query_one("#input", Input).focus()
+        if not ok:
+            self._sys_line(f"proxy restart failed: {detail}", warn=True)
+            self._sys_line("the key is saved — it applies on the next launch", warn=True)
+            return
+        # The proxy's master key is the new key now, so this client has to send
+        # it or every request is a 401 against the proxy rather than upstream.
+        self.cfg.auth_token = key
+        self.cfg.api_key = ""
+        self.agent._client = None
+        self._sys_line(f"{src.label} proxy restarted — the new key is live", ok=True)
 
     def _cmd_gateway_key(self, kind: str, args) -> None:
         """/openrouter-api-setup and /unorouter-api-setup [key] — store the key.
@@ -7319,6 +7427,8 @@ class ZimZillaApp(App):
             ("/infronai-models", "the live free catalog — what is free and usable",
              "infronai-models"),
             ("/models", "free models of an upstream — /models [source]", "models"),
+            ("/logfare-api-setup", "use your own Logfare key (the shipped one is shared)",
+             "logfare-api-setup"),
             ("/logfare-models", "fetch the live catalog; show what is up",
              "logfare-models"),
             ("/ldxhub-api-setup", "store your LDXHub API key",

@@ -919,6 +919,38 @@ def proxy_healthy(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _service_env(src: Source) -> dict[str, str]:
+    """The environment a source's proxy is started with.
+
+    The profile is the credential channel: LiteLLM reads ``master_key`` and each
+    deployment's ``api_key`` from it via ``os.environ``, which is why writing a
+    new key to that file does nothing to a proxy that is already running.
+    """
+    env = dict(os.environ)
+    env.setdefault("ZIMZILLA_ROOT", str(src.root))
+    env["LITELLM_ENV_FILE"] = str(src.profile)
+    env["LITELLM_CONFIG"] = str(src.config)
+    env["LITELLM_PORT"] = str(src.port)
+    return env
+
+
+def _run_service(src: Source, action: str, timeout: float) -> tuple[bool, str]:
+    """Run the source's service script with *action*; report health, not exit 0."""
+    try:
+        proc = subprocess.run(
+            [str(src.service), action], env=_service_env(src),
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {timeout:.0f}s"
+    except OSError as e:
+        return False, f"could not run {src.service}: {e}"
+    if proxy_healthy(src.port):
+        return True, action
+    detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+    return False, detail[-1] if detail else f"exit {proc.returncode}"
+
+
 def start_proxy(src: Source, timeout: float = 180.0) -> tuple[bool, str]:
     """Start the source's proxy if it is not already answering. Blocking."""
     if proxy_healthy(src.port):
@@ -926,29 +958,23 @@ def start_proxy(src: Source, timeout: float = 180.0) -> tuple[bool, str]:
     if not src.service.is_file():
         return False, f"no service manager at {src.service}"
 
-    env = dict(os.environ)
-    env.setdefault("ZIMZILLA_ROOT", str(src.root))
-    env["LITELLM_ENV_FILE"] = str(src.profile)
-    env["LITELLM_CONFIG"] = str(src.config)
-    env["LITELLM_PORT"] = str(src.port)
     # Do not wrap this in flock. The launcher already serialises its own
     # cold-start, and wrapping here is how a leaked lock (LiteLLM inheriting
     # the launcher's lock fd) made /zim-tokenjuice hang until timeout while
     # a manual start of the same script finished in seconds. Two sources
     # live on different ports, so they can come up independently.
-    argv = [str(src.service), "start"]
+    return _run_service(src, "start", timeout)
 
-    try:
-        proc = subprocess.run(
-            argv, env=env, capture_output=True, text=True, timeout=timeout
-        )
-    except subprocess.TimeoutExpired:
-        return False, f"timed out after {timeout:.0f}s"
-    except OSError as e:
-        return False, f"could not run {src.service}: {e}"
 
-    if proxy_healthy(src.port):
-        return True, "started"
-    detail = (proc.stderr or proc.stdout or "").strip().splitlines()
-    tail = detail[-1] if detail else f"exit {proc.returncode}"
-    return False, tail
+def restart_proxy(src: Source, timeout: float = 180.0) -> tuple[bool, str]:
+    """Restart the source's proxy so it picks up a key written to its profile.
+
+    A key reaches LiteLLM through the environment it was started with, and that
+    environment is the profile — so a key saved while the proxy is up is not the
+    key the proxy is using, on either side: the master key it demands of this
+    client, and the upstream key it sends. Same no-flock reasoning as
+    :func:`start_proxy`. Blocking; callers run it off the UI thread.
+    """
+    if not src.service.is_file():
+        return False, f"no service manager at {src.service}"
+    return _run_service(src, "restart", timeout)

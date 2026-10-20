@@ -17,9 +17,12 @@ No test here touches the network: every fetch is served by a stub urlopen.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
+import os
 import sys
+import tempfile
 import urllib.error
 from pathlib import Path
 from unittest import mock
@@ -311,6 +314,164 @@ def test_is_logfare() -> None:
     check("host: None is not", not lf.is_logfare(None))
 
 
+def test_profile_key(tmp: Path) -> None:
+    """Where the key comes from, and what writing one does to the profile."""
+    from zimzilla import logfare as lf
+
+    profile = tmp / "zhome" / "logfare" / "source"
+    # Nothing anywhere: no operator file, no shipped file, no environment token.
+    with mock.patch.object(lf, "PROFILE", profile), \
+         mock.patch.object(lf, "SHIPPED_PROFILE", tmp / "absent"), \
+         mock.patch.dict(os.environ, {"ANTHROPIC_AUTH_TOKEN": ""}):
+        check("key: nothing set -> None", lf.load_credentials() is None,
+              str(lf.load_credentials()))
+        check("key: has_key agrees", not lf.has_key())
+
+    with mock.patch.object(lf, "PROFILE", profile), \
+         mock.patch.dict(os.environ, {"ANTHROPIC_AUTH_TOKEN": ""}):
+        # The shipped profile is the fallback, and says so by origin.
+        creds = lf.load_credentials()
+        check("key: the shipped key is found", creds is not None)
+        check("key: reported as the shipped one",
+              creds is not None and creds[2] == str(lf.SHIPPED_PROFILE),
+              str(creds and creds[2]))
+
+        # An environment token beats the shared key...
+        with mock.patch.dict(os.environ,
+                             {"ANTHROPIC_AUTH_TOKEN": "env-token-0123456789"}):
+            creds = lf.load_credentials()
+            check("key: the environment beats the shipped profile",
+                  creds is not None and creds[2] == "$ANTHROPIC_AUTH_TOKEN",
+                  str(creds and creds[2]))
+
+        # ...and the operator's own file beats both.
+        first = "lfu_first_key_0123456789abcd"
+        path = lf.save_key(first, "deepseek-v4.1-flash")
+        check("key: saved where the launcher looks", path == profile, str(path))
+        text = profile.read_text(encoding="utf-8")
+        check("key: the token is in the file",
+              f'ANTHROPIC_AUTH_TOKEN="{first}"' in text)
+        check("key: the model aliases came along", "MODEL_QWEN" in text)
+        check("key: the empty API key came along",
+              'ANTHROPIC_API_KEY=""' in text)
+        check("key: mode is 600",
+              (profile.stat().st_mode % 0o1000) == 0o600,
+              oct(profile.stat().st_mode % 0o1000))
+        check("key: the directory is 700",
+              (profile.parent.stat().st_mode % 0o1000) == 0o700,
+              oct(profile.parent.stat().st_mode % 0o1000))
+        with mock.patch.dict(os.environ,
+                             {"ANTHROPIC_AUTH_TOKEN": "env-token-0123456789"}):
+            creds = lf.load_credentials()
+            check("key: the operator's file beats the environment",
+                  creds is not None and creds[0] == first
+                  and creds[2] == str(profile), str(creds))
+
+        # Twice must not leave two token lines for the shell to disagree about.
+        second = "lfu_second_key_0123456789ab"
+        lf.save_key(second, "")
+        text = profile.read_text(encoding="utf-8")
+        check("key: one token line after two writes",
+              text.count("ANTHROPIC_AUTH_TOKEN=") == 1,
+              str(text.count("ANTHROPIC_AUTH_TOKEN=")))
+        check("key: the second key is the stored one", second in text)
+        check("key: the model is kept when none is given",
+              'ANTHROPIC_MODEL="deepseek-v4.1-flash"' in text)
+
+    check("key: lfu_ and a long body is accepted",
+          lf.looks_like_key("lfu_" + "a" * 32))
+    check("key: a pasted export line is rejected",
+          not lf.looks_like_key('export ANTHROPIC_AUTH_TOKEN="x"'))
+    check("key: something short is rejected", not lf.looks_like_key("short"))
+    check("key: an empty string is rejected", not lf.looks_like_key(""))
+
+    check("key: :4001 is a Logfare endpoint",
+          lf.active_endpoint("http://localhost:4001"))
+    check("key: logfare.ai is one too", lf.active_endpoint("https://logfare.ai/v1"))
+    check("key: :4002 is not", not lf.active_endpoint("http://localhost:4002"))
+    check("key: None is not", not lf.active_endpoint(None))
+
+
+def test_key_command(tmp: Path) -> None:
+    """`/logfare-api-setup` stores the key, applies it, and never echoes it."""
+    from zimzilla import logfare as lf
+    from zimzilla import sources as sources_mod
+    from zimzilla.config import Config
+    from zimzilla.ui.app import ZimZillaApp
+
+    profile = tmp / "zhome" / "logfare" / "source"
+    key = "lfu_live_0123456789abcdef"
+    src = sources_mod.Source(key="logfare", label="Logfare", port=4001,
+                             profile=profile, service=tmp / "svc.sh",
+                             config=tmp / "cfg.yaml", model="deepseek-v4.1-flash",
+                             root=ROOT)
+
+    def run(base_url: str, args: list[str]) -> tuple[list[str], Config, list[str]]:
+        said: list[str] = []
+        restarted: list[str] = []
+        cfg = Config.from_env(workdir=tmp, api_key="old-key", base_url=base_url,
+                              model="deepseek-v4.1-flash")
+        app = ZimZillaApp(cfg)
+        app._sys_line = lambda msg, **kw: said.append(str(msg))
+
+        async def go() -> None:
+            async with app.run_test(size=(110, 34)) as pilot:
+                # The restart runs in a worker, so the patches have to outlive
+                # the command call itself.
+                with mock.patch.object(lf, "PROFILE", profile), \
+                     mock.patch.object(sources_mod, "discover",
+                                       return_value={"logfare": src}), \
+                     mock.patch.object(sources_mod, "restart_proxy",
+                                       side_effect=lambda s, **k: (
+                                           restarted.append(s.key),
+                                           (True, "restart"))[1]):
+                    app._cmd_logfare_key(args)
+                    await pilot.pause()
+                    await pilot.pause()
+
+        asyncio.run(go())
+        return said, cfg, restarted
+
+    # Straight at logfare.ai: this client sends the key, so no restart is needed.
+    said, cfg, restarted = run("https://logfare.ai/v1", [key])
+    check("cmd: the key is stored", profile.exists()
+          and key in profile.read_text(encoding="utf-8"))
+    check("cmd: it is applied to the live session", cfg.auth_token == key,
+          str(cfg.auth_token))
+    check("cmd: the stale api_key is cleared", cfg.api_key == "")
+    check("cmd: no proxy restart on a direct endpoint", restarted == [], str(restarted))
+    check("cmd: it says no restart was needed",
+          any("no restart" in m for m in said), str(said))
+    check("cmd: the key itself is never echoed",
+          all(key not in m for m in said), str(said))
+    check("cmd: the confirmation names the last four characters",
+          any(key[-4:] in m for m in said), str(said))
+
+    # Through the local proxy: LiteLLM took the key at start-up, so restart it.
+    said, cfg, restarted = run("http://localhost:4001", [key])
+    check("cmd: the proxy is restarted for a proxied session",
+          restarted == ["logfare"], str(restarted))
+    check("cmd: the client sends the new key after the restart",
+          cfg.auth_token == key, str(cfg.auth_token))
+    check("cmd: still no echo of the key", all(key not in m for m in said), str(said))
+
+    # A pasted shell line is refused, and nothing is written.
+    profile.unlink(missing_ok=True)
+    said, _, _ = run("https://logfare.ai/v1", ['export ANTHROPIC_AUTH_TOKEN="x"'])
+    check("cmd: a pasted export line is refused", not profile.exists(), str(said))
+    check("cmd: and it says why", any("does not look like" in m for m in said), str(said))
+
+    # The wiring that makes the command reachable at all.
+    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
+    check("cmd: dispatch entry",
+          '"logfare-api-setup": lambda a: self._cmd_logfare_key(a)' in app_src)
+    check("cmd: stays typeable mid-turn",
+          '"logfare-api-setup", "logfare-models",' in app_src)
+    check("cmd: help row", '("/logfare-api-setup [key]"' in app_src)
+    check("cmd: palette entry",
+          '"/logfare-api-setup", "use your own Logfare key' in app_src)
+
+
 def main() -> int:
     test_chat_filter()
     test_health_is_read()
@@ -321,6 +482,9 @@ def main() -> int:
     test_sources_prefers_live()
     test_declared_fallback_is_plausible()
     test_is_logfare()
+    with tempfile.TemporaryDirectory() as td:
+        test_profile_key(Path(td) / "a")
+        test_key_command(Path(td) / "b")
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
