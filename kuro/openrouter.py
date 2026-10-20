@@ -1,4 +1,4 @@
-﻿"""OpenRouter â€” a hosted Anthropic-protocol gateway, as a Kuro source.
+"""OpenRouter â€” a hosted Anthropic-protocol gateway, as a Kuro source.
 
 OpenRouter is a remote endpoint (``https://openrouter.ai/api``) that fronts
 hundreds of models behind one key. Measured on this box, not assumed:

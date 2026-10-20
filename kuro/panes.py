@@ -1,4 +1,4 @@
-﻿"""Multi-pane Kuro: tmux prefix keys plus a mailbox so the panes' agents can talk.
+"""Multi-pane Kuro: tmux prefix keys plus a mailbox so the panes' agents can talk.
 
 Layout
 ------

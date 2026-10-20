@@ -1,4 +1,4 @@
-﻿"""Regression suite for the boot screen's spinning logo.
+"""Regression suite for the boot screen's spinning logo.
 
 Run:  ./.venv/bin/python tests/test_boot.py
 

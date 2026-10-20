@@ -1,4 +1,4 @@
-﻿"""`/ad` regression suite: the gate, the interlock, the probe, the doctrine.
+"""`/ad` regression suite: the gate, the interlock, the probe, the doctrine.
 
 Run:  python tests/test_ad.py   (from an activated venv)
 

@@ -1,4 +1,4 @@
-﻿"""Run the `opencode` CLI behind a rotating, per-process IP.
+"""Run the `opencode` CLI behind a rotating, per-process IP.
 
 What this is
 ------------

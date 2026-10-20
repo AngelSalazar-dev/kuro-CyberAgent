@@ -1,4 +1,4 @@
-﻿"""Regressions for bugs found by pointing the harness at a hosted gateway live.
+"""Regressions for bugs found by pointing the harness at a hosted gateway live.
 
 Run:  python tests/test_gateway_auth.py   (from an activated venv)
 

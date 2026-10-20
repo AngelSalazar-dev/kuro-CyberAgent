@@ -1,4 +1,4 @@
-﻿# Kuro â€” Logfare profile
+# Kuro â€” Logfare profile
 #
 # This file is the credential profile for the local LiteLLM proxy. setup.sh
 # writes the real one next to this example as `source`, with mode 600, and

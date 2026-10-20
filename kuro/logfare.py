@@ -1,4 +1,4 @@
-﻿"""Logfare's live catalog â€” what the upstream serves *right now*.
+"""Logfare's live catalog â€” what the upstream serves *right now*.
 
 Logfare's model line-up moves faster than this repo does. A list baked into
 ``sources.py`` was correct the day it was written and wrong a month later: ten

@@ -1,4 +1,4 @@
-﻿"""Regression suite for the wave web and its tracker.
+"""Regression suite for the wave web and its tracker.
 
 Run:  python tests/test_web.py   (from an activated venv)
 

@@ -1,4 +1,4 @@
-﻿"""Regression suite for upstream source discovery and proxy start.
+"""Regression suite for upstream source discovery and proxy start.
 
 Run:  python tests/test_sources.py   (from an activated venv)
 

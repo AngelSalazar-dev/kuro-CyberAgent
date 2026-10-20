@@ -1,4 +1,4 @@
-﻿"""Regression suite for `/phish` and zim-pane.
+"""Regression suite for `/phish` and zim-pane.
 
 Run:  python tests/test_phish.py   (from an activated venv)
 

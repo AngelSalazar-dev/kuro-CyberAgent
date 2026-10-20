@@ -1,4 +1,4 @@
-﻿"""Native OpenAI-compatible transport â€” the second wire protocol Kuro speaks.
+"""Native OpenAI-compatible transport â€” the second wire protocol Kuro speaks.
 
 Kuro grew up on the Anthropic Messages protocol, and for a while every
 upstream was reached through a local LiteLLM proxy that translated Chat

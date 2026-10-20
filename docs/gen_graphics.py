@@ -1,4 +1,4 @@
-﻿"""Regenerate the animated README graphics (docs/hero.svg, docs/terminal.svg).
+"""Regenerate the animated README graphics (docs/hero.svg, docs/terminal.svg).
 
 Run:  python docs/gen_graphics.py   (from an activated venv)
 

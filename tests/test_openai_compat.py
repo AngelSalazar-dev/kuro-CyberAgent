@@ -1,4 +1,4 @@
-﻿"""Regression suite for the native OpenAI-compatible transport.
+"""Regression suite for the native OpenAI-compatible transport.
 
 Run:  python tests/test_openai_compat.py   (from an activated venv)
 

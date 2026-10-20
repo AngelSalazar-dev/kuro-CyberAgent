@@ -1,4 +1,4 @@
-﻿"""Runtime configuration, model registry and pricing."""
+"""Runtime configuration, model registry and pricing."""
 
 from __future__ import annotations
 

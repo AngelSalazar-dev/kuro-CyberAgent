@@ -1,4 +1,4 @@
-﻿"""Hacker themes for the TUI.
+"""Hacker themes for the TUI.
 
 Three fixed variants, each a tight palette so the whole UI reads as one neon
 system â€” no stray colors anywhere. Plus ``system``, which has no colours of its

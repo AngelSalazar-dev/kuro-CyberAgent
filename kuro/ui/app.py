@@ -1,4 +1,4 @@
-﻿"""The main Textual application."""
+"""The main Textual application."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-﻿"""`/ad` â€” an Active Directory campaign, and the interlock that keeps it safe.
+"""`/ad` â€” an Active Directory campaign, and the interlock that keeps it safe.
 
 The command is a **doctrine**, not an engine. `/bug-hunt` already is the
 campaign loop â€” recon, a read-only planner, one wave of concurrent agents,

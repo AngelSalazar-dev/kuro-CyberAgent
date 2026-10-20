@@ -1,4 +1,4 @@
-﻿"""AIHubMix â€” a hosted Anthropic-protocol gateway, as a Kuro source.
+"""AIHubMix â€” a hosted Anthropic-protocol gateway, as a Kuro source.
 
 AIHubMix is a remote endpoint (``https://aihubmix.com``) that fronts 857
 models behind one key. Measured on this box, not assumed:

@@ -1,4 +1,4 @@
-﻿"""/scope-validator: parsing, scope-file writing, the recon deny guard, ranking, tree.
+"""/scope-validator: parsing, scope-file writing, the recon deny guard, ranking, tree.
 
 Runs without a model or the network: the model reply is a fixture, and recon is
 checked through the deny-list gate before any socket would open.

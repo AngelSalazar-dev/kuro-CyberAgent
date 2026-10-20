@@ -1,4 +1,4 @@
-﻿"""`/phish` â€” clone a login page, serve it, tunnel it, harvest credentials.
+"""`/phish` â€” clone a login page, serve it, tunnel it, harvest credentials.
 
 The command is an **engine**, not a playbook. `/osint` hands a briefing to the
 agent and lets the loop do the work; `/phish` cannot, because a phishing page

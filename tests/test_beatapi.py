@@ -1,4 +1,4 @@
-﻿"""Regression suite for the BeatAPI source.
+"""Regression suite for the BeatAPI source.
 
 Run:  python tests/test_beatapi.py   (from an activated venv)
 

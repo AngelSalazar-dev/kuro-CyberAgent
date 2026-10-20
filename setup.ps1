@@ -1,4 +1,4 @@
-﻿# setup.ps1 - configure the Logfare route for Kuro on Windows.
+# setup.ps1 - configure the Logfare route for Kuro on Windows.
 #
 #   .\setup.ps1
 #

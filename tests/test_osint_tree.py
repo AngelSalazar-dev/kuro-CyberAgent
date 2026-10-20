@@ -1,4 +1,4 @@
-﻿"""Regression suite for the `/osint` result tree.
+"""Regression suite for the `/osint` result tree.
 
 Run:  python tests/test_osint_tree.py   (from an activated venv)
 

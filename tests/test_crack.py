@@ -1,4 +1,4 @@
-﻿"""`/crack` regression suite: identification, arithmetic, the ladder, the real crack.
+"""`/crack` regression suite: identification, arithmetic, the ladder, the real crack.
 
 Run:  python tests/test_crack.py   (from an activated venv)
 

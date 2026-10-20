@@ -1,4 +1,4 @@
-﻿"""Regression suite for the round caps, auto-continue and auto-compact.
+"""Regression suite for the round caps, auto-continue and auto-compact.
 
 Run:  ./.venv/bin/python tests/test_agent_limits.py
 

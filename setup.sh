@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # setup.sh â€” configure the Logfare route for Kuro.
 #
 #   ./setup.sh

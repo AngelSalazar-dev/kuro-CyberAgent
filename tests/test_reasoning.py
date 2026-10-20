@@ -1,4 +1,4 @@
-﻿"""Regression suite for the model-reasoning display.
+"""Regression suite for the model-reasoning display.
 
 Run:  ./.venv/bin/python tests/test_reasoning.py
 

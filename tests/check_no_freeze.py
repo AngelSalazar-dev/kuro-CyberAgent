@@ -1,4 +1,4 @@
-﻿"""Prove the event loop keeps ticking while a slow bash tool runs."""
+"""Prove the event loop keeps ticking while a slow bash tool runs."""
 import asyncio, sys, time
 from pathlib import Path
 sys.path.insert(0, "/home/zim/Projects/Kuro")

@@ -1,4 +1,4 @@
-﻿"""`/model` must police against the ACTIVE gateway's catalog, not Logfare's.
+"""`/model` must police against the ACTIVE gateway's catalog, not Logfare's.
 
 Run:  python tests/test_model_switch.py   (from an activated venv)
 

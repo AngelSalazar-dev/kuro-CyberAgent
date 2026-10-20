@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # run.sh â€” run Kuro straight from the checkout.
 #
 # The real launcher lives in packaging/; it needs KURO_ROOT to point at the

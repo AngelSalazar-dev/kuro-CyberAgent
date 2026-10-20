@@ -1,4 +1,4 @@
-﻿"""IteraCompute â€” a free-model upstream, reached directly by default.
+"""IteraCompute â€” a free-model upstream, reached directly by default.
 
 IteraCompute (``https://api.iteracompute.com``) is **OpenAI-compatible only**.
 Measured on this box, 2026-10-19: ``POST /v1/messages`` answers ``404

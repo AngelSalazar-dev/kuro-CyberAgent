@@ -1,4 +1,4 @@
-﻿"""Regression suite for the deliverable check in ``Agent.run_turn``.
+"""Regression suite for the deliverable check in ``Agent.run_turn``.
 
 Run:  python tests/test_deliverable.py   (from an activated venv)
 

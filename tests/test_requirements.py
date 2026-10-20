@@ -1,4 +1,4 @@
-﻿"""Guards the dependency split between the harness and the LiteLLM proxy.
+"""Guards the dependency split between the harness and the LiteLLM proxy.
 
 Run:  python tests/test_requirements.py
 

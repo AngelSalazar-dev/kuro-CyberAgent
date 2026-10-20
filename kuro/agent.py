@@ -1,4 +1,4 @@
-﻿"""The agent loop.
+"""The agent loop.
 
 ``Agent.run_turn`` is an async generator: it streams the model's reply,
 executes any tools it asks for (through the permission gate), feeds the

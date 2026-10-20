@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # install.sh â€” one-line installer for Kuro.
 #
 #   curl -fsSL https://raw.githubusercontent.com/AngelSalazar-dev/kuro-CyberAgent/main/install.sh | bash

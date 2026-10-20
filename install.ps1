@@ -1,4 +1,4 @@
-﻿# install.ps1 — one-line installer for Kuro on Windows.
+# install.ps1 — one-line installer for Kuro on Windows.
 #
 # Clones Kuro into %LOCALAPPDATA%\kuro, builds a virtualenv there and
 # installs the dependencies into it, then drops a `kuro` launcher into
@@ -28,10 +28,18 @@
 
 $ErrorActionPreference = 'Stop'
 
-$REPO        = $env:KURO_REPO        -or 'https://github.com/AngelSalazar-dev/kuro-CyberAgent.git'
-$INSTALL_DIR = $env:KURO_INSTALL_DIR -or (Join-Path $env:LOCALAPPDATA 'kuro')
-$BIN_DIR     = $env:KURO_BIN_DIR     -or (Join-Path $env:USERPROFILE 'bin')
-$KURO_HOME   = $env:KURO_HOME        -or (Join-Path $env:USERPROFILE '.kuro')
+$REPO        = $env:KURO_REPO
+if (-not $REPO) { $REPO = 'https://github.com/AngelSalazar-dev/kuro-CyberAgent.git' }
+
+$INSTALL_DIR = $env:KURO_INSTALL_DIR
+if (-not $INSTALL_DIR) { $INSTALL_DIR = Join-Path $env:LOCALAPPDATA 'kuro' }
+
+$BIN_DIR     = $env:KURO_BIN_DIR
+if (-not $BIN_DIR) { $BIN_DIR = Join-Path $env:USERPROFILE 'bin' }
+
+$KURO_HOME   = $env:KURO_HOME
+if (-not $KURO_HOME) { $KURO_HOME = Join-Path $env:USERPROFILE '.kuro' }
+
 $PROFILE     = Join-Path $KURO_HOME 'logfare\source'
 
 function bold   { param($msg) Write-Host $msg -ForegroundColor White }
@@ -41,20 +49,43 @@ function warn   { param($msg) Write-Warning "  [WARN] $msg" }
 function die    { param($msg) Write-Error "  [ERR] $msg" -ErrorAction Stop }
 function note   { param($msg) Write-Host "      $msg" -ForegroundColor Cyan }
 
+# Helper: run a Python one-liner via a temp file to avoid PowerShell quoting issues
+function py_run {
+    param($cmd, $code)
+    $tmp = Join-Path $env:TEMP ('kuro_py_' + [System.Guid]::NewGuid().ToString('N') + '.py')
+    Set-Content -Path $tmp -Value $code -Encoding UTF8
+    $out = & $cmd $tmp 2>$null
+    $code_exit = $LASTEXITCODE
+    Remove-Item -Path $tmp -ErrorAction SilentlyContinue
+    if ($code_exit -ne 0) { return $null }
+    return $out
+}
+
 # --- 0. preconditions --------------------------------------------------------
 
 step "Checking prerequisites"
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+$gitCmd = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitCmd) {
   die "git is required."
 }
-$PY = (Get-Command python -ErrorAction SilentlyContinue) -or (Get-Command python3 -ErrorAction SilentlyContinue)
-if (-not $PY) {
+
+$pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonCmd) {
+  $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue
+}
+if (-not $pythonCmd) {
   die "python not found — install Python 3.11 or newer."
 }
-$py_version = & $PY.Source -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])'
-$py_major_minor = & $PY.Source -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>$null
-if ($LASTEXITCODE -ne 0) {
-  die "Python 3.11+ is required; $($PY.Source) is $py_version"
+$PY = $pythonCmd.Source
+
+# Check Python version using a temp file to avoid PS quoting issues
+$py_version = py_run $PY 'import sys; print(".".join(map(str, sys.version_info[:3])))'
+if (-not $py_version) {
+  die "could not determine Python version for $PY"
+}
+$py_ok = py_run $PY 'import sys; print(1 if sys.version_info >= (3, 11) else 0)'
+if ($py_ok -ne '1') {
+  die "Python 3.11+ is required; $PY is $py_version"
 }
 ok "git and $py_version"
 
@@ -96,29 +127,46 @@ if ($env:KURO_SKIP_DEPS -eq '1') {
   if (Test-Path -Path $VENV_PY -PathType Leaf) {
     ok "venv already present"
   } else {
-    & $PY.Source -m venv (Join-Path $INSTALL_DIR '.venv') 2>$null
+    & $PY @('-m', 'venv', (Join-Path $INSTALL_DIR '.venv')) 2>$null
     ok "venv at $INSTALL_DIR\.venv"
   }
 
   step "Installing dependencies (a minute or two the first time)"
-  function _install_deps {
-    & $VENV_PY -m pip install --quiet --disable-pip-version-check --upgrade pip 2>$null
+  # Read requirements.txt, filter out the trailing '-e .' line (we install the
+  # package separately below from the correct directory).
+  $req_path = Join-Path $INSTALL_DIR 'requirements.txt'
+  $req_lines = Get-Content -Path $req_path
+  $deps = @()
+  foreach ($line in $req_lines) {
+    $trimmed = $line.Trim()
+    if ($trimmed -and $trimmed -notlike '-e .*') {
+      $deps += $trimmed
+    }
+  }
+  $deps_file = Join-Path $env:TEMP 'kuro_deps.txt'
+  Set-Content -Path $deps_file -Value $deps -Encoding UTF8
+
+  try {
+    & $VENV_PY @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '--upgrade', 'pip') 2>$null
+    ok "pip upgraded"
+    & $VENV_PY @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-r', $deps_file) 2>$null
+    ok "dependencies installed"
+    # Install kuro itself in editable mode from the checkout directory.
     Push-Location -Path $INSTALL_DIR -ErrorAction Stop
     try {
-      & $VENV_PY -m pip install --quiet --disable-pip-version-check -r (Join-Path $INSTALL_DIR 'requirements.txt') 2>$null
+      & $VENV_PY @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-e', '.') 2>$null
     } finally {
       Pop-Location
     }
-  }
-  try {
-    _install_deps
-    ok "dependencies installed"
+    ok "kuro installed"
   } catch {
     die "could not install the dependencies — see the pip output above."
   }
+  Remove-Item -Path $deps_file -ErrorAction SilentlyContinue
+
   # Stamp the requirements hash so the launcher's incremental refresh sees a
   # matching venv and does nothing on the first launch.
-  $hash = (Get-FileHash -Path (Join-Path $INSTALL_DIR 'requirements.txt') -Algorithm SHA256).Hash
+  $hash = (Get-FileHash -Path $req_path -Algorithm SHA256).Hash
   Set-Content -Path (Join-Path $INSTALL_DIR '.venv\.requirements.sha') -Value $hash -Encoding UTF8
 }
 
@@ -132,22 +180,18 @@ if (-not (Test-Path -Path $BIN_DIR -PathType Container)) {
 # so the real launcher (which lives in packaging/) finds the venv and the
 # profile no matter where `kuro` is invoked from. Written fresh each run so
 # a moved install re-points itself.
-$shim = @"
+$shim = @'
 #!/usr/bin/env pwsh
 # kuro — installed launcher (written by install.ps1).
 # Pins the checkout and hands every argument to the real launcher.
-$env:KURO_ROOT = "$INSTALL_DIR"
-& "$INSTALL_DIR\packaging\kuro.ps1" @args
-"@
+$env:KURO_ROOT = "__INSTALL_DIR__"
+& "__INSTALL_DIR__\packaging\kuro.ps1" @args
+'@
+$shim = $shim -replace '__INSTALL_DIR__', $INSTALL_DIR
 Set-Content -Path (Join-Path $BIN_DIR 'kuro.ps1') -Value $shim -Encoding UTF8
 
 # Also create a plain `kuro` shim (without .ps1) for convenience.
-$shim2 = @"
-#!/usr/bin/env pwsh
-$env:KURO_ROOT = "$INSTALL_DIR"
-& "$INSTALL_DIR\packaging\kuro.ps1" @args
-"@
-Set-Content -Path (Join-Path $BIN_DIR 'kuro') -Value $shim2 -Encoding UTF8
+Set-Content -Path (Join-Path $BIN_DIR 'kuro') -Value $shim -Encoding UTF8
 
 ok "$BIN_DIR\kuro"
 
@@ -167,14 +211,6 @@ if ($env:KURO_SKIP_SETUP -eq '1') {
   step "Route already configured"
   ok "$PROFILE exists"
 } else {
-  # setup.ps1 does not prompt: it seeds the profile from the key shipped in the
-  # checkout, so a fresh install finishes unattended. stdin is still pointed at
-  # $null rather than left as this script's own, so a future read in setup.ps1
-  # cannot eat the rest of a pipeline.
-  #
-  # A setup.ps1 that fails must not fail the install: a proxy that will not
-  # start, an upstream that is down, or a machine with no network all leave a
-  # working checkout, and the launcher retries on launch.
   step "Configuring the Logfare route"
   try {
     & "$INSTALL_DIR\setup.ps1" 2>$null
@@ -187,9 +223,9 @@ if ($env:KURO_SKIP_SETUP -eq '1') {
 # --- done --------------------------------------------------------------------
 
 Write-Host ""
-bold "+----------------------------------------------+"
-bold "|  installed.                                  |"
-bold "+----------------------------------------------+"
+bold "+--------------------------------------------------------------+"
+bold "|  installed.                                                  |"
+bold "+--------------------------------------------------------------+"
 Write-Host ""
 Write-Host "    kuro                 # launch, from anywhere"
 Write-Host "    kuro -C C:\proj      # run against another directory"

@@ -1,4 +1,4 @@
-﻿"""AntSeed â€” the P2P marketplace, reached through its local buyer proxy.
+"""AntSeed â€” the P2P marketplace, reached through its local buyer proxy.
 
 AntSeed is not a hosted gateway like TokenHarbour or OpenRouter. It is a peer
 to peer network: independent sellers advertise models, and a **buyer** process

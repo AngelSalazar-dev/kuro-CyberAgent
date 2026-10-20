@@ -1,4 +1,4 @@
-﻿"""InfronAI â€” a free-model upstream, reached directly by default.
+"""InfronAI â€” a free-model upstream, reached directly by default.
 
 Infron (``https://infron.ai``, API at ``https://llm.onerouter.pro``) is a model
 marketplace that fronts a few hundred models behind one key. Measured on this

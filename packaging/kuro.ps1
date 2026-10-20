@@ -1,4 +1,4 @@
-﻿# kuro.ps1 - launcher for Kuro on Windows.
+# kuro.ps1 - launcher for Kuro on Windows.
 #
 # Starts the LiteLLM -> Logfare proxy if it is not already up, then runs the
 # harness. Every argument is forwarded verbatim to `python -m kuro`, so

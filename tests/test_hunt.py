@@ -1,4 +1,4 @@
-﻿"""`/bug-hunt` regression suite: findings parsing, the wave loop, stop, reports.
+"""`/bug-hunt` regression suite: findings parsing, the wave loop, stop, reports.
 
 Run:  python tests/test_hunt.py   (from an activated venv)
 

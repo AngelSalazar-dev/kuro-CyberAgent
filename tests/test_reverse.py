@@ -1,4 +1,4 @@
-﻿"""`/reverse-engineer` regression suite: identify, inventory, probe, brief.
+"""`/reverse-engineer` regression suite: identify, inventory, probe, brief.
 
 Run:  python tests/test_reverse.py   (from an activated venv)
 

@@ -1,4 +1,4 @@
-﻿"""The KURO ASCII banner, in a few styles.
+"""The KURO ASCII banner, in a few styles.
 
 Each glyph is 6 rows tall. The boot screen reveals them with a per-column
 glitch/typewriter animation.

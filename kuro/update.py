@@ -1,4 +1,4 @@
-﻿"""Self-update on launch â€” detect new commits on the upstream and apply them.
+"""Self-update on launch â€” detect new commits on the upstream and apply them.
 
 Kuro is installed editable from its own checkout (``requirements.txt``
 ends in ``-e .``, and ``packaging/kuro`` points ``PYTHONPATH`` at the

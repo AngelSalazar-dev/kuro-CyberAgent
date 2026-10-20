@@ -1,4 +1,4 @@
-﻿"""Layout widgets: header, chat pane, status bar."""
+"""Layout widgets: header, chat pane, status bar."""
 
 from __future__ import annotations
 

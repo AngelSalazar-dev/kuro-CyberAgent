@@ -1,4 +1,4 @@
-﻿"""BeatAPI â€” a hosted Anthropic-protocol gateway, as a Kuro source.
+"""BeatAPI â€” a hosted Anthropic-protocol gateway, as a Kuro source.
 
 BeatAPI is a remote capability layer (``https://beatapi.io``) that fronts text,
 image and video models, social-data actions and web tools behind one key. This

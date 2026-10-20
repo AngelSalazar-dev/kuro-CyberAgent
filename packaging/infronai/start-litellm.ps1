@@ -1,4 +1,4 @@
-﻿# start-litellm.ps1 - run the LiteLLM translation proxy for Kuro on Windows.
+# start-litellm.ps1 - run the LiteLLM translation proxy for Kuro on Windows.
 #
 #   Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4001 --â–¶ Logfare (OpenAI)
 #

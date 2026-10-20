@@ -1,4 +1,4 @@
-﻿"""`/crack` â€” offline password cracking, and the honest arithmetic it runs on.
+"""`/crack` â€” offline password cracking, and the honest arithmetic it runs on.
 
 Why this command exists
 -----------------------

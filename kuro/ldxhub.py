@@ -1,4 +1,4 @@
-﻿"""LDXHub â€” a document-processing job gateway. Not a chat source.
+"""LDXHub â€” a document-processing job gateway. Not a chat source.
 
 Measured against https://gw.ldxhub.io (docs at gw.portal.ldxhub.io):
 

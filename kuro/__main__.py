@@ -1,4 +1,4 @@
-﻿"""Command-line entrypoint: ``python -m kuro`` / ``kuro``."""
+"""Command-line entrypoint: ``python -m kuro`` / ``kuro``."""
 
 from __future__ import annotations
 

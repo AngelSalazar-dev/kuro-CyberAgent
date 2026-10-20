@@ -1,4 +1,4 @@
-﻿# run.ps1 - run Kuro straight from the checkout on Windows.
+# run.ps1 - run Kuro straight from the checkout on Windows.
 #
 # The real launcher lives in packaging/; it needs KURO_ROOT to point at the
 # checkout (its own directory is packaging/). This shim does exactly that, so

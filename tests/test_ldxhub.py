@@ -1,4 +1,4 @@
-﻿"""Regression suite for the LDXHub document gateway.
+"""Regression suite for the LDXHub document gateway.
 
 Run:  python tests/test_ldxhub.py   (from an activated venv)
 

@@ -1,4 +1,4 @@
-﻿"""Regression suite for the TokenHarbour source.
+"""Regression suite for the TokenHarbour source.
 
 Run:  python tests/test_tokenharbour.py   (from an activated venv)
 

@@ -1,4 +1,4 @@
-﻿"""Target scope for bug-bounty engagements: ``allow.yaml`` + ``out-of-scope.yaml``.
+"""Target scope for bug-bounty engagements: ``allow.yaml`` + ``out-of-scope.yaml``.
 
 Two files, one job each:
 

@@ -1,4 +1,4 @@
-﻿"""Upstream "sources" â€” the LiteLLM proxies Kuro can talk through.
+"""Upstream "sources" â€” the LiteLLM proxies Kuro can talk through.
 
 Kuro speaks the Anthropic Messages protocol to whatever ``ANTHROPIC_BASE_URL``
 points at. That is the default, not the only option: an endpoint that serves

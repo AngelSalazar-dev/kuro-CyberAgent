@@ -1,4 +1,4 @@
-﻿"""Regression suite for the AIHubMix source.
+"""Regression suite for the AIHubMix source.
 
 Run:  python tests/test_aihubmix.py   (from an activated venv)
 

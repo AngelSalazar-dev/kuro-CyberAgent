@@ -1,4 +1,4 @@
-﻿"""UnoRouter â€” a hosted Anthropic-protocol gateway, as a Kuro source.
+"""UnoRouter â€” a hosted Anthropic-protocol gateway, as a Kuro source.
 
 UnoRouter is a remote endpoint (``https://api.unorouter.com``) that fronts a few
 hundred models behind one key. Measured on this box, not assumed:

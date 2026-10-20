@@ -1,4 +1,4 @@
-﻿"""`/osint` â€” targeted open-source-intelligence recon.
+"""`/osint` â€” targeted open-source-intelligence recon.
 
 The command is a **router**, not an engine. It picks a *kind* (email, phone,
 facebook, â€¦), validates the target for that kind, opens a case directory, and

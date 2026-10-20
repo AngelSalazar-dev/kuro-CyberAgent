@@ -1,4 +1,4 @@
-﻿"""Regression suite for `/osint`.
+"""Regression suite for `/osint`.
 
 Run:  python tests/test_osint.py   (from an activated venv)
 

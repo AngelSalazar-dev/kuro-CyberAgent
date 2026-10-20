@@ -1,4 +1,4 @@
-﻿"""Regression suite for the markdown renderer.
+"""Regression suite for the markdown renderer.
 
 Run:  python tests/test_markdown.py   (from an activated venv)
 

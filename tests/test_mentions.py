@@ -1,4 +1,4 @@
-﻿"""`@`-mention completion: selection, ranking, and what accepting one does.
+"""`@`-mention completion: selection, ranking, and what accepting one does.
 
 Offline and app-free. The selection logic lives at module level precisely so it
 can be exercised here â€” a popup that needs a terminal to say what it would have

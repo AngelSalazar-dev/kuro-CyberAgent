@@ -1,4 +1,4 @@
-﻿"""Inline completion popup for the prompt.
+"""Inline completion popup for the prompt.
 
 Two triggers:
 

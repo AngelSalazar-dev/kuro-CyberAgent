@@ -1,4 +1,4 @@
-﻿"""The tool layer: JSON schemas, permission previews and execution.
+"""The tool layer: JSON schemas, permission previews and execution.
 
 The model is offered bash, read_file, write_file, edit_file, glob, grep,
 list_dir, search_web and web_fetch in an ordinary session. Reads are

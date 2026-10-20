@@ -1,4 +1,4 @@
-﻿"""Assistant markdown, rendered as the thing it describes.
+"""Assistant markdown, rendered as the thing it describes.
 
 A model answers in markdown whether or not anything asked it to: `#` for a
 heading, `**` for emphasis, a dash and a space for a bullet, a fenced block for

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # start-litellm.sh â€” run the LiteLLM translation proxy for Kuro.
 #
 #   Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4001 --â–¶ Logfare (OpenAI)

@@ -1,4 +1,4 @@
-﻿"""`/shodan-*` regression suite: the key, the plan, the query, the facets, the turn.
+"""`/shodan-*` regression suite: the key, the plan, the query, the facets, the turn.
 
 Run:  python tests/test_shodan.py
 

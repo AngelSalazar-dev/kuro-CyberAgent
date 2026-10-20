@@ -1,4 +1,4 @@
-﻿"""Regression suite for the one-line installer and the launcher it writes.
+"""Regression suite for the one-line installer and the launcher it writes.
 
 Run:  python tests/test_install.py
 

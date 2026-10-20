@@ -1,4 +1,4 @@
-﻿"""Web search and page fetch â€” the tools the model uses to learn something
+"""Web search and page fetch â€” the tools the model uses to learn something
 that is not in the repository.
 
 Search is a *chain* of key-free backends rather than a single engine, and the

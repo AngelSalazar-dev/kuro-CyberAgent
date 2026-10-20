@@ -1,4 +1,4 @@
-﻿"""Regression suite for the OpenRouter source.
+"""Regression suite for the OpenRouter source.
 
 Run:  python tests/test_openrouter.py   (from an activated venv)
 

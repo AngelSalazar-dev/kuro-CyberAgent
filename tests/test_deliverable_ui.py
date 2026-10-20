@@ -1,4 +1,4 @@
-﻿"""App-level coverage for the deliverable check, driven through the live TUI.
+"""App-level coverage for the deliverable check, driven through the live TUI.
 
 Run:  python tests/test_deliverable_ui.py   (from an activated venv)
 

@@ -1,4 +1,4 @@
-﻿"""Regression suite for the InfronAI source.
+"""Regression suite for the InfronAI source.
 
 Run:  python tests/test_infronai.py   (from an activated venv)
 

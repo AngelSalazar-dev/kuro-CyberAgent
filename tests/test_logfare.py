@@ -1,4 +1,4 @@
-﻿"""Regression suite for the live Logfare catalog.
+"""Regression suite for the live Logfare catalog.
 
 Run:  python tests/test_logfare.py   (from an activated venv)
 

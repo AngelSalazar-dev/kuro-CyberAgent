@@ -1,4 +1,4 @@
-﻿"""TokenHarbour â€” a hosted Anthropic-protocol gateway, as a Kuro source.
+"""TokenHarbour â€” a hosted Anthropic-protocol gateway, as a Kuro source.
 
 TokenHarbour is not a local LiteLLM proxy like Logfare and Token Juice: it is a
 remote endpoint (``https://tokenharbor.ai``) that speaks the same Anthropic

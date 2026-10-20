@@ -1,4 +1,4 @@
-﻿"""`/zim-opencode`: the proxy pool, the rotation, and the launch decision.
+"""`/zim-opencode`: the proxy pool, the rotation, and the launch decision.
 
 Run:  python tests/test_opencode.py   (from an activated venv)
 

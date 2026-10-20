@@ -1,4 +1,4 @@
-﻿"""Pane messaging: mailbox semantics, tool gating, and the generated tmux config.
+"""Pane messaging: mailbox semantics, tool gating, and the generated tmux config.
 
 Run:  python tests/test_panes.py   (from an activated venv)
 """

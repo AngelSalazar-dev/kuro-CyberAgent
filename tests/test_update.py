@@ -1,4 +1,4 @@
-﻿"""Regression suite for the launch-time self-update.
+"""Regression suite for the launch-time self-update.
 
 Run:  python tests/test_update.py   (from an activated venv)
 

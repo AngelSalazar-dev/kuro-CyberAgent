@@ -1,4 +1,4 @@
-﻿"""Regression suite for the UnoRouter source.
+"""Regression suite for the UnoRouter source.
 
 Run:  python tests/test_unorouter.py   (from an activated venv)
 

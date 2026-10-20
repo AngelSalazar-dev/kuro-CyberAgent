@@ -1,4 +1,4 @@
-﻿"""Kuro â€” an agentic coding CLI over the Anthropic Messages API.
+"""Kuro â€” an agentic coding CLI over the Anthropic Messages API.
 
 A green-on-black hacker TUI that streams model output token by token, runs
 sandboxed tools behind a permission gate, and enforces an optional network

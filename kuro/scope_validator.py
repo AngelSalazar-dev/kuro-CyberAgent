@@ -1,4 +1,4 @@
-﻿"""`/scope-validator` â€” turn a pasted bug-bounty programme overview into scope files.
+"""`/scope-validator` â€” turn a pasted bug-bounty programme overview into scope files.
 
 The operator pastes the whole programme page: the in-scope and out-of-scope
 sections, the rules, the reward tiers, all of it. This module does three things

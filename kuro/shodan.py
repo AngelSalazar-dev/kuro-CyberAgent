@@ -1,4 +1,4 @@
-﻿"""Shodan, wired into the agent loop â€” on whatever plan the key actually has.
+"""Shodan, wired into the agent loop â€” on whatever plan the key actually has.
 
 Shodan's API is tiered, and the tier is not visible from the error message:
 

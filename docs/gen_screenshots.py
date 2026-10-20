@@ -1,4 +1,4 @@
-﻿"""Regenerate the README screenshots (docs/screenshots/*.png).
+"""Regenerate the README screenshots (docs/screenshots/*.png).
 
 Run:  python docs/gen_screenshots.py   (from an activated venv)
 

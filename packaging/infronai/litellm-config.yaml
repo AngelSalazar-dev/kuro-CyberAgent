@@ -1,4 +1,4 @@
-﻿# InfronAI â€” the LiteLLM translation proxy.
+# InfronAI â€” the LiteLLM translation proxy.
 #
 #     Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4003 --â–¶ InfronAI (OpenAI)
 #

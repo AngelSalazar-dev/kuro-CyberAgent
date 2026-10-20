@@ -1,4 +1,4 @@
-﻿# Kuro â€” the harness's dependencies.
+# Kuro â€” the harness's dependencies.
 #
 #   python -m venv .venv && source .venv/bin/activate
 #   pip install -r requirements.txt

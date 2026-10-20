@@ -1,4 +1,4 @@
-﻿"""Regression suite for the IteraCompute source.
+"""Regression suite for the IteraCompute source.
 
 Run:  python tests/test_iteracompute.py   (from an activated venv)
 
