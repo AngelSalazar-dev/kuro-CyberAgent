@@ -28,13 +28,13 @@ keeps going until the job is done â€” while you watch it work.
 
 ### Cold start
 
-<img src="docs/screenshots/01-boot.png" alt="KURO boot screen â€” ASCII banner, system check, shell ready" width="880">
+<img src="docs/screenshots/01-boot.svg" alt="KURO boot screen — ASCII banner, system check, shell ready" width="880">
 
 *Banner reveal, a live system check, then the shell takes over.*
 
 ### The shell
 
-<img src="docs/screenshots/02-shell.png" alt="the KURO shell â€” loop rail, transcript with a live tool card, telemetry rail, status bar" width="880">
+<img src="docs/screenshots/02-shell.svg" alt="the KURO shell — loop rail, transcript with a live tool card, telemetry rail, status bar" width="880">
 
 *A transcript that streams, a tool card that shows the call while it runs,
 and two rails that keep the loop and the cost in view. The left rail is the
@@ -45,7 +45,7 @@ throughput, how full the context is, what it has cost, which files it touched.*
 <tr>
 <td width="50%">
 
-<img src="docs/screenshots/03-models.png" alt="switching models at runtime">
+<img src="docs/screenshots/03-models.svg" alt="switching models at runtime">
 
 **Swap engines mid-session.**<br>
 <sub>Prices in, prices out. No restart, no lost context.</sub>
@@ -53,7 +53,7 @@ throughput, how full the context is, what it has cost, which files it touched.*
 </td>
 <td width="50%">
 
-<img src="docs/screenshots/04-modes.png" alt="the mode list">
+<img src="docs/screenshots/04-modes.svg" alt="the mode list">
 
 **Change how much rope it gets.**<br>
 <sub>From read-only spectator to full send.</sub>

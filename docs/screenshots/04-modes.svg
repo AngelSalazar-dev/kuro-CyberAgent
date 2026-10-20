@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" role="img" aria-label="Kuro modes">
+  <rect width="880" height="200" fill="#040704"/>
+  <text x="440" y="100" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="32" font-weight="700" fill="#00ff41" letter-spacing="4">KURO</text>
+  <text x="440" y="145" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="14" fill="#7dffb0">change how much rope it gets · read-only to full auto</text>
+</svg>
