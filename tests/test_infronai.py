@@ -1,21 +1,21 @@
-"""Regression suite for the InfronAI source.
+﻿"""Regression suite for the InfronAI source.
 
 Run:  python tests/test_infronai.py   (from an activated venv)
 
 Protects what is particular about this provider:
 
-* **It is a local proxy, not a hosted gateway — even though the upstream speaks
+* **It is a local proxy, not a hosted gateway â€” even though the upstream speaks
   Messages.** Infron serves ``/v1/messages`` natively, but every ``:free`` chat
   model lists ``supported_endpoint_types: ["openai"]`` and nothing else, so a
   session aimed at ``llm.onerouter.pro`` cannot run the models this source
   exists for. ``is_infronai`` must match ``localhost:4003`` and must NOT match
   the upstream; calling the upstream a working source would hide exactly that.
 * **Free is a read 0/0 price, or the ``:free`` suffix when no price was read.**
-  A *missing* price is not free — 120 of the 503 live entries carry nulls — so
+  A *missing* price is not free â€” 120 of the 503 live entries carry nulls â€” so
   ``priced`` is what keeps an unpriced model out of the free list.
 * **Three catalog traps are filtered, not named.** Non-text output (the
   free-priced video generators), ``is_display_only`` entries, and LLMs that
-  only list ``openai-response`` — none can answer a turn through a Chat
+  only list ``openai-response`` â€” none can answer a turn through a Chat
   Completions proxy.
 * **Modality strings are not case-consistent.** The catalog carries both
   ``text`` and ``Text``; ``_strings`` lowercases, so the filter survives.
@@ -211,7 +211,7 @@ def _clean_env():
 # ---------------------------------------------------------------------------
 
 def test_free_is_a_read_price_or_the_suffix() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     models = inf._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -240,7 +240,7 @@ def test_free_is_a_read_price_or_the_suffix() -> None:
 
 
 def test_priced_records_a_read() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     by_id = {m.id: m for m in inf._parse_models(CATALOG)}
     check("priced: a real pair counts as priced",
@@ -259,8 +259,8 @@ def test_priced_records_a_read() -> None:
 
 
 def test_chat_filters_three_traps() -> None:
-    """Modality, display-only and endpoint — each excludes something real."""
-    from zimzilla import infronai as inf
+    """Modality, display-only and endpoint â€” each excludes something real."""
+    from kuro import infronai as inf
 
     by_id = {m.id: m for m in inf._parse_models(CATALOG)}
     check("chat: a text model is chat",
@@ -291,7 +291,7 @@ def test_chat_filters_three_traps() -> None:
 
 def test_modalities_are_lowercased() -> None:
     """The catalog carries both `text` and `Text`; the filter must not care."""
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     check("strings: a list is lowercased",
           inf._strings(["Text", "IMAGE"]) == ("text", "image"),
@@ -309,7 +309,7 @@ def test_modalities_are_lowercased() -> None:
 
 
 def test_usable_free_models_sorts_by_context() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with mock.patch("urllib.request.urlopen", _stub()):
         inf.clear_cache()
@@ -326,8 +326,8 @@ def test_usable_free_models_sorts_by_context() -> None:
 
 
 def test_context_and_output_come_from_the_catalog() -> None:
-    from zimzilla import infronai as inf
-    from zimzilla import sources as s
+    from kuro import infronai as inf
+    from kuro import sources as s
 
     by_id = {m.id: m for m in inf._parse_models(CATALOG)}
     check("context: the catalog figure is reported unchanged",
@@ -352,8 +352,8 @@ def test_context_and_output_come_from_the_catalog() -> None:
 
 
 def test_price_for() -> None:
-    from zimzilla import infronai as inf
-    from zimzilla import sources as s
+    from kuro import infronai as inf
+    from kuro import sources as s
 
     models = inf._parse_models(CATALOG)
     check("price: a free model is (0, 0)",
@@ -384,7 +384,7 @@ def test_price_for() -> None:
 
 def test_catalog_is_public_and_the_url_is_right() -> None:
     seen, opener = _capture()
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with mock.patch("urllib.request.urlopen", opener):
         inf.clear_cache()
@@ -417,7 +417,7 @@ def test_catalog_is_public_and_the_url_is_right() -> None:
 
 def test_fetch_is_total() -> None:
     """A network failure is returned, never raised."""
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with mock.patch("urllib.request.urlopen",
                     _stub(error=urllib.error.URLError("down"))):
@@ -433,7 +433,7 @@ def test_fetch_is_total() -> None:
     check("fetch: a 401 names the setup command",
           models is None and "/infronai-api-setup" in err, repr(err))
 
-    # A 403 here is Cloudflare's bot rule, not a bad key — saying "check your
+    # A 403 here is Cloudflare's bot rule, not a bad key â€” saying "check your
     # key" would send the operator to fix something that is not wrong.
     with mock.patch("urllib.request.urlopen",
                     _stub(error=urllib.error.HTTPError("u", 403, "no", {}, None))):
@@ -461,7 +461,7 @@ def test_fetch_is_total() -> None:
 
 
 def test_cache_is_keyed_and_expires() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with mock.patch("urllib.request.urlopen", _stub()):
         inf.clear_cache()
@@ -488,7 +488,7 @@ def test_cache_is_keyed_and_expires() -> None:
 
 
 def test_default_free_model() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with mock.patch("urllib.request.urlopen", _stub()):
         inf.clear_cache()
@@ -505,7 +505,7 @@ def test_default_free_model() -> None:
 
 def test_is_infronai_matches_only_the_proxy() -> None:
     """The upstream speaks Messages but not for the free models."""
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     check("endpoint: the local proxy matches",
           inf.is_infronai("http://localhost:4003"))
@@ -519,7 +519,7 @@ def test_is_infronai_matches_only_the_proxy() -> None:
     check("endpoint: the generic alias is the same test",
           inf.active_endpoint is inf.is_infronai)
 
-    from zimzilla import sources as s
+    from kuro import sources as s
     check("endpoint: sources identifies it by port",
           s.active_key("http://localhost:4003") == "infronai",
           str(s.active_key("http://localhost:4003")))
@@ -528,7 +528,7 @@ def test_is_infronai_matches_only_the_proxy() -> None:
 
 
 def test_port_does_not_collide() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     check("port: 4003 is not Token Juice, Logfare or IteraCompute",
           inf.PROXY_PORT == 4003
@@ -538,13 +538,13 @@ def test_port_does_not_collide() -> None:
 
 
 def test_profile_roundtrip(tmp: Path) -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with _clean_env():
         path = inf.save_key("inf_test_key_1234567890",
                             "deepseek/deepseek-v4.1-flash:free")
-        check("profile: written under ZIMZILLA_HOME",
-              path == tmp / ".zimzilla" / "infronai" / "source", str(path))
+        check("profile: written under KURO_HOME",
+              path == tmp / ".kuro" / "infronai" / "source", str(path))
         check("profile: mode 600", oct(path.stat().st_mode & 0o777) == "0o600",
               oct(path.stat().st_mode & 0o777))
         check("profile: parent is 700",
@@ -569,7 +569,7 @@ def test_profile_roundtrip(tmp: Path) -> None:
 
 
 def test_credential_precedence(tmp: Path) -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     with _clean_env():
         check("creds: nothing set is None", inf.load_credentials() is None)
@@ -596,7 +596,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 
 def test_looks_like_key() -> None:
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     check("key: a plausible token passes", inf.looks_like_key("inf_abc123456789XYZ"))
     check("key: a short string fails", not inf.looks_like_key("short"))
@@ -607,8 +607,8 @@ def test_looks_like_key() -> None:
 
 
 def test_sources_registry_dispatch() -> None:
-    from zimzilla import infronai as inf
-    from zimzilla import sources as s
+    from kuro import infronai as inf
+    from kuro import sources as s
 
     with mock.patch("urllib.request.urlopen", _stub()):
         inf.clear_cache()
@@ -631,18 +631,18 @@ def test_sources_registry_dispatch() -> None:
 
 def test_discovery_needs_a_profile() -> None:
     """The service and config ship; without the operator's key there is no route."""
-    from zimzilla import sources as s
+    from kuro import sources as s
 
     with tempfile.TemporaryDirectory() as td:
         home = Path(td) / "home"
-        zhome = Path(td) / "zimzilla"
+        zhome = Path(td) / "kuro"
         home.mkdir()
         (zhome / "infronai").mkdir(parents=True)
         for name in ("start-litellm.sh", "litellm-config.yaml"):
             (zhome / "infronai" / name).write_text("# test\n")
 
         with mock.patch.object(s, "DEFAULT_HOME", home), \
-             mock.patch.object(s, "ZIMZILLA_HOME", zhome):
+             mock.patch.object(s, "KURO_HOME", zhome):
             check("discovery: no profile means no source",
                   s.discover().get("infronai") is None)
             (zhome / "infronai" / "source").write_text(
@@ -664,7 +664,7 @@ def test_discovery_needs_a_profile() -> None:
 def test_proxy_config_agrees_with_the_module() -> None:
     """The yaml and the module must not drift apart on the upstream or the id."""
     config = (ROOT / "packaging" / "infronai" / "litellm-config.yaml").read_text()
-    from zimzilla import infronai as inf
+    from kuro import infronai as inf
 
     check("proxy: the config points at the same upstream",
           inf.API_BASE_URL in config, inf.API_BASE_URL)
@@ -696,10 +696,10 @@ def test_proxy_config_agrees_with_the_module() -> None:
 
 
 def test_tui_surfaces() -> None:
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
-    comp_src = (ROOT / "zimzilla" / "ui" / "complete.py").read_text(encoding="utf-8")
-    main_src = (ROOT / "zimzilla" / "__main__.py").read_text(encoding="utf-8")
-    launcher = (ROOT / "packaging" / "zimzilla").read_text(encoding="utf-8")
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text(encoding="utf-8")
+    comp_src = (ROOT / "kuro" / "ui" / "complete.py").read_text(encoding="utf-8")
+    main_src = (ROOT / "kuro" / "__main__.py").read_text(encoding="utf-8")
+    launcher = (ROOT / "packaging" / "kuro").read_text(encoding="utf-8")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
 
     for cmd in ("zim-infronai", "infronai-api-setup", "infronai-models"):
@@ -732,7 +732,7 @@ def test_tui_surfaces() -> None:
     check("launcher: it starts the :4003 proxy",
           'LITELLM_PORT="${_port_override:-4003}"' in launcher)
     check("launcher: it sources the operator's profile",
-          '"$ZIMZILLA_HOME/infronai/source"' in launcher)
+          '"$KURO_HOME/infronai/source"' in launcher)
     check("setup: it installs the route",
           'packaging/infronai/litellm-config.yaml' in setup)
     check("setup: it does not ship a credential",
@@ -740,7 +740,7 @@ def test_tui_surfaces() -> None:
 
     # The launch-time restore loop applies hosted gateways only. InfronAI is
     # restored by the launcher sourcing its profile, so it must NOT be in that
-    # tuple — the module has no ``apply_to`` and the loop would crash.
+    # tuple â€” the module has no ``apply_to`` and the loop would crash.
     check("main: the restore loop is left to the launcher",
           '("infronai", inf_mod)' not in main_src)
 
@@ -748,9 +748,9 @@ def test_tui_surfaces() -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-inf-test-"))
     # Pin the module's paths to the temp tree before anything imports it.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     saved = {k: os.environ.get(k) for k in
@@ -787,7 +787,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -796,3 +796,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

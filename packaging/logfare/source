@@ -1,18 +1,18 @@
-# ZimZilla — Logfare profile (template)
+﻿# Kuro â€” Logfare profile (template)
 #
 # This file ships WITHOUT a credential on purpose. It used to carry a key, and
 # a key in a public repository is not a credential: it is a shared budget that
 # anyone can spend, and once it is in the history it cannot be taken back out of
 # everyone's clone. So the token below is a placeholder and nothing else.
 #
-# Put your own key in one of two places — either is fine, and both are read
+# Put your own key in one of two places â€” either is fine, and both are read
 # before this file:
 #
-#   ~/.zimzilla/logfare/source   mode 600, written by `/logfare-api-setup <key>`
+#   ~/.kuro/logfare/source   mode 600, written by `/logfare-api-setup <key>`
 #                                in the TUI, or by setup.sh from a key it found
 #   $ANTHROPIC_AUTH_TOKEN        exported in the shell
 #
-# Get a key at https://logfare.ai — they start with `lfu_`. Without one, the
+# Get a key at https://logfare.ai â€” they start with `lfu_`. Without one, the
 # harness still starts and `/logfare-models` still works (that catalog is
 # public); the first turn is what needs the key.
 #
@@ -29,8 +29,8 @@ export ANTHROPIC_MODEL="deepseek-v4.1-flash"
 # clears any real API key inherited from the shell.
 export ANTHROPIC_API_KEY=""
 
-# Model aliases — switch per-invocation, e.g.:
-#   ANTHROPIC_MODEL=$MODEL_QWEN zimzilla
+# Model aliases â€” switch per-invocation, e.g.:
+#   ANTHROPIC_MODEL=$MODEL_QWEN kuro
 # These are the models Logfare currently serves. Logfare retires models without
 # notice, so the live list is fetched, not declared: /logfare-models in the TUI
 # shows what is up right now.
@@ -39,3 +39,4 @@ export MODEL_DEEPSEEK_FLASH="deepseek-v4.1-flash"
 export MODEL_QWEN="qwen-3.8-27b"
 export MODEL_GEMMA="gemma-4-26b"
 export MODEL_AUTO="logfare/auto"
+

@@ -1,4 +1,4 @@
-"""Regression suite for the live Logfare catalog.
+﻿"""Regression suite for the live Logfare catalog.
 
 Run:  python tests/test_logfare.py   (from an activated venv)
 
@@ -8,7 +8,7 @@ and the upstream answered with a 404. The catalog is now fetched from
 
     https://logfare.ai/v1/status?hours=24
 
-and the load-bearing rule is the endpoint filter — an entry is a chat model only
+and the load-bearing rule is the endpoint filter â€” an entry is a chat model only
 if it advertises ``chat/completions``. Get that wrong and the picker offers an
 image or TTS model, which is the same bug in a new costume.
 
@@ -39,7 +39,7 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 
 # A payload shaped like the real one: two healthy chat models, one degraded chat
-# model, and three that do NOT serve chat (image, TTS, STT) — those must be
+# model, and three that do NOT serve chat (image, TTS, STT) â€” those must be
 # filtered out, and they are the whole point of the suite.
 CATALOG = {
     "object": "list",
@@ -59,7 +59,7 @@ CATALOG = {
          "status": "unstable", "uptime_percent": 40.7,
          "endpoints": ["chat/completions"],
          "real_traffic_total": 3981, "real_traffic_success_rate": 0.407},
-        # Not chat — must never reach /model.
+        # Not chat â€” must never reach /model.
         {"model_id": "flux-1.1-pro", "display_name": "Flux",
          "status": "operational", "uptime_percent": 99.0,
          "endpoints": ["images/generations"], "real_traffic_total": 120},
@@ -93,7 +93,7 @@ def _stub_urlopen(payload: dict | None = None, error: Exception | None = None):
 
 def test_chat_filter() -> None:
     """Only entries advertising chat/completions are offered as models."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     lf.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -108,7 +108,7 @@ def test_chat_filter() -> None:
 
 def test_health_is_read() -> None:
     """Status, uptime and traffic come through, and drive `healthy`."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     lf.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -130,7 +130,7 @@ def test_health_is_read() -> None:
 
 def test_parse_is_total() -> None:
     """A malformed entry degrades; it never takes the catalog down."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     messy = lf._parse_models({"data": [
         {"model_id": "ok", "endpoints": ["chat/completions"],
@@ -149,7 +149,7 @@ def test_parse_is_total() -> None:
 
 def test_fetch_is_total() -> None:
     """fetch_models returns errors; it never raises into the TUI."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     lf.clear_cache()
     with mock.patch("urllib.request.urlopen",
@@ -168,7 +168,7 @@ def test_fetch_is_total() -> None:
 
 def test_cache() -> None:
     """A warm cache answers without a second request; clear_cache empties it."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     lf.clear_cache()
     calls = []
@@ -193,7 +193,7 @@ def test_cache_expiry() -> None:
     """An expired catalog must not be served as if it were live.
 
     The bug this pins: ``fetch_models`` has always refused to *reuse* an entry
-    past ``CACHE_TTL``, but ``cached_models`` read it back regardless — so a
+    past ``CACHE_TTL``, but ``cached_models`` read it back regardless â€” so a
     catalog fetched once at startup was reported by ``/model`` for the rest of
     the session, under the words "the catalog is live". Logfare retires models
     without notice, which is the entire reason the list is fetched rather than
@@ -204,8 +204,8 @@ def test_cache_expiry() -> None:
     """
     import time
 
-    from zimzilla import logfare as lf
-    from zimzilla import sources as s
+    from kuro import logfare as lf
+    from kuro import sources as s
 
     proxy = "http://localhost:4001"
     lf.clear_cache()
@@ -218,7 +218,7 @@ def test_cache_expiry() -> None:
     check("expiry: its age is reported, and small",
           (lf.catalog_age() or 999) < 5.0, str(lf.catalog_age()))
 
-    # Age it well past the TTL — the state a long-running session reaches on
+    # Age it well past the TTL â€” the state a long-running session reaches on
     # its own, with no code path having cleared the cache in between.
     lf._CACHE[:] = [(lf._CACHE[0][0], time.monotonic() - (lf.CACHE_TTL + 60))]
     check("expiry: an expired catalog reads as None",
@@ -233,7 +233,7 @@ def test_cache_expiry() -> None:
     check("expiry: health_for finds nothing in an expired catalog",
           lf.health_for("deepseek-v4.1-flash") is None)
 
-    # A re-fetch is what makes it live again — and fetch_models must not have
+    # A re-fetch is what makes it live again â€” and fetch_models must not have
     # been serving the stale entry to itself either.
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
         lf.fetch_models()
@@ -243,8 +243,8 @@ def test_cache_expiry() -> None:
 
 def test_sources_prefers_live() -> None:
     """sources.models_for("logfare") is the fetched list, not the declaration."""
-    from zimzilla import logfare as lf
-    from zimzilla import sources as s
+    from kuro import logfare as lf
+    from kuro import sources as s
 
     proxy = "http://localhost:4001"
     lf.clear_cache()
@@ -273,13 +273,13 @@ def test_declared_fallback_is_plausible() -> None:
 
     This is the regression that started all of it: LOGFARE_MODELS listed ten
     models that 404'd upstream, so /model offered them. The list cannot be kept
-    honest by a test — only a fetch can — so this pins it to the set that was
+    honest by a test â€” only a fetch can â€” so this pins it to the set that was
     live on a known date, and the *chat* filter is what keeps image, TTS and STT
     entries out. A model that appears upstream after that date is picked up by
     the fetch (and routed by the proxy's wildcard), not by editing this test.
     """
-    from zimzilla import sources as s
-    from zimzilla.config import KNOWN_MODELS, PRICING
+    from kuro import sources as s
+    from kuro.config import KNOWN_MODELS, PRICING
 
     # Every chat model Logfare served on 2026-10-19, and nothing else. The list
     # is the cold-cache half of /model, so a served model missing here is one
@@ -305,7 +305,7 @@ def test_declared_fallback_is_plausible() -> None:
 
 def test_is_logfare() -> None:
     """The host test distinguishes the gateway from the local proxy."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     check("host: a local proxy is not the gateway",
           not lf.is_logfare("http://localhost:4001"))
@@ -316,7 +316,7 @@ def test_is_logfare() -> None:
 
 def test_profile_key(tmp: Path) -> None:
     """Where the key comes from, and what writing one does to the profile."""
-    from zimzilla import logfare as lf
+    from kuro import logfare as lf
 
     profile = tmp / "zhome" / "logfare" / "source"
     # Nothing anywhere: no operator file, no shipped file, no environment token.
@@ -337,7 +337,7 @@ def test_profile_key(tmp: Path) -> None:
         check("key: has_key agrees", not lf.has_key())
 
     # A shipped profile that carries a real token is still honoured, and says so
-    # by origin — that is how a maintainer ships a key on purpose, with its own
+    # by origin â€” that is how a maintainer ships a key on purpose, with its own
     # budget and the knowledge that it is public.
     shipped_real = tmp / "shipped-with-key"
     shipped_real.parent.mkdir(parents=True, exist_ok=True)
@@ -414,10 +414,10 @@ def test_profile_key(tmp: Path) -> None:
 
 def test_key_command(tmp: Path) -> None:
     """`/logfare-api-setup` stores the key, applies it, and never echoes it."""
-    from zimzilla import logfare as lf
-    from zimzilla import sources as sources_mod
-    from zimzilla.config import Config
-    from zimzilla.ui.app import ZimZillaApp
+    from kuro import logfare as lf
+    from kuro import sources as sources_mod
+    from kuro.config import Config
+    from kuro.ui.app import KuroApp
 
     profile = tmp / "zhome" / "logfare" / "source"
     key = "lfu_live_0123456789abcdef"
@@ -431,7 +431,7 @@ def test_key_command(tmp: Path) -> None:
         restarted: list[str] = []
         cfg = Config.from_env(workdir=tmp, api_key="old-key", base_url=base_url,
                               model="deepseek-v4.1-flash")
-        app = ZimZillaApp(cfg)
+        app = KuroApp(cfg)
         app._sys_line = lambda msg, **kw: said.append(str(msg))
 
         async def go() -> None:
@@ -482,7 +482,7 @@ def test_key_command(tmp: Path) -> None:
     check("cmd: and it says why", any("does not look like" in m for m in said), str(said))
 
     # The wiring that makes the command reachable at all.
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text(encoding="utf-8")
     check("cmd: dispatch entry",
           '"logfare-api-setup": lambda a: self._cmd_logfare_key(a)' in app_src)
     check("cmd: stays typeable mid-turn",
@@ -509,7 +509,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -518,3 +518,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

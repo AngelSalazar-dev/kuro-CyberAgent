@@ -1,4 +1,4 @@
-# The Logfare catalog, refreshed against the upstream's own status API:
+﻿# The Logfare catalog, refreshed against the upstream's own status API:
 #
 #     https://logfare.ai/v1/status?hours=24
 #
@@ -12,16 +12,16 @@
 # win over the wildcard (LiteLLM resolves an exact model_name first), which is
 # what lets the aliases at the bottom pin a haiku name to a live model.
 #
-# `zimzilla/logfare.py` fetches the live catalog and /logfare-models shows what
+# `kuro/logfare.py` fetches the live catalog and /logfare-models shows what
 # it found; /model is built from that list, not from this file. Keeping the two
-# in step still matters for the *fallback* path — sources.LOGFARE_MODELS and
+# in step still matters for the *fallback* path â€” sources.LOGFARE_MODELS and
 # config.KNOWN_MODELS are what /model shows before the first fetch.
 general_settings:
   # Required since litellm 1.104: without a master key the proxy refuses to
   # start, because it would otherwise accept every request with no
   # authentication. This proxy is a local translation shim in front of Logfare,
   # not a multi-tenant gateway, so the harness's own upstream token doubles as
-  # the proxy credential — ZimZilla already sends it as x-api-key, so the
+  # the proxy credential â€” Kuro already sends it as x-api-key, so the
   # request that worked before keeps working, while anything else on the box
   # that finds the port is now rejected.
   master_key: os.environ/ANTHROPIC_AUTH_TOKEN
@@ -43,8 +43,8 @@ model_list:
       api_base: https://logfare.ai/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
 
-  # gemma-4-26b is the weakest of the four upstream — Logfare reports it
-  # "unstable" at ~40% uptime — but it is genuinely served, so it stays
+  # gemma-4-26b is the weakest of the four upstream â€” Logfare reports it
+  # "unstable" at ~40% uptime â€” but it is genuinely served, so it stays
   # selectable rather than being hidden. /model says so beside the name.
   - model_name: gemma-4-26b
     litellm_params:
@@ -100,7 +100,7 @@ model_list:
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
 
   # --- Wildcard ---------------------------------------------------------------
-  # Any chat model Logfare adds later, without waiting for a ZimZilla release.
+  # Any chat model Logfare adds later, without waiting for a Kuro release.
   # `openai/*` forwards the requested name upstream verbatim, which is exactly
   # what this proxy is for. It is a fallback, never a preferred route: the
   # named entries above match first, and a name Logfare does not serve simply
@@ -113,7 +113,7 @@ model_list:
 
   # Claude Code probes/streams with a "small fast" model too; map the usual
   # haiku names onto a live upstream model so background requests don't 404.
-  # These are aliases, not catalog entries — they exist so a client that hard-
+  # These are aliases, not catalog entries â€” they exist so a client that hard-
   # codes a haiku name still works, and they are deliberately kept out of
   # /model by not being listed in sources.LOGFARE_MODELS.
   - model_name: claude-3-5-haiku-latest
@@ -133,3 +133,4 @@ model_list:
       model: openai/deepseek-v4.1-flash
       api_base: https://logfare.ai/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
+

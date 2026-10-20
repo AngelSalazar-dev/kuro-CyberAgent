@@ -1,17 +1,17 @@
-"""Regression suite for the launch-time self-update.
+﻿"""Regression suite for the launch-time self-update.
 
 Run:  python tests/test_update.py   (from an activated venv)
 
 Real git, real repositories, no network. The suite builds a bare "origin" and
-a clone of it in a temp directory, then drives ``zimzilla.update`` against the
-clone — the same shape as the checkout ZimZilla actually runs from (editable
+a clone of it in a temp directory, then drives ``kuro.update`` against the
+clone â€” the same shape as the checkout Kuro actually runs from (editable
 install, HEAD tracking an upstream).
 
 What is being protected here is not "does git pull work" but the safety
 contract around it: a dirty tree is never touched, a diverged branch is never
 merged, a broken remote never raises and never blocks the launch. Those are
 the properties that make it acceptable to run this automatically at startup,
-so they are asserted directly — by checking the commit HEAD points at, not
+so they are asserted directly â€” by checking the commit HEAD points at, not
 merely the returned action string.
 
 Every fixture is hermetic: the repos get a pinned identity and signing off, so
@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import update  # noqa: E402
+from kuro import update  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -115,8 +115,8 @@ def head_of(repo: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def test_find_checkout() -> None:
-    # Running from this repo, __file__ is <root>/zimzilla/update.py, so the
-    # parent of the package dir is the checkout — and it is one.
+    # Running from this repo, __file__ is <root>/kuro/update.py, so the
+    # parent of the package dir is the checkout â€” and it is one.
     root = update.find_checkout()
     check("find_checkout: locates this repository", root == ROOT, f"{root}")
 
@@ -125,8 +125,8 @@ def test_find_checkout() -> None:
     with tempfile.TemporaryDirectory() as td:
         real = update.__file__
         try:
-            (Path(td) / "zimzilla").mkdir()
-            update.__file__ = str(Path(td) / "zimzilla" / "update.py")
+            (Path(td) / "kuro").mkdir()
+            update.__file__ = str(Path(td) / "kuro" / "update.py")
             check("find_checkout: None outside a repo", update.find_checkout() is None)
         finally:
             update.__file__ = real
@@ -156,7 +156,7 @@ def test_behind_clean(base: Path) -> None:
     check("behind+clean: counts the commits", r.behind == 2, f"{r.behind}")
     check("behind+clean: lists the commits",
           len(r.commits) == 2 and all(c for c in r.commits), f"{r.commits}")
-    # inspect must not move HEAD — only apply does.
+    # inspect must not move HEAD â€” only apply does.
     check("behind+clean: inspect leaves HEAD alone", head_of(clone) == before)
 
     r = update.apply(clone, r)
@@ -174,7 +174,7 @@ def test_behind_modified_tracked(base: Path) -> None:
     commit_to_origin(seed, origin, "remote work")
     before = head_of(clone)
 
-    # An edit to a file git is tracking — work the operator would lose or have
+    # An edit to a file git is tracking â€” work the operator would lose or have
     # to reconcile. This is the case that must stop the pull dead.
     (clone / "README.md").write_text("edited by hand\n")
 
@@ -201,7 +201,7 @@ def test_behind_untracked(base: Path) -> None:
     seed = base / "seed"
     want = commit_to_origin(seed, origin, "remote work")
 
-    # A stray untracked file — a scratch note, a build artefact. A
+    # A stray untracked file â€” a scratch note, a build artefact. A
     # fast-forward cannot lose it, so it must not disable the update.
     (clone / "scratch.txt").write_text("notes\n")
 
@@ -322,7 +322,7 @@ def test_disabled() -> None:
 
 
 def test_format(base: Path) -> None:
-    # An up-to-date result prints nothing at all — a clean launch is silent.
+    # An up-to-date result prints nothing at all â€” a clean launch is silent.
     quiet = update.UpdateResult(action="none", message="up to date")
     buf = io.StringIO()
     update.format_result(quiet, stream=buf)
@@ -386,3 +386,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

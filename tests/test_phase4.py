@@ -1,4 +1,4 @@
-"""Phase-4 regression suite: identity, modes, zim/AGENTS.md, completion popup, @mentions.
+﻿"""Phase-4 regression suite: identity, modes, zim/AGENTS.md, completion popup, @mentions.
 
 Run:  python tests/test_phase4.py   (from an activated venv)
 """
@@ -17,28 +17,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# A throwaway ZIMZILLA_HOME for the whole suite. The package resolves this at
-# import time (``config.DEFAULT_HOME``, ``theme.ZIMZILLA_HOME``), so it has to
-# be set before the imports below — and it has to be set at all. Without it,
+# A throwaway KURO_HOME for the whole suite. The package resolves this at
+# import time (``config.DEFAULT_HOME``, ``theme.KURO_HOME``), so it has to
+# be set before the imports below â€” and it has to be set at all. Without it,
 # every ``/theme`` this suite drives wrote to the operator's *live*
-# ``~/.zimzilla/current-theme``: a test run that ends on "green" silently reset
+# ``~/.kuro/current-theme``: a test run that ends on "green" silently reset
 # the theme the operator had chosen, and the next launch came up green with
 # nothing in the app to explain it.
 _TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
-os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+os.environ["KURO_HOME"] = str(_TEST_HOME)
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 from rich.text import Text  # noqa: E402
 
-from zimzilla import team as team_mod  # noqa: E402
-from zimzilla import tools, websearch  # noqa: E402
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import Config, MODES  # noqa: E402
-from zimzilla.scope import Scope  # noqa: E402
-from zimzilla.theme import agent_color  # noqa: E402
-from zimzilla.ui.app import ZimZillaApp  # noqa: E402
-from zimzilla.ui.complete import CompletionPopup, _iter_files  # noqa: E402
-from zimzilla.ui.widgets import StatusBar  # noqa: E402
+from kuro import team as team_mod  # noqa: E402
+from kuro import tools, websearch  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import Config, MODES  # noqa: E402
+from kuro.scope import Scope  # noqa: E402
+from kuro.theme import agent_color  # noqa: E402
+from kuro.ui.app import KuroApp  # noqa: E402
+from kuro.ui.complete import CompletionPopup, _iter_files  # noqa: E402
+from kuro.ui.widgets import StatusBar  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -62,7 +62,7 @@ class _Blk:
 
         Agent._block_to_dict prefers model_dump() and falls back to str(block),
         so without this the stub's blocks reach the history as object reprs
-        rather than their fields — which quietly weakens any test that reads a
+        rather than their fields â€” which quietly weakens any test that reads a
         message back (e.g. the team digest).
         """
         return {k: v for k, v in self.__dict__.items()
@@ -104,7 +104,7 @@ def _stub_agent(mode: str, workdir: Path):
 
 async def test_identity(wd: Path) -> None:
     sp = Agent(_cfg(wd)).system_prompt()
-    check("identity names ZimZilla", "ZimZilla" in sp and "ZIM (Mr-Destroyer)" in sp)
+    check("identity names Kuro", "Kuro" in sp and "ZIM (Mr-Destroyer)" in sp)
     check("identity disclaims other products", 'NOT "Claude"' in sp)
 
     dsp = Agent(_cfg(wd, mode="danger")).system_prompt()
@@ -115,7 +115,7 @@ async def test_identity(wd: Path) -> None:
           and "do not restate your limits as a reply to an instruction" in dsp)
     check("danger mode keeps its two mechanical bounds",
           "scope guard" in dsp and "harness itself refusing" in dsp)
-    check("danger keeps the identity", "ZimZilla" in dsp)
+    check("danger keeps the identity", "Kuro" in dsp)
 
     usp = Agent(_cfg(wd, mode="uncensored")).system_prompt()
     check("uncensored mode replaces the default prompt",
@@ -126,7 +126,7 @@ async def test_identity(wd: Path) -> None:
           "whether you should" in usp and "plan of attack" in usp)
     check("uncensored mode does not carry the default coding brief",
           "Prefer small, exact edits" not in usp)
-    check("uncensored keeps the identity", "ZimZilla" in usp)
+    check("uncensored keeps the identity", "Kuro" in usp)
     check("uncensored keeps the mechanical bounds",
           "scope guard" in usp and "harness itself refusing" in usp)
     check("uncensored voids vendor refusal priors",
@@ -194,7 +194,7 @@ def test_web_tools(wd: Path) -> None:
 
     # ---- the fallback backends, offline ----------------------------------
     # These parsers exist because DDG answered exactly two queries from this
-    # IP and then served an HTTP 202 anti-bot page in place of results — which
+    # IP and then served an HTTP 202 anti-bot page in place of results â€” which
     # the old code reported as "the results page format may have changed".
     # Nothing in the suite touched the live endpoint, so that shipped silently.
     # The shapes below are the ones the live services actually returned.
@@ -300,7 +300,7 @@ def test_web_tools(wd: Path) -> None:
                          scoped(allow=allow_file, deny=deny_file))
     check("deny beats allow", both.is_error and both.meta.get("blocked") is True)
 
-    # search_web names no host, so scope never blocks it — even with a deny file.
+    # search_web names no host, so scope never blocks it â€” even with a deny file.
     es = tools.execute("search_web", {"query": "anything"}, scoped(deny=deny_file))
     check("search_web is never blocked by scope",
           not (es.is_error and es.meta.get("blocked") is True), es.output[:60])
@@ -323,7 +323,7 @@ def test_zim_agents(wd: Path) -> None:
     sp = Agent(_cfg(wd, mode="zim", agents_path=agents)).system_prompt()
     check("zim mode loads AGENTS.md", "OBEY THE ZIM" in sp)
 
-    # A directory with no doctrine anywhere — including no ~/AGENTS.md, which
+    # A directory with no doctrine anywhere â€” including no ~/AGENTS.md, which
     # is why HOME is pinned to the temp tree for the duration.
     saved_home = os.environ.get("HOME")
     with tempfile.TemporaryDirectory() as td:
@@ -333,7 +333,7 @@ def test_zim_agents(wd: Path) -> None:
             cfg = _cfg(bare, mode="zim")
             cfg.state_dir = bare / "state"  # nothing installed there either
             check("zim mode without file falls back",
-                  "ZimZilla" in Agent(cfg).system_prompt())
+                  "Kuro" in Agent(cfg).system_prompt())
         finally:
             if saved_home is None:
                 os.environ.pop("HOME", None)
@@ -344,10 +344,10 @@ def test_zim_agents(wd: Path) -> None:
 def test_agents_search(wd: Path) -> None:
     """The doctrine search: workdir, parent, installed home, then ~.
 
-    The installed-home step is the point of the whole thing — it is what lets
-    `zimzilla --mode zim` run from a directory that has no AGENTS.md of its own.
+    The installed-home step is the point of the whole thing â€” it is what lets
+    `kuro --mode zim` run from a directory that has no AGENTS.md of its own.
     """
-    from zimzilla.config import find_agents_file
+    from kuro.config import find_agents_file
 
     saved_home = os.environ.get("HOME")
     with tempfile.TemporaryDirectory() as td:
@@ -370,7 +370,7 @@ def test_agents_search(wd: Path) -> None:
 
             # The installed doctrine is found from an unrelated directory.
             (home / "AGENTS.md").write_text("INSTALLED DOCTRINE\n")
-            check("installed ~/.zimzilla/AGENTS.md is found from any workdir",
+            check("installed ~/.kuro/AGENTS.md is found from any workdir",
                   find_agents_file(sub, home, nohome) == home / "AGENTS.md")
 
             # A project's own file wins over the installed one.
@@ -455,7 +455,7 @@ def _scope_semantics(wd: Path) -> None:
     check("variable-host substitution is refused",
           bool(s.check_command("curl http://$TARGET/x")))
     # A literal target alongside a substitution is still checked normally, so
-    # this is NOT refused for being unresolvable — but it IS refused, because
+    # this is NOT refused for being unresolvable â€” but it IS refused, because
     # the literal itself is deny-listed. (Proves the guard did not just
     # fail-open on the substitution.)
     check("substitution does not excuse a deny-listed literal",
@@ -550,7 +550,7 @@ async def test_mode_gating(wd: Path) -> None:
 
     # The ordering constraint: arming bypasses the PERMISSION GATE only. The
     # mode-deny branch runs first, so allow.yaml must NOT re-enable bash in
-    # plan or edits mode — those modes withhold the tool from the model.
+    # plan or edits mode â€” those modes withhold the tool from the model.
     allow_f = Path(tempfile.mkdtemp()) / "allow.yaml"
     allow_f.write_text("domain:\n  - example.com\n")
     for mode in ("plan", "edits"):
@@ -568,7 +568,7 @@ async def test_mode_gating(wd: Path) -> None:
 
 
 async def test_ui(wd: Path) -> None:
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     async with app.run_test(size=(110, 34)) as pilot:
         app.pop_screen()
         await pilot.pause()
@@ -584,7 +584,7 @@ async def test_ui(wd: Path) -> None:
 
         # The caret follows what a typist's would. Assigning `.value` clamps the
         # cursor but leaves it where it was, and the picker describes the mention
-        # under the caret — so a stale cursor asks a different question.
+        # under the caret â€” so a stale cursor asks a different question.
         inp.value = "@al"
         inp.cursor_position = len(inp.value)
         await pilot.pause()
@@ -724,10 +724,10 @@ def _stub_agent_usage(workdir: Path):
 
 async def test_ui_rails(wd: Path) -> None:
     """The Mission Control rails: mount, cycle, gauge, card, palette."""
-    from zimzilla.ui.palette_cmd import CommandPalette, PaletteEntry, fuzzy, rank
-    from zimzilla.ui.rails import (CallStrip, ContextGauge, FileRiver, LoopRail,
+    from kuro.ui.palette_cmd import CommandPalette, PaletteEntry, fuzzy, rank
+    from kuro.ui.rails import (CallStrip, ContextGauge, FileRiver, LoopRail,
                                    TelemetryRail, Waveform)
-    from zimzilla.ui.widgets import ChatPane, HeaderBar
+    from kuro.ui.widgets import ChatPane, HeaderBar
 
     # ---- fuzzy matching (pure, no app needed) -----------------------------
     check("fuzzy: subsequence matches", fuzzy("md", "/model") is not None)
@@ -744,7 +744,7 @@ async def test_ui_rails(wd: Path) -> None:
     check("fuzzy: hint is searched too",
           any(e.title == "/model" for e, _ in rank(ents, "switch")))
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     app.agent = _stub_agent_usage(wd)
     async with app.run_test(size=(118, 34)) as pilot:
         app.pop_screen()
@@ -894,9 +894,9 @@ async def test_termbg(wd: Path) -> None:
     paint outside the text grid, so a hardcoded background leaves a frame of the
     wrong colour around the whole interface. The app asks over OSC 11 instead.
     """
-    from zimzilla.termbg import detect_background, is_dark, parse_background
-    from zimzilla.theme import PALETTES, get_palette
-    from zimzilla.ui.app import ZimZillaApp
+    from kuro.termbg import detect_background, is_dark, parse_background
+    from kuro.theme import PALETTES, get_palette
+    from kuro.ui.app import KuroApp
 
     # ---- parsing: the terminal's reply, in every form they send it ---------
     check("termbg: kitty's 16-bit reply parses",
@@ -920,7 +920,7 @@ async def test_termbg(wd: Path) -> None:
           is_dark("#7f7f7f") and not is_dark("#808080"))
 
     # No tty here (the suite runs piped), so detection must decline cleanly
-    # rather than raise — that is the fallback path every non-answering
+    # rather than raise â€” that is the fallback path every non-answering
     # terminal takes.
     check("termbg: detection declines without a tty",
           detect_background() is None, repr(detect_background()))
@@ -935,7 +935,7 @@ async def test_termbg(wd: Path) -> None:
           PALETTES["green"].bg == "#000000" and PALETTES["amber"].bg == "#000000")
 
     # ---- and it reaches the compositor, corners included -------------------
-    app = ZimZillaApp(_cfg(wd, boot_rain=False), term_bg="#101315")
+    app = KuroApp(_cfg(wd, boot_rain=False), term_bg="#101315")
     async with app.run_test(size=(100, 30)) as pilot:
         app.pop_screen()
         await pilot.pause()
@@ -975,13 +975,13 @@ async def test_system_theme(wd: Path) -> None:
     omarchy's `aether` themes generate a scheme from each wallpaper and install
     it as the terminal's palette, so the terminal is the one place the current
     colours can be read from. Every check here is offline against captured
-    replies — the suite runs piped, with no tty to ask.
+    replies â€” the suite runs piped, with no tty to ask.
     """
     from unittest import mock
 
-    from zimzilla import theme as theme_mod
-    from zimzilla.termcolors import detect_colors, parse_colors
-    from zimzilla.theme import (PALETTES, SYSTEM_THEME, THEME_NAMES,
+    from kuro import theme as theme_mod
+    from kuro.termcolors import detect_colors, parse_colors
+    from kuro.theme import (PALETTES, SYSTEM_THEME, THEME_NAMES,
                                 get_palette, system_palette)
 
     # ---- parsing: one batched reply carries every answer -------------------
@@ -994,7 +994,7 @@ async def test_system_theme(wd: Path) -> None:
     c = parse_colors(reply)
     check("termcolors: the background parses", c.bg == "#101315", repr(c.bg))
     check("termcolors: the foreground parses", c.fg == "#ffffff", repr(c.fg))
-    # `ff00` is 65280 of a possible 65535, which is 254 — not 255. The scaling
+    # `ff00` is 65280 of a possible 65535, which is 254 â€” not 255. The scaling
     # is the honest one (value / (16**digits - 1)), so a 16-bit reply lands one
     # step below the naive top-byte truncation on every channel that is not
     # `ffff`. It looks like an off-by-one and is not: `ffff` gives exactly 255,
@@ -1041,7 +1041,7 @@ async def test_system_theme(wd: Path) -> None:
         pid, pfd = pty.fork()
         if pid == 0:  # the "app", with the pty slave as its tty
             try:
-                from zimzilla.termcolors import detect_colors as dc
+                from kuro.termcolors import detect_colors as dc
                 cc = dc(timeout=2.0)
                 got = ("none" if cc is None else
                        f"{cc.bg} {cc.fg} {len(cc.ansi)} {cc.ansi.get(1)} {cc.ansi.get(8)}")
@@ -1102,7 +1102,7 @@ async def test_system_theme(wd: Path) -> None:
 
     # A partial reply degrades field by field, not all at once: no ANSI slots
     # answered here, so every role falls through to green's value while the
-    # background — the one thing that *was* reported — is still adopted.
+    # background â€” the one thing that *was* reported â€” is still adopted.
     pp = system_palette(parse_colors(b"\x1b]11;rgb:1010/1313/1515\x1b\\"))
     check("theme: a missing ANSI slot falls back to green's value",
           (pp.dim, pp.accent, pp.red, pp.amber)
@@ -1115,7 +1115,7 @@ async def test_system_theme(wd: Path) -> None:
           system_palette(None) == PALETTES["green"])
 
     # ---- the light rule (the operator's decision) --------------------------
-    # The three fixed palettes refuse a light background — neon on white is
+    # The three fixed palettes refuse a light background â€” neon on white is
     # unreadable. `system` does not: its colours come from the terminal, so
     # contrast is the theme author's problem, and refusing would mean the UI
     # ignoring the very wallpaper it was asked to match.
@@ -1135,8 +1135,8 @@ async def test_system_theme(wd: Path) -> None:
 
     # ---- persistence: the choice survives a restart ------------------------
     with tempfile.TemporaryDirectory() as td:
-        home = Path(td) / ".zimzilla"
-        with mock.patch.object(theme_mod, "ZIMZILLA_HOME", home):
+        home = Path(td) / ".kuro"
+        with mock.patch.object(theme_mod, "KURO_HOME", home):
             check("theme: nothing remembered on a fresh home",
                   theme_mod.current_theme() is None)
             theme_mod.set_current_theme("amber")
@@ -1150,19 +1150,19 @@ async def test_system_theme(wd: Path) -> None:
             check("theme: an unknown name is ignored, not written",
                   theme_mod.current_theme() == SYSTEM_THEME,
                   repr(theme_mod.current_theme()))
-            # A file naming a theme this build does not have — left by an older
-            # or newer one — is ignored rather than obeyed, so it cannot put the
+            # A file naming a theme this build does not have â€” left by an older
+            # or newer one â€” is ignored rather than obeyed, so it cannot put the
             # UI into a state it has no palette for.
             (home / "current-theme").write_text("vaporwave\n")
             check("theme: a name from another build is refused",
                   theme_mod.current_theme() is None,
                   repr(theme_mod.current_theme()))
             # A home that cannot be written must not break the TUI. Pointing
-            # ZIMZILLA_HOME at an existing *file* makes mkdir fail, which is the
+            # KURO_HOME at an existing *file* makes mkdir fail, which is the
             # real shape of a read-only or misconfigured home.
             blocker = Path(td) / "not-a-dir"
             blocker.write_text("")
-            with mock.patch.object(theme_mod, "ZIMZILLA_HOME", blocker):
+            with mock.patch.object(theme_mod, "KURO_HOME", blocker):
                 try:
                     theme_mod.set_current_theme("cyan")
                     check("theme: an unwritable home does not raise", True)
@@ -1173,9 +1173,9 @@ async def test_system_theme(wd: Path) -> None:
     # The checks above cover the state file; this covers what __main__ does with
     # it, which is the half the operator actually sees. `app.run` is stubbed so
     # main() can be driven to completion without a terminal: everything up to
-    # the palette — argparse, the precedence, Config.from_env — runs for real.
-    import zimzilla.__main__ as main_mod
-    from zimzilla.ui import app as app_ui
+    # the palette â€” argparse, the precedence, Config.from_env â€” runs for real.
+    import kuro.__main__ as main_mod
+    from kuro.ui import app as app_ui
 
     seen: list = []
 
@@ -1188,12 +1188,12 @@ async def test_system_theme(wd: Path) -> None:
             pass
 
     with tempfile.TemporaryDirectory() as td:
-        home = Path(td) / ".zimzilla"
-        with mock.patch.object(theme_mod, "ZIMZILLA_HOME", home), \
-             mock.patch.object(app_ui, "ZimZillaApp", _StubApp), \
-             mock.patch.dict(os.environ, {"ZIMZILLA_UPDATED": "1",
+        home = Path(td) / ".kuro"
+        with mock.patch.object(theme_mod, "KURO_HOME", home), \
+             mock.patch.object(app_ui, "KuroApp", _StubApp), \
+             mock.patch.dict(os.environ, {"KURO_UPDATED": "1",
                                           "ANTHROPIC_AUTH_TOKEN": "x"}), \
-             mock.patch.object(sys, "argv", ["zimzilla"]):
+             mock.patch.object(sys, "argv", ["kuro"]):
             def launched(*argv: str) -> str:
                 seen.clear()
                 main_mod.main([*argv, "--workdir", str(wd)])
@@ -1207,7 +1207,7 @@ async def test_system_theme(wd: Path) -> None:
             check("theme: system is remembered like any other",
                   (theme_mod.set_current_theme(SYSTEM_THEME), launched())[1]
                   == SYSTEM_THEME)
-            # An explicit flag is authoritative, and — the part worth pinning —
+            # An explicit flag is authoritative, and â€” the part worth pinning â€”
             # it does NOT rewrite the memory. A one-off `--theme green` must not
             # quietly forget the wallpaper theme the operator chose.
             check("theme: --theme overrides the remembered choice",
@@ -1225,8 +1225,8 @@ async def test_system_theme(wd: Path) -> None:
 
     # ---- and it reaches the app --------------------------------------------
     with tempfile.TemporaryDirectory() as td:
-        with mock.patch.object(theme_mod, "ZIMZILLA_HOME", Path(td) / ".zimzilla"):
-            app = ZimZillaApp(_cfg(wd, boot_rain=False, theme=SYSTEM_THEME),
+        with mock.patch.object(theme_mod, "KURO_HOME", Path(td) / ".kuro"):
+            app = KuroApp(_cfg(wd, boot_rain=False, theme=SYSTEM_THEME),
                               term_colors=c)
             async with app.run_test(size=(100, 30)) as pilot:
                 app.pop_screen()
@@ -1271,7 +1271,7 @@ async def test_system_theme(wd: Path) -> None:
 
             # A terminal that answered nothing: system must degrade to green AND
             # say so, rather than showing green under a "theme: system" badge.
-            blind = ZimZillaApp(_cfg(wd, boot_rain=False, theme=SYSTEM_THEME),
+            blind = KuroApp(_cfg(wd, boot_rain=False, theme=SYSTEM_THEME),
                                 term_colors=None)
             async with blind.run_test(size=(100, 30)) as pilot:
                 blind.pop_screen()
@@ -1292,8 +1292,8 @@ async def test_theme_survives_exit(wd: Path) -> None:
     Reported: a theme picked with ``/theme`` came back after closing the
     terminal, but ``/exit`` brought green back. The app never wrote on the way
     out, so the choice could only be lost if the *file* was overwritten by
-    something else — and it was: this very suite drove ``/theme`` against the
-    operator's live ``~/.zimzilla`` before the throwaway home at the top of the
+    something else â€” and it was: this very suite drove ``/theme`` against the
+    operator's live ``~/.kuro`` before the throwaway home at the top of the
     file existed, so a test run ending on "green" reset the real choice.
 
     These checks pin both halves of the contract: that the app writes on every
@@ -1302,12 +1302,12 @@ async def test_theme_survives_exit(wd: Path) -> None:
     """
     from unittest import mock
 
-    from zimzilla import theme as theme_mod
+    from kuro import theme as theme_mod
 
     with tempfile.TemporaryDirectory() as td:
-        home = Path(td) / ".zimzilla"
-        with mock.patch.object(theme_mod, "ZIMZILLA_HOME", home):
-            app = ZimZillaApp(_cfg(wd, boot_rain=False, theme="green"),
+        home = Path(td) / ".kuro"
+        with mock.patch.object(theme_mod, "KURO_HOME", home):
+            app = KuroApp(_cfg(wd, boot_rain=False, theme="green"),
                               term_colors=None)
             async with app.run_test(size=(100, 30)) as pilot:
                 app.pop_screen()
@@ -1327,7 +1327,7 @@ async def test_theme_survives_exit(wd: Path) -> None:
                   repr((home / "current-theme").read_text()))
 
             # And Ctrl+D / action_quit, the other way out.
-            app2 = ZimZillaApp(_cfg(wd, boot_rain=False, theme="green"),
+            app2 = KuroApp(_cfg(wd, boot_rain=False, theme="green"),
                                term_colors=None)
             async with app2.run_test(size=(100, 30)) as pilot:
                 app2.pop_screen()
@@ -1342,8 +1342,8 @@ async def test_theme_survives_exit(wd: Path) -> None:
 
     # The suite's own home must be the throwaway one, never the operator's.
     check("exit: the suite is pinned to a throwaway home",
-          Path(os.environ["ZIMZILLA_HOME"]) != Path.home() / ".zimzilla",
-          os.environ["ZIMZILLA_HOME"])
+          Path(os.environ["KURO_HOME"]) != Path.home() / ".kuro",
+          os.environ["KURO_HOME"])
 
 
 # ---- /team ----------------------------------------------------------------
@@ -1362,7 +1362,7 @@ def test_team_roster(wd: Path) -> None:
     rf = team_mod.parse_roster(fenced)
     check("team: fenced JSON parses", rf is not None and len(rf.workers) == 2)
 
-    prose = "Here is the roster: " + clean + " — tell me if you want changes."
+    prose = "Here is the roster: " + clean + " â€” tell me if you want changes."
     rp = team_mod.parse_roster(prose)
     check("team: JSON wrapped in prose parses", rp is not None and len(rp.workers) == 2)
 
@@ -1436,7 +1436,7 @@ def test_team_isolation(wd: Path) -> None:
     """Each worker must get its own Config and its own Scope.
 
     Agent.__init__ does `cfg._scope = self.scope`. If workers shared one Config,
-    the last one built would own the guard for all of them — and the tools read
+    the last one built would own the guard for all of them â€” and the tools read
     the guard off cfg._scope, so the clobber would be silent.
     """
     import dataclasses
@@ -1461,7 +1461,7 @@ def test_team_isolation(wd: Path) -> None:
     check("team: the session agent is unaffected",
           main_agent.scope is main_scope)
 
-    # The mode travels with the copy — /team is not a mode.
+    # The mode travels with the copy â€” /team is not a mode.
     danger_cfg = _cfg(wd, mode="danger")
     wd_agent = Agent(dataclasses.replace(danger_cfg))
     check("team: a worker inherits danger mode",
@@ -1479,7 +1479,7 @@ def _team_factory(script):
     """A factory returning stubbed Agents, keyed off the Config's mode.
 
     run_team builds every Agent through the factory, so this is the only place
-    the stub needs to be installed — a class attribute would not reach the
+    the stub needs to be installed â€” a class attribute would not reach the
     per-worker instances.
     """
     built = []
@@ -1731,10 +1731,10 @@ async def test_team_ui(wd: Path) -> None:
               '{"name": "two", "brief": "do two", "owns": ["b.py"]}]}')
     factory = _team_factory({"roster": roster, "names": ["one", "two"]})
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     app._team_agent_factory = factory
     # The fallback path runs the task on the MAIN agent, so that one must be
-    # stubbed too — otherwise an unreadable roster reaches the live API.
+    # stubbed too â€” otherwise an unreadable roster reaches the live API.
     app.agent = _stub_agent_usage(wd)
 
     async with app.run_test(size=(118, 40)) as pilot:
@@ -1765,7 +1765,7 @@ async def test_team_ui(wd: Path) -> None:
         lines = [s.text for s in log.lines]
         blob = "\n".join(lines)
         check("team ui: the team marker reached the transcript",
-              "⚑ team: do the thing" in blob or "team: do the thing" in blob,
+              "âš‘ team: do the thing" in blob or "team: do the thing" in blob,
               blob[-400:])
         check("team ui: both workers are labelled in the transcript",
               "[one]" in blob and "[two]" in blob, blob[-600:])
@@ -1804,36 +1804,36 @@ async def test_team_ui(wd: Path) -> None:
 # the price it must have, and the environment override that outranks it.
 
 def test_default_model(wd: Path) -> None:
-    from zimzilla.config import DEFAULT_MODEL
+    from kuro.config import DEFAULT_MODEL
 
     check("default model: the shipped default is deepseek-v4.1-flash",
           DEFAULT_MODEL == "deepseek-v4.1-flash", DEFAULT_MODEL)
 
-    from zimzilla.config import KNOWN_MODELS
+    from kuro.config import KNOWN_MODELS
 
     check("default model: it is in KNOWN_MODELS",
           DEFAULT_MODEL in KNOWN_MODELS,
           f"registry has {len(KNOWN_MODELS)} entries")
 
-    from zimzilla.config import DEFAULT_PRICE, PRICING
+    from kuro.config import DEFAULT_PRICE, PRICING
 
     check("default model: it has a real price, not the fallback",
           DEFAULT_MODEL in PRICING and PRICING[DEFAULT_MODEL] != DEFAULT_PRICE,
           f"{PRICING.get(DEFAULT_MODEL)}")
 
-    from zimzilla.sources import LOGFARE_MODELS
+    from kuro.sources import LOGFARE_MODELS
 
     check("default model: Logfare actually serves it",
           DEFAULT_MODEL in LOGFARE_MODELS,
           f"{len(LOGFARE_MODELS)} served")
 
-    # from_env prefers ZIMZILLA_MODEL, then ANTHROPIC_MODEL, then the
+    # from_env prefers KURO_MODEL, then ANTHROPIC_MODEL, then the
     # constant. The profile exports ANTHROPIC_MODEL, so in a real session the
-    # constant is never consulted — which means a wrong value there would be
+    # constant is never consulted â€” which means a wrong value there would be
     # invisible until someone ran without the profile.
     import os
 
-    saved = {k: os.environ.pop(k, None) for k in ("ZIMZILLA_MODEL", "ANTHROPIC_MODEL")}
+    saved = {k: os.environ.pop(k, None) for k in ("KURO_MODEL", "ANTHROPIC_MODEL")}
     try:
         check("default model: an unset environment yields the default",
               _cfg(wd).model == DEFAULT_MODEL, _cfg(wd).model)
@@ -1842,8 +1842,8 @@ def test_default_model(wd: Path) -> None:
         check("default model: ANTHROPIC_MODEL outranks it",
               _cfg(wd).model == "grok-4.6", _cfg(wd).model)
 
-        os.environ["ZIMZILLA_MODEL"] = "kimi-k2.5"
-        check("default model: ZIMZILLA_MODEL outranks both",
+        os.environ["KURO_MODEL"] = "kimi-k2.5"
+        check("default model: KURO_MODEL outranks both",
               _cfg(wd).model == "kimi-k2.5", _cfg(wd).model)
     finally:
         for k, v in saved.items():
@@ -1854,8 +1854,8 @@ def test_default_model(wd: Path) -> None:
 
 
 async def test_copy_on_select(wd: Path) -> None:
-    """A mouse highlight copies itself — no binding required."""
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    """A mouse highlight copies itself â€” no binding required."""
+    app = KuroApp(_cfg(wd, boot_rain=False))
     copied: list[str] = []
     app.copy_to_clipboard = lambda text: copied.append(text)  # type: ignore[method-assign]
 
@@ -1889,7 +1889,7 @@ async def test_copy_on_select(wd: Path) -> None:
 
 
 async def test_prompt_paste_full(wd: Path) -> None:
-    """A paste lands in the prompt in full — Textual's Input keeps only line 1.
+    """A paste lands in the prompt in full â€” Textual's Input keeps only line 1.
 
     Stock ``Input._on_paste`` does ``event.text.splitlines()[0]``, so a prompt
     copied with any line break in it arrived truncated. ``PromptInput`` keeps
@@ -1899,9 +1899,9 @@ async def test_prompt_paste_full(wd: Path) -> None:
     """
     from textual import events
 
-    from zimzilla.ui.widgets import NEWLINE_GLYPH, PromptInput
+    from kuro.ui.widgets import NEWLINE_GLYPH, PromptInput
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
 
     async with app.run_test(size=(110, 34)) as pilot:
         app.pop_screen()
@@ -1909,7 +1909,7 @@ async def test_prompt_paste_full(wd: Path) -> None:
         inp = app.query_one("#input", PromptInput)
         inp.focus()
 
-        # A long, multi-line paste — the exact shape that used to truncate.
+        # A long, multi-line paste â€” the exact shape that used to truncate.
         pasted = "first instruction line\nsecond line here\nthird and last line"
         inp.post_message(events.Paste(pasted))
         await pilot.pause()
@@ -1950,11 +1950,11 @@ async def test_harness_copy_resize_mouse(wd: Path) -> None:
     """The transcript copies, survives a resize round-trip, and the rails drag."""
     from textual.events import MouseMove
 
-    from zimzilla.ui.rails import ContextGauge, LoopRail, TelemetryRail, Waveform
-    from zimzilla.ui.rain import RainRichLog
-    from zimzilla.ui.widgets import ChatPane
+    from kuro.ui.rails import ContextGauge, LoopRail, TelemetryRail, Waveform
+    from kuro.ui.rain import RainRichLog
+    from kuro.ui.widgets import ChatPane
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     copied: list[str] = []
     app.copy_to_clipboard = lambda text: copied.append(text)  # type: ignore[method-assign]
 
@@ -2208,3 +2208,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

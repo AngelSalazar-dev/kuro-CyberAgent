@@ -1,14 +1,14 @@
-#!/usr/bin/env bash
-# install.sh — one-line installer for ZimZilla.
+﻿#!/usr/bin/env bash
+# install.sh â€” one-line installer for Kuro.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Mr-Destroyer/ZimZilla/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Mr-Destroyer/Kuro/main/install.sh | bash
 #
-# Clones ZimZilla into ~/.local/share/zimzilla, builds a virtualenv there and
-# installs the dependencies into it, then drops a `zimzilla` launcher into
+# Clones Kuro into ~/.local/share/kuro, builds a virtualenv there and
+# installs the dependencies into it, then drops a `kuro` launcher into
 # ~/.local/bin. After this the operator never creates, activates or pip-installs
-# anything by hand: `zimzilla` finds its own venv and runs from any directory.
+# anything by hand: `kuro` finds its own venv and runs from any directory.
 #
-# The venv is built here, on this machine, rather than shipped — a venv is not
+# The venv is built here, on this machine, rather than shipped â€” a venv is not
 # portable (its interpreter symlink, the console-script shebangs and pyvenv.cfg
 # all bake in absolute paths and one exact base interpreter), so the only way
 # to hand someone a working one is to build it where it will run. That is what
@@ -19,40 +19,40 @@
 # needs to run once.
 #
 # Environment overrides (all optional):
-#   ZIMZILLA_REPO          git URL to install from
-#                          (default https://github.com/Mr-Destroyer/ZimZilla.git)
-#   ZIMZILLA_INSTALL_DIR   where the checkout and venv live
-#                          (default ${XDG_DATA_HOME:-~/.local/share}/zimzilla)
-#   ZIMZILLA_BIN_DIR       where the `zimzilla` launcher is written
+#   KURO_REPO          git URL to install from
+#                          (default https://github.com/Mr-Destroyer/Kuro.git)
+#   KURO_INSTALL_DIR   where the checkout and venv live
+#                          (default ${XDG_DATA_HOME:-~/.local/share}/kuro)
+#   KURO_BIN_DIR       where the `kuro` launcher is written
 #                          (default ~/.local/bin)
-#   ZIMZILLA_SKIP_DEPS=1   lay the files down but do not build the venv
-#   ZIMZILLA_SKIP_SETUP=1  do not run setup.sh at the end
+#   KURO_SKIP_DEPS=1   lay the files down but do not build the venv
+#   KURO_SKIP_SETUP=1  do not run setup.sh at the end
 #
-# This is meant to be run from a pipe (`curl … | bash`), where standard input
-# is the script itself — so nothing here may read stdin. External commands get
+# This is meant to be run from a pipe (`curl â€¦ | bash`), where standard input
+# is the script itself â€” so nothing here may read stdin. External commands get
 # </dev/null. setup.sh does not prompt either: it seeds the profile from the key
 # shipped in the checkout, so a fresh install finishes unattended.
 
 set -euo pipefail
 
-REPO="${ZIMZILLA_REPO:-https://github.com/Mr-Destroyer/ZimZilla.git}"
-INSTALL_DIR="${ZIMZILLA_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/zimzilla}"
-BIN_DIR="${ZIMZILLA_BIN_DIR:-$HOME/.local/bin}"
-ZIMZILLA_HOME="${ZIMZILLA_HOME:-$HOME/.zimzilla}"
-PROFILE="$ZIMZILLA_HOME/logfare/source"
+REPO="${KURO_REPO:-https://github.com/Mr-Destroyer/Kuro.git}"
+INSTALL_DIR="${KURO_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/kuro}"
+BIN_DIR="${KURO_BIN_DIR:-$HOME/.local/bin}"
+KURO_HOME="${KURO_HOME:-$HOME/.kuro}"
+PROFILE="$KURO_HOME/logfare/source"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
-step() { printf '\n\033[36m▸\033[0m \033[1m%s\033[0m\n' "$*"; }
-ok()   { printf '  \033[32m✔\033[0m %s\n' "$*"; }
-warn() { printf '  \033[33m⚠\033[0m %s\n' "$*" >&2; }
-die()  { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
+step() { printf '\n\033[36mâ–¸\033[0m \033[1m%s\033[0m\n' "$*"; }
+ok()   { printf '  \033[32mâœ”\033[0m %s\n' "$*"; }
+warn() { printf '  \033[33mâš \033[0m %s\n' "$*" >&2; }
+die()  { printf '\n\033[31mâœ– %s\033[0m\n' "$*" >&2; exit 1; }
 note() { printf '      \033[36m%s\033[0m\n' "$*" >&2; }
 
 # Animate while a command runs, then report it exactly like ok() would have.
 #
 # The command's output is captured and replayed only if it fails, so a spinner
-# never interleaves with pip or git mid-line — and on failure the real error
-# lands right above the ✖ that explains it. When stdout is not a terminal (a
+# never interleaves with pip or git mid-line â€” and on failure the real error
+# lands right above the âœ– that explains it. When stdout is not a terminal (a
 # pipe, a redirect, CI, the test harness) this falls back to plain execution
 # and emits no control characters, so the log stays byte-clean.
 spin() {
@@ -66,14 +66,14 @@ spin() {
   fi
 
   if [[ -z "$SPIN_LOG" ]]; then
-    SPIN_LOG="$(mktemp "${TMPDIR:-/tmp}/zimzilla-install.XXXXXX")"
+    SPIN_LOG="$(mktemp "${TMPDIR:-/tmp}/kuro-install.XXXXXX")"
   fi
   : > "$SPIN_LOG"
   "$@" >"$SPIN_LOG" 2>&1 &
 
-  # A braille spinner, plus the elapsed seconds once a step drags — the
+  # A braille spinner, plus the elapsed seconds once a step drags â€” the
   # dependency install is a minute or two and wants a heartbeat.
-  local -a frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+  local -a frames=(â ‹ â ™ â ¹ â ¸ â ¼ â ´ â ¦ â § â ‡ â )
   local pid=$! i=0 start=$SECONDS el
   while kill -0 "$pid" 2>/dev/null; do
     el=$((SECONDS - start))
@@ -108,9 +108,9 @@ hash_file() {
   fi
 }
 
-bold "╭──────────────────────────────────────────────╮"
-bold "│  ZIMZILLA · install                        │"
-bold "╰──────────────────────────────────────────────╯"
+bold "â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®"
+bold "â”‚  KURO Â· install                        â”‚"
+bold "â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯"
 
 # --- 0. preconditions --------------------------------------------------------
 
@@ -118,23 +118,23 @@ step "Checking prerequisites"
 command -v git >/dev/null 2>&1 || die "git is required."
 
 PY="$(command -v python3 || true)"
-[[ -n "$PY" ]] || die "python3 not found — install Python 3.11 or newer."
+[[ -n "$PY" ]] || die "python3 not found â€” install Python 3.11 or newer."
 "$PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' \
   || die "Python 3.11+ is required; $PY is $("$PY" -c 'import sys;print("%d.%d"%sys.version_info[:2])')."
 ok "git and $("$PY" -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])')"
 
 # --- 1. get the source -------------------------------------------------------
 
-step "Fetching ZimZilla"
+step "Fetching Kuro"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  # An existing install. Fast-forward only — never merge, never touch local
+  # An existing install. Fast-forward only â€” never merge, never touch local
   # edits; a failed pull is a warning, not a stop, because the launcher's own
   # update check will report the same thing at run time.
   spin "updated $INSTALL_DIR" \
     git -C "$INSTALL_DIR" pull --ff-only --quiet </dev/null \
-    || warn "could not update $INSTALL_DIR (local changes or offline) — using what is there"
+    || warn "could not update $INSTALL_DIR (local changes or offline) â€” using what is there"
 elif [[ -e "$INSTALL_DIR" ]]; then
-  die "$INSTALL_DIR exists but is not a git checkout — move it aside and re-run."
+  die "$INSTALL_DIR exists but is not a git checkout â€” move it aside and re-run."
 else
   mkdir -p "$(dirname -- "$INSTALL_DIR")"
   # A full clone, not --depth 1: the launcher's update check counts how far
@@ -149,8 +149,8 @@ fi
 
 VENV_PY="$INSTALL_DIR/.venv/bin/python"
 
-if [[ "${ZIMZILLA_SKIP_DEPS:-0}" == "1" ]]; then
-  warn "ZIMZILLA_SKIP_DEPS=1 — skipping the venv (the launcher will not run yet)"
+if [[ "${KURO_SKIP_DEPS:-0}" == "1" ]]; then
+  warn "KURO_SKIP_DEPS=1 â€” skipping the venv (the launcher will not run yet)"
 else
   step "Building the virtualenv"
   if [[ -x "$VENV_PY" ]]; then
@@ -162,8 +162,8 @@ else
   fi
 
   step "Installing dependencies (a minute or two the first time)"
-  # One spinner covers the whole step — the pip self-upgrade and then
-  # requirements.txt — because together they are the wait worth animating.
+  # One spinner covers the whole step â€” the pip self-upgrade and then
+  # requirements.txt â€” because together they are the wait worth animating.
   _install_deps() {
     "$VENV_PY" -m pip install --quiet --disable-pip-version-check --upgrade pip </dev/null || true
     # Run from the checkout: requirements.txt ends in `-e .`, and pip resolves
@@ -174,7 +174,7 @@ else
         -r "$INSTALL_DIR/requirements.txt" </dev/null )
   }
   spin "dependencies installed" _install_deps \
-    || die "could not install the dependencies — see the pip output above."
+    || die "could not install the dependencies â€” see the pip output above."
   # Stamp the requirements hash so the launcher's incremental refresh sees a
   # matching venv and does nothing on the first launch.
   if _h="$(hash_file "$INSTALL_DIR/requirements.txt")"; then
@@ -186,32 +186,32 @@ fi
 
 step "Installing the launcher"
 mkdir -p "$BIN_DIR"
-# A tiny shim, not the launcher itself: it pins ZIMZILLA_ROOT to the checkout
+# A tiny shim, not the launcher itself: it pins KURO_ROOT to the checkout
 # so the real launcher (which lives in packaging/) finds the venv and the
-# profile no matter where `zimzilla` is invoked from. Written fresh each run so
+# profile no matter where `kuro` is invoked from. Written fresh each run so
 # a moved install re-points itself.
 {
   printf '#!/usr/bin/env bash\n'
-  printf '# zimzilla — installed launcher (written by install.sh).\n'
+  printf '# kuro â€” installed launcher (written by install.sh).\n'
   printf '# Pins the checkout and hands every argument to the real launcher.\n'
-  printf 'export ZIMZILLA_ROOT=%q\n' "$INSTALL_DIR"
-  printf 'exec %q "$@"\n' "$INSTALL_DIR/packaging/zimzilla"
-} > "$BIN_DIR/zimzilla"
-chmod 755 "$BIN_DIR/zimzilla"
-ok "$BIN_DIR/zimzilla"
+  printf 'export KURO_ROOT=%q\n' "$INSTALL_DIR"
+  printf 'exec %q "$@"\n' "$INSTALL_DIR/packaging/kuro"
+} > "$BIN_DIR/kuro"
+chmod 755 "$BIN_DIR/kuro"
+ok "$BIN_DIR/kuro"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) ok "$BIN_DIR is on PATH" ;;
   *)
-    warn "$BIN_DIR is not on your PATH — add it, then open a new shell:"
+    warn "$BIN_DIR is not on your PATH â€” add it, then open a new shell:"
     note "echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.bashrc"
     ;;
 esac
 
 # --- 4. the credential -------------------------------------------------------
 
-if [[ "${ZIMZILLA_SKIP_SETUP:-0}" == "1" ]]; then
-  warn "ZIMZILLA_SKIP_SETUP=1 — not configuring the route"
+if [[ "${KURO_SKIP_SETUP:-0}" == "1" ]]; then
+  warn "KURO_SKIP_SETUP=1 â€” not configuring the route"
 elif [[ -r "$PROFILE" ]]; then
   step "Route already configured"
   ok "$PROFILE exists"
@@ -227,18 +227,19 @@ else
   # rather than a bare call under `set -e`.
   step "Configuring the Logfare route"
   "$INSTALL_DIR/setup.sh" </dev/null \
-    || warn "setup did not finish — run $INSTALL_DIR/setup.sh to retry"
+    || warn "setup did not finish â€” run $INSTALL_DIR/setup.sh to retry"
 fi
 
 # --- done --------------------------------------------------------------------
 
 printf '\n'
-bold "╭──────────────────────────────────────────────╮"
-bold "│  installed.                                  │"
-bold "╰──────────────────────────────────────────────╯"
+bold "â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®"
+bold "â”‚  installed.                                  â”‚"
+bold "â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯"
 printf '\n'
-printf '    \033[36mzimzilla\033[0m                 # launch, from anywhere\n'
-printf '    \033[36mzimzilla -C ~/proj\033[0m       # run against another directory\n'
-printf '    \033[36mzimzilla --mode zim\033[0m      # full auto, follows AGENTS.md\n\n'
+printf '    \033[36mkuro\033[0m                 # launch, from anywhere\n'
+printf '    \033[36mkuro -C ~/proj\033[0m       # run against another directory\n'
+printf '    \033[36mkuro --mode zim\033[0m      # full auto, follows AGENTS.md\n\n'
 printf '  Re-run this installer to update:  %s/install.sh\n' "$INSTALL_DIR"
 printf '  It keeps its own venv, so nothing to activate and nothing to pip-install.\n\n'
+

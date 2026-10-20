@@ -1,9 +1,9 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zimzilla"
+name = "kuro"
 version = "1.0.0"
 description = "An agentic coding CLI over the Anthropic Messages API or any OpenAI-compatible endpoint, with a green-on-black hacker TUI."
 requires-python = ">=3.11"
@@ -15,7 +15,8 @@ dependencies = [
 ]
 
 [project.scripts]
-zimzilla = "zimzilla.__main__:main"
+kuro = "kuro.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["zimzilla*"]
+include = ["kuro*"]
+

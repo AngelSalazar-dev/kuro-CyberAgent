@@ -1,25 +1,25 @@
-"""`/reverse-engineer` regression suite: identify, inventory, probe, brief.
+﻿"""`/reverse-engineer` regression suite: identify, inventory, probe, brief.
 
 Run:  python tests/test_reverse.py   (from an activated venv)
 
 Everything here is offline and model-free, and that is the point of the module
 it covers: ``reverse.identify`` and ``reverse.inventory`` are pure functions of
 a path, and the two commands are built entirely on top of them. If that ever
-stops being true — if mapping an artifact starts needing the network, or starts
-wanting to write beside the artifact — these tests are where it should show up.
+stops being true â€” if mapping an artifact starts needing the network, or starts
+wanting to write beside the artifact â€” these tests are where it should show up.
 
 Four invariants this file is built around:
 
 * **A wrong extension never beats a right header, and a wrong header never
   beats random bytes.** ``sample.bin`` full of urandom once got parsed as an
-  ELF and produced confident garbage — a fake entry point, 35,000 sections.
+  ELF and produced confident garbage â€” a fake entry point, 35,000 sections.
   Identification has to be willing to say "unknown".
 * **Identification is by content, so the same bytes under any name agree.**
-  The zip refinement (AndroidManifest.xml + classes.dex → apk) is what makes
+  The zip refinement (AndroidManifest.xml + classes.dex â†’ apk) is what makes
   an APK an APK, not the ``.apk`` suffix.
 * **Nothing in the inventory writes, executes, or fetches.** The fixtures are
-  hostile by construction — an ELF header over random bytes, a script that
-  tries to look like a dropper — and reading them must stay a read.
+  hostile by construction â€” an ELF header over random bytes, a script that
+  tries to look like a dropper â€” and reading them must stay a read.
 * **A secret in an artifact comes out redacted.** Signatures are surfaced
   because they are the point of reconnaissance; key-shaped strings are not.
 """
@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import reverse as rv  # noqa: E402
+from kuro import reverse as rv  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -47,7 +47,7 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 
 # ---------------------------------------------------------------------------
-# fixtures — built here rather than checked in, so the suite has no binary blobs
+# fixtures â€” built here rather than checked in, so the suite has no binary blobs
 # ---------------------------------------------------------------------------
 
 
@@ -91,7 +91,7 @@ def _elf(path: Path) -> None:
 def _pe(path: Path) -> None:
     """A PE32+ x86-64 image: NX and CFG on, ASLR off, Windows GUI subsystem.
 
-    The PE signature has to land exactly at ``e_lfanew`` — a DOS header is
+    The PE signature has to land exactly at ``e_lfanew`` â€” a DOS header is
     padded, not contiguous, and a fixture that puts the signature right after
     the stub while pointing ``e_lfanew`` past it parses as "MZ, no PE" and
     yields no facts at all.
@@ -185,13 +185,13 @@ def test_refinement_is_by_content(tmp: Path) -> None:
         p = tmp / name
         _apk(p)
         got = rv.identify(p).kind
-        check(f"apk bytes named {name} → apk", got == "apk", got)
+        check(f"apk bytes named {name} â†’ apk", got == "apk", got)
 
     for name in ("lib.jar", "lib.zip", "lib"):
         p = tmp / name
         _jar(p)
         got = rv.identify(p).kind
-        check(f"jar bytes named {name} → jar", got == "jar", got)
+        check(f"jar bytes named {name} â†’ jar", got == "jar", got)
 
 
 # ---------------------------------------------------------------------------
@@ -534,14 +534,14 @@ def test_nothing_is_written(tmp: Path) -> None:
 
 
 def test_symlink_and_missing(tmp: Path) -> None:
-    """Bad input is reported, not raised — these run from a slash command."""
+    """Bad input is reported, not raised â€” these run from a slash command."""
     missing = tmp / "nope.apk"
     try:
         art = rv.identify(missing)
         check("missing: identify does not raise", True, art.kind)
         rv.inventory(art)
         check("missing: inventory does not raise", True)
-    except Exception as exc:  # noqa: BLE001 — the point is that it must not
+    except Exception as exc:  # noqa: BLE001 â€” the point is that it must not
         check("missing: identify does not raise", False, repr(exc))
 
     real = tmp / "real.sh"; _script(real)
@@ -604,3 +604,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

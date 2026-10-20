@@ -1,12 +1,12 @@
-"""Regression suite for the `/osint` result tree.
+﻿"""Regression suite for the `/osint` result tree.
 
 Run:  python tests/test_osint_tree.py   (from an activated venv)
 
-Two layers, matching the split in zimzilla/osint_tree.py itself:
+Two layers, matching the split in kuro/osint_tree.py itself:
 
-* the pure parsing — the ladder, confidence reading, table handling, report
-  resolution — exercised directly and with no terminal;
-* the wiring — that the slash dispatch, the help table, the palette, the
+* the pure parsing â€” the ladder, confidence reading, table handling, report
+  resolution â€” exercised directly and with no terminal;
+* the wiring â€” that the slash dispatch, the help table, the palette, the
   completion popup and the finalise hook all actually expose the tree, so a
   rename in one place cannot silently orphan it in another.
 
@@ -30,11 +30,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import osint_tree as ot  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
-from zimzilla.theme import THEME_NAMES, get_palette  # noqa: E402
-from zimzilla.ui.app import ZimZillaApp  # noqa: E402
-from zimzilla.ui.complete import SLASH_COMMANDS  # noqa: E402
+from kuro import osint_tree as ot  # noqa: E402
+from kuro.config import Config  # noqa: E402
+from kuro.theme import THEME_NAMES, get_palette  # noqa: E402
+from kuro.ui.app import KuroApp  # noqa: E402
+from kuro.ui.complete import SLASH_COMMANDS  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -50,13 +50,13 @@ def _cfg(workdir: Path, **kw) -> Config:
 
 
 # ---------------------------------------------------------------------------
-# Fixtures — the three shapes the real reports come in
+# Fixtures â€” the three shapes the real reports come in
 # ---------------------------------------------------------------------------
 
 # Shape A: conformant. Numbered sections, every finding a `###` heading with the
 # five-line What/Where/Confidence/Means/Verify block underneath.
 SHAPE_A = """\
-# Email OSINT — demo@example.com
+# Email OSINT â€” demo@example.com
 
 ## Headline
 
@@ -67,57 +67,57 @@ This is a demo address belonging to **Demo Person**, used to exercise the tree.
 | Phase | Ran? | Result |
 |-------|------|--------|
 | 1. Validation | yes | Free provider; not disposable |
-| 6. Domain | skipped | Free provider — out of scope |
+| 6. Domain | skipped | Free provider â€” out of scope |
 
 ## 1. VALIDATION
 
 ### Example Mail is a free consumer provider, not corporate
-**What**       — the domain resolves to a free provider.
-**Where**      — `01-dns.txt`, MX records.
-**Confidence** — CONFIRMED
-**Means**      — this is an identity problem, not a domain problem.
-**Verify**     — `dig MX example.com`.
+**What**       â€” the domain resolves to a free provider.
+**Where**      â€” `01-dns.txt`, MX records.
+**Confidence** â€” CONFIRMED
+**Means**      â€” this is an identity problem, not a domain problem.
+**Verify**     â€” `dig MX example.com`.
 
 ### Address is not disposable
-**What**       — Disify reports `disposable: false`.
-**Where**      — `01-dns.txt`.
-**Confidence** — CONFIRMED
-**Means**      — the mailbox is likely a real person's.
-**Verify**     — re-run Disify.
+**What**       â€” Disify reports `disposable: false`.
+**Where**      â€” `01-dns.txt`.
+**Confidence** â€” CONFIRMED
+**Means**      â€” the mailbox is likely a real person's.
+**Verify**     â€” re-run Disify.
 
 ## 2. IDENTITY
 
 ### Full name is Demo Person
-**What**       — the portfolio names its owner.
-**Where**      — `05-portfolio.txt`.
-**Confidence** — CONFIRMED
-**Means**      — the address maps to a named individual.
-**Verify**     — fetch the portfolio page.
+**What**       â€” the portfolio names its owner.
+**Where**      â€” `05-portfolio.txt`.
+**Confidence** â€” CONFIRMED
+**Means**      â€” the address maps to a named individual.
+**Verify**     â€” fetch the portfolio page.
 
 ### Alias demoguy is unconfirmed
-**What**       — a handle appears in one commit only.
-**Where**      — git author string.
-**Confidence** — UNVERIFIED
-**Means**      — not yet tied to the same person.
-**Verify**     — search the handle elsewhere.
+**What**       â€” a handle appears in one commit only.
+**Where**      â€” git author string.
+**Confidence** â€” UNVERIFIED
+**Means**      â€” not yet tied to the same person.
+**Verify**     â€” search the handle elsewhere.
 
 ## 3. LEAKS
 
-Nothing found — no paste or code exposure surfaced for this address.
+Nothing found â€” no paste or code exposure surfaced for this address.
 """
 
 # Shape B: table-only. Same numbered sections, but every finding is a table row
 # and there is not a single `**What**` block. This is the shape a strict parser
 # renders as an empty tree.
 SHAPE_B = """\
-# Email OSINT — demo@example.com
+# Email OSINT â€” demo@example.com
 
 ## 1. VALIDATION
 
 | Item | Value | Source |
 |---|---|---|
-| Provider | **Example Mail — free consumer provider** | `01-dns.txt` |
-| Disposable? | **No** — mainstream provider | — |
+| Provider | **Example Mail â€” free consumer provider** | `01-dns.txt` |
+| Disposable? | **No** â€” mainstream provider | â€” |
 
 **Classification: free provider.** Phase 6 is out of scope.
 
@@ -133,14 +133,14 @@ SHAPE_B = """\
 | Type | Value | Confidence | Source |
 |---|---|---|---|
 | Email (secondary) | `second@example.com` | CONFIRMED | README `mailto:` |
-| Phone | **none found** | — | — |
+| Phone | **none found** | â€” | â€” |
 """
 
-# Shape C: the github report — a different section vocabulary entirely, plus
+# Shape C: the github report â€” a different section vocabulary entirely, plus
 # `###` sub-blocks whose titles cite evidence files, and a `Source` column that
 # leads its table.
 SHAPE_C = """\
-# GitHub OSINT — demohandle
+# GitHub OSINT â€” demohandle
 
 ## 1. ACCOUNT
 
@@ -157,13 +157,13 @@ SHAPE_C = """\
 
 ## 4. BREACH EXPOSURE
 
-### 4a. Breach list (Example) — `03-xon.json`
+### 4a. Breach list (Example) â€” `03-xon.json`
 
 | Breach | Date | Password? |
 |---|---|---|
-| **DemoLeak** | 2023-09 | **Yes — plaintext** |
+| **DemoLeak** | 2023-09 | **Yes â€” plaintext** |
 
-### 4b. Stealer logs — `03-stealer.json`
+### 4b. Stealer logs â€” `03-stealer.json`
 
 | Date | Machine | Malware |
 |---|---|---|
@@ -209,13 +209,13 @@ def _section(node: ot.Node, name: str) -> ot.Node | None:
 
 
 # ---------------------------------------------------------------------------
-# Shape A — the conformant report
+# Shape A â€” the conformant report
 # ---------------------------------------------------------------------------
 
 def test_shape_a() -> None:
     node = _tree(SHAPE_A)
 
-    check("A: the H1 becomes the root", node.label == "Email OSINT — demo@example.com",
+    check("A: the H1 becomes the root", node.label == "Email OSINT â€” demo@example.com",
           repr(node.label))
 
     names = [c.label for c in node.children]
@@ -242,14 +242,14 @@ def test_shape_a() -> None:
           repr(ident.children[1].confidence))
 
     # A section that found nothing is a finding in its own right and must not
-    # be dropped — the report guide says so explicitly.
+    # be dropped â€” the report guide says so explicitly.
     leaks = _section(node, "3. LEAKS")
     check("A: a 'nothing found' section still appears", leaks is not None)
     check("A: its prose is kept as a leaf",
           bool(leaks.children) and "no paste or code exposure" in leaks.children[0].label,
           f"{leaks.children[0].label[:60] if leaks.children else 'none'}")
 
-    # Headline is the run's most important paragraph — losing it would be the
+    # Headline is the run's most important paragraph â€” losing it would be the
     # worst thing this view could do.
     head = _section(node, "Headline")
     check("A: the Headline is rendered, not dropped",
@@ -263,7 +263,7 @@ def test_shape_a() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Shape B — the table-only report (the regression a strict parser fails)
+# Shape B â€” the table-only report (the regression a strict parser fails)
 # ---------------------------------------------------------------------------
 
 def test_shape_b() -> None:
@@ -279,7 +279,7 @@ def test_shape_b() -> None:
     # The header row names the columns; counting it would inflate every section.
     labels = " | ".join(_labels(node))
     check("B: the header row is not counted as a finding",
-          "Item · Value" not in labels and "Attribute · Value" not in labels,
+          "Item Â· Value" not in labels and "Attribute Â· Value" not in labels,
           labels[:90])
 
     # A trailing source column is provenance, not a finding. `01-dns.txt` must
@@ -289,7 +289,7 @@ def test_shape_b() -> None:
 
     # ...but the *value* survives. Over-trimming here would silently gut the tree.
     check("B: the row's value survives",
-          "Provider · Example Mail — free consumer provider" in labels,
+          "Provider Â· Example Mail â€” free consumer provider" in labels,
           labels[:120])
 
     ident = _section(node, "2. IDENTITY")
@@ -298,22 +298,22 @@ def test_shape_b() -> None:
           and ident.children[1].confidence == "UNVERIFIED",
           f"{[c.confidence for c in ident.children]}")
 
-    # A `—` source cell means "no source"; the value before it must remain.
+    # A `â€”` source cell means "no source"; the value before it must remain.
     contact = _section(node, "3. CONTACT")
     check("B: a row with an em-dash source keeps its value",
-          any("Phone · none found" in c.label for c in contact.children),
+          any("Phone Â· none found" in c.label for c in contact.children),
           f"{[c.label for c in contact.children]}")
 
 
 # ---------------------------------------------------------------------------
-# Shape C — the github report's different vocabulary
+# Shape C â€” the github report's different vocabulary
 # ---------------------------------------------------------------------------
 
 def test_shape_c() -> None:
     node = _tree(SHAPE_C)
 
     names = [c.label for c in node.children]
-    # The parser keys on `## `, never on a hard-coded section list — which is
+    # The parser keys on `## `, never on a hard-coded section list â€” which is
     # the only reason a report with a different vocabulary works at all.
     check("C: sections are whatever the report calls them",
           names == ["1. ACCOUNT", "2. EMAILS", "4. BREACH EXPOSURE", "6. KEYS",
@@ -371,7 +371,7 @@ def test_unparsed_sections() -> None:
 ## 2. TOTALLY EMPTY
 """)
 
-    # A section of pure structure — a quote, a rule — has nothing to show. It
+    # A section of pure structure â€” a quote, a rule â€” has nothing to show. It
     # must say so, because a bare branch reads as "nothing was there".
     empty = _section(node, "1. STRUCTURE ONLY")
     check("unparsed: a section with no findings still appears", empty is not None)
@@ -387,10 +387,10 @@ def test_unparsed_sections() -> None:
           blank is not None and blank.note == "(empty section)",
           repr(blank.note if blank else ""))
 
-    # But prose *is* a finding at the bottom rung: "Nothing found — <why>" is
+    # But prose *is* a finding at the bottom rung: "Nothing found â€” <why>" is
     # the shape the report guide mandates for an empty section, and dropping it
     # would lose the reason.
-    prose = _tree("# T\n\n## 1. LEAKS\n\nNothing found — every source was key-gated.\n")
+    prose = _tree("# T\n\n## 1. LEAKS\n\nNothing found â€” every source was key-gated.\n")
     leaks = _section(prose, "1. LEAKS")
     check("unparsed: a 'nothing found' sentence is kept as a leaf",
           bool(leaks.children) and "key-gated" in leaks.children[0].label,
@@ -502,7 +502,7 @@ def test_find_report(tmp: Path) -> None:
     check("find: only .md files are considered",
           ot.find_report(cfg) == a, f"{ot.find_report(cfg)}")
 
-    # `<state_dir>/reports/` is shared with /bug-hunt and /crack — all three
+    # `<state_dir>/reports/` is shared with /bug-hunt and /crack â€” all three
     # move their finished report into the same flat directory. A newer hunt or
     # crack report must not be handed back as "the latest recon": it parses to
     # nothing, so the operator would get an empty tree for a run that never
@@ -510,7 +510,7 @@ def test_find_report(tmp: Path) -> None:
     h = base / "hunt-x.test-20260103-000000.md"
     c = base / "some-tgs.txt-20260104-000000.md"
     h.write_text("---\ntarget: x.test\n---\n")
-    c.write_text("# Password cracking — tgs.txt\n")
+    c.write_text("# Password cracking â€” tgs.txt\n")
     os.utime(h, (now + 900, now + 900))
     os.utime(c, (now + 950, now + 950))
     check("find: a newer hunt report is not a recon",
@@ -525,7 +525,7 @@ def test_find_report_live_case(tmp: Path) -> None:
     """A case directory that never finalised is still a readable recon.
 
     ``finalise_case`` runs in the turn's ``finally`` block, so an app killed
-    outright — Ctrl+C twice, a crash, a closed terminal — leaves the case (and
+    outright â€” Ctrl+C twice, a crash, a closed terminal â€” leaves the case (and
     its ``report.md``) on disk forever. This is not hypothetical: it is how all
     three real reports on this box ended up in case directories rather than in
     the archive, and the whole reason ``/osint-tree`` searches both.
@@ -559,7 +559,7 @@ def test_find_report_live_case(tmp: Path) -> None:
           ot.find_report(cfg, "github-beta-20260102-000000") == new / "report.md",
           f"{ot.find_report(cfg, 'github-beta-20260102-000000')}")
 
-    # A case dir with no report in it is a failed run, not a result — it must
+    # A case dir with no report in it is a failed run, not a result â€” it must
     # not shadow a real one, and must not be returned at all.
     empty = root / "email-gamma-20260103-000000"
     empty.mkdir()
@@ -622,13 +622,13 @@ def test_render() -> None:
 
     # Colours come from the palette, so the tree reads in any theme. Iterating
     # THEME_NAMES rather than a hardcoded trio is what makes a newly-added theme
-    # get checked here without anyone remembering to come back and edit this —
+    # get checked here without anyone remembering to come back and edit this â€”
     # the list had already drifted from the one the UI offers once.
     for theme in THEME_NAMES:
         t = ot.render_tree(node, get_palette(theme))
         check(f"render: it renders under the {theme} palette", t is not None)
 
-    # Confidence styling must actually differ per level — the failure this
+    # Confidence styling must actually differ per level â€” the failure this
     # guards is every tag falling through to `dim`.
     styles = {c: ot.confidence_style(c, pal) for c in ot.CONFIDENCES}
     check("render: the three confidence levels are styled distinctly",
@@ -642,7 +642,7 @@ def test_render() -> None:
 # ---------------------------------------------------------------------------
 
 def test_wiring() -> None:
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text()
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text()
 
     check("wiring: dispatch has an osint-tree entry",
           '"osint-tree": lambda a:' in app_src)
@@ -689,7 +689,7 @@ async def test_ui(wd: Path) -> None:
     """Drive /osint end to end and confirm the tree reaches the transcript."""
     from rich.tree import Tree
 
-    from zimzilla.ui.widgets import ChatPane
+    from kuro.ui.widgets import ChatPane
 
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "ui-state"
@@ -703,7 +703,7 @@ async def test_ui(wd: Path) -> None:
 
     ChatPane.write_block = spy
     try:
-        app = ZimZillaApp(cfg)
+        app = KuroApp(cfg)
         async with app.run_test(size=(120, 44)) as pilot:
             app.pop_screen()
             await pilot.pause()
@@ -737,7 +737,7 @@ async def test_ui(wd: Path) -> None:
             check("ui: the summary line is printed",
                   "RESULT" in texts and "finding" in texts, texts[:90])
 
-            # The archive still happens — the tree is added to that path, not
+            # The archive still happens â€” the tree is added to that path, not
             # instead of it.
             archived = list((cfg.state_dir / "reports").glob("email-demo-example.com-*.md"))
             check("ui: the report is still archived", len(archived) == 1,
@@ -799,7 +799,7 @@ def test_real_reports() -> None:
     without running is worse than no check, and these are the only inputs that
     prove the ladder against markdown nobody wrote for a test.
     """
-    base = Path.home() / ".zimzilla" / "osint"
+    base = Path.home() / ".kuro" / "osint"
     found = sorted(base.glob("*/report.md")) if base.is_dir() else []
     if not found:
         print("SKIP  real: no archived reports on this box to parse")
@@ -813,7 +813,7 @@ def test_real_reports() -> None:
               total > 0 and len(node.children) > 0,
               f"{total} findings across {len(node.children)} sections")
 
-        # Every section must be accounted for — rendered with children, or with
+        # Every section must be accounted for â€” rendered with children, or with
         # the explicit note. A bare branch is the silent-empty failure.
         bare = [c.label for c in node.children if not c.children and not c.note]
         check(f"real: {tag} has no silent empty sections", not bare, f"{bare}")
@@ -843,3 +843,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

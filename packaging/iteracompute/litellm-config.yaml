@@ -1,26 +1,26 @@
-# IteraCompute — the LiteLLM translation proxy.
+﻿# IteraCompute â€” the LiteLLM translation proxy.
 #
-#     ZimZilla (Anthropic /v1/messages) --▶ LiteLLM :4002 --▶ IteraCompute (OpenAI)
+#     Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4002 --â–¶ IteraCompute (OpenAI)
 #
 # IteraCompute serves the OpenAI protocol only. Measured 2026-10-19:
 # `POST https://api.iteracompute.com/v1/messages` answers
 # `404 edge_route_not_allowed`, so a session pointed straight at the upstream
 # would 404 on every turn while the catalog still worked. This proxy is what
-# makes it a ZimZilla source, exactly like packaging/logfare and
+# makes it a Kuro source, exactly like packaging/logfare and
 # packaging/tokenjuice.
 #
 # The upstream key is read from ANTHROPIC_AUTH_TOKEN, which the profile in this
-# directory exports. It is also the proxy's master key: ZimZilla already sends
+# directory exports. It is also the proxy's master key: Kuro already sends
 # it as x-api-key, so the request that worked before keeps working, while
 # anything else on the box that finds the port is rejected.
 #
-# Model ids are `provider/model` and must be forwarded verbatim — the gateway's
+# Model ids are `provider/model` and must be forwarded verbatim â€” the gateway's
 # docs say to use the Models endpoint's `id` exactly as returned, with no
 # `iteracompute/` prefix. `openai/*` does that: it forwards the requested name
 # unchanged. The named entry below is the free model as of 2026-10-19; the
 # wildcard is what lets a model added upstream work without a release here.
 #
-# Chat Completions only — and that needs saying, because LiteLLM's default is
+# Chat Completions only â€” and that needs saying, because LiteLLM's default is
 # the opposite. Since 1.x, a `/v1/messages` request whose deployment is the
 # `openai/` provider is routed through the **Responses API** by default; measured
 # on this box with litellm 1.105.1, the upstream received `POST /v1/responses`.
@@ -37,7 +37,7 @@ general_settings:
   master_key: os.environ/ANTHROPIC_AUTH_TOKEN
 
 model_list:
-  # The free tier's model — 30M tokens per UTC calendar month on a Free
+  # The free tier's model â€” 30M tokens per UTC calendar month on a Free
   # account, no card required. It is a reasoning model; the harness does not
   # ask for effort, so the gateway's default applies.
   - model_name: qwen/qwen3.8-27b
@@ -46,11 +46,12 @@ model_list:
       api_base: https://api.iteracompute.com/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
 
-  # Any other model the catalog serves. A paid model is reachable here too —
+  # Any other model the catalog serves. A paid model is reachable here too â€”
   # the harness's catalog lists them, and the account's balance decides whether
-  # the upstream answers — so this is a fallback, not a free-only route.
+  # the upstream answers â€” so this is a fallback, not a free-only route.
   - model_name: "*"
     litellm_params:
       model: openai/*
       api_base: https://api.iteracompute.com/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
+

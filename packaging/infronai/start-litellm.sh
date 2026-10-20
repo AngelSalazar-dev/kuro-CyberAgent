@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
-# start-litellm.sh — run the LiteLLM translation proxy for ZimZilla.
+﻿#!/usr/bin/env bash
+# start-litellm.sh â€” run the LiteLLM translation proxy for Kuro.
 #
-#   ZimZilla (Anthropic /v1/messages) --▶ LiteLLM :4003 --▶ InfronAI (OpenAI)
+#   Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4003 --â–¶ InfronAI (OpenAI)
 #
 # Usage:  ./start-litellm.sh [start|stop|restart|status|logs|help]
 #
@@ -28,7 +28,7 @@ PID_FILE="${LITELLM_PID_FILE:-/tmp/litellm-infron.pid}"
 HOST="${LITELLM_HOST:-127.0.0.1}"
 
 # NOTE: litellm reads the env var LITELLM_LOG as its *log level* ("INFO",
-# "DEBUG"), so it must never carry a file path — doing so crashes it at import
+# "DEBUG"), so it must never carry a file path â€” doing so crashes it at import
 # with "module 'logging' has no attribute '/tmp/...'". The log-file path lives
 # in LITELLM_LOGFILE. A path-valued LITELLM_LOG is still accepted for
 # backwards compatibility, but is stripped before litellm is launched.
@@ -45,8 +45,8 @@ if [[ -z "${LITELLM_BIN:-}" ]]; then
 fi
 if [[ -z "$LITELLM_BIN" ]]; then
   for _c in "$HOME/.local/bin/litellm" \
-            "${ZIMZILLA_HOME:-$HOME/.zimzilla}/venv/bin/litellm" \
-            "$HOME/.zimzilla/venv/bin/litellm" "$HOME/venv/bin/litellm"; do
+            "${KURO_HOME:-$HOME/.kuro}/venv/bin/litellm" \
+            "$HOME/.kuro/venv/bin/litellm" "$HOME/venv/bin/litellm"; do
     [[ -x "$_c" ]] && LITELLM_BIN="$_c" && break
   done
 fi
@@ -57,7 +57,7 @@ log() { printf '\033[36m[liteLLM]\033[0m %s\n' "$*"; }
 err() { printf '\033[31m[liteLLM]\033[0m %s\n' "$*" >&2; }
 
 # A pidfile is only a number, and pids get reused. Confirm the recorded pid is
-# actually a litellm serving THIS config before believing it — otherwise a stale
+# actually a litellm serving THIS config before believing it â€” otherwise a stale
 # file makes do_start report a false "already running" and leaves the route
 # pointing at a port nothing is answering on.
 pid_is_our_proxy() {
@@ -101,8 +101,8 @@ port_owner_pids() {
 # port plus "is a litellm" reclaims those without guessing at a path that has
 # changed since.
 #
-# Both conditions must hold before anything is signalled — it must be a litellm,
-# and it must hold this port — so an unrelated service on :$PORT is never a
+# Both conditions must hold before anything is signalled â€” it must be a litellm,
+# and it must hold this port â€” so an unrelated service on :$PORT is never a
 # target. Takes an optional signal name, defaulting to TERM.
 kill_port_orphans() {
   local sig="${1:-TERM}" pid args
@@ -138,7 +138,7 @@ do_stop() {
       log "not tracked as running."
       return 0
     fi
-    log "no pid file, but something is still serving :$PORT — reclaiming it"
+    log "no pid file, but something is still serving :$PORT â€” reclaiming it"
     # Precise case first: a proxy of ours whose cmdline names this exact config.
     pkill -f "litellm --config $CONFIG" 2>/dev/null || true
     # Then the general one, which reaches a stray from an older layout.
@@ -177,7 +177,7 @@ do_start() {
   command -v "$LITELLM_BIN" >/dev/null 2>&1 || [[ -x "$LITELLM_BIN" ]] \
     || { err "litellm not found at '$LITELLM_BIN'. Install: pip install 'litellm[proxy]'"; exit 1; }
   [[ -f "$CONFIG" ]]      || { err "config not found: $CONFIG"; exit 1; }
-  [[ -f "$ENV_FILE" ]]    || { err "profile not found: $ENV_FILE — run ./setup.sh first"; exit 1; }
+  [[ -f "$ENV_FILE" ]]    || { err "profile not found: $ENV_FILE â€” run ./setup.sh first"; exit 1; }
 
   # Load the profile and export everything it defines (no key is echoed).
   set -a; . "$ENV_FILE"; set +a
@@ -203,12 +203,12 @@ do_start() {
   local i
   for i in $(seq 1 180); do
     if port_answers; then
-      log "up and healthy (pid $(cat "$PID_FILE")) ✓"
+      log "up and healthy (pid $(cat "$PID_FILE")) âœ“"
       return 0
     fi
     sleep 1
   done
-  err "proxy did not become healthy within 180s — last log lines:"
+  err "proxy did not become healthy within 180s â€” last log lines:"
   tail -n 20 "$LOG" >&2 || true
   exit 1
 }
@@ -235,3 +235,4 @@ case "${1:-start}" in
   help|-h|--help) do_help ;;
   *) err "usage: $0 [start|stop|restart|status|logs|help]"; exit 2 ;;
 esac
+

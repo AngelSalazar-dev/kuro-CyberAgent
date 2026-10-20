@@ -1,16 +1,16 @@
-"""Regression suite for the one-line installer and the launcher it writes.
+﻿"""Regression suite for the one-line installer and the launcher it writes.
 
 Run:  python tests/test_install.py
 
 Hermetic: no network, no real dependencies. It builds a throwaway git repo to
 stand in for the upstream, runs install.sh against it with the dependency and
-credential steps switched off, and checks the install layout it produces — the
+credential steps switched off, and checks the install layout it produces â€” the
 checkout, the launcher shim, and the interpreter the launcher then chooses.
 
-What is being protected is the promise install.sh makes: `zimzilla` on PATH,
+What is being protected is the promise install.sh makes: `kuro` on PATH,
 running the checkout's own venv, from any directory, with no activation. The
-parts that break silently are the two that decide *which* interpreter runs — the
-shim's ZIMZILLA_ROOT and the launcher's root derivation — so those are asserted
+parts that break silently are the two that decide *which* interpreter runs â€” the
+shim's KURO_ROOT and the launcher's root derivation â€” so those are asserted
 directly, by reading the path the launcher reports in its failure message, not
 merely by exit code.
 """
@@ -51,14 +51,14 @@ def base_env(home: Path) -> dict:
 
     XDG_DATA_HOME is pinned into the temp HOME too. install.sh honours it, so an
     operator who exports it (common on Arch) would otherwise send the test's
-    clone into their real ~/.local/share — the test must not depend on the
+    clone into their real ~/.local/share â€” the test must not depend on the
     ambient environment to stay inside its sandbox.
     """
     env = dict(os.environ)
     env["HOME"] = str(home)
     env["XDG_DATA_HOME"] = str(home / ".local" / "share")
-    for var in ("VIRTUAL_ENV", "ZIMZILLA_ROOT", "ZIMZILLA_INSTALL_DIR",
-                "ZIMZILLA_BIN_DIR", "ZIMZILLA_SKIP_DEPS", "ZIMZILLA_SKIP_SETUP"):
+    for var in ("VIRTUAL_ENV", "KURO_ROOT", "KURO_INSTALL_DIR",
+                "KURO_BIN_DIR", "KURO_SKIP_DEPS", "KURO_SKIP_SETUP"):
         env.pop(var, None)
     return env
 
@@ -67,8 +67,8 @@ def make_source(td: Path) -> Path:
     """A minimal git repo to clone: the launcher, requirements, a setup stub."""
     src = td / "src"
     (src / "packaging").mkdir(parents=True)
-    shutil.copy(ROOT / "packaging" / "zimzilla", src / "packaging" / "zimzilla")
-    os.chmod(src / "packaging" / "zimzilla", 0o755)
+    shutil.copy(ROOT / "packaging" / "kuro", src / "packaging" / "kuro")
+    os.chmod(src / "packaging" / "kuro", 0o755)
     # Empty (comment-only) so the launcher's dependency sync, if it ever runs,
     # is a no-op rather than a network fetch.
     (src / "requirements.txt").write_text("# no deps in this test\n")
@@ -83,7 +83,7 @@ def make_source(td: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# install.sh — the layout it lays down
+# install.sh â€” the layout it lays down
 # ---------------------------------------------------------------------------
 
 def test_install_layout(td: Path) -> dict:
@@ -91,14 +91,14 @@ def test_install_layout(td: Path) -> dict:
     home.mkdir()
     src = make_source(td)
     env = base_env(home)
-    env["ZIMZILLA_REPO"] = f"file://{src}"
-    env["ZIMZILLA_SKIP_DEPS"] = "1"
-    env["ZIMZILLA_SKIP_SETUP"] = "1"
+    env["KURO_REPO"] = f"file://{src}"
+    env["KURO_SKIP_DEPS"] = "1"
+    env["KURO_SKIP_SETUP"] = "1"
 
-    install_dir = home / ".local" / "share" / "zimzilla"
+    install_dir = home / ".local" / "share" / "kuro"
     bin_dir = home / ".local" / "bin"
 
-    # Feed the script on stdin, exactly as `curl … | bash` would, to prove
+    # Feed the script on stdin, exactly as `curl â€¦ | bash` would, to prove
     # nothing in it reads standard input.
     rc, out, err = run(["bash"], env=env, cwd=ROOT,
                        stdin=(ROOT / "install.sh").read_text())
@@ -106,29 +106,29 @@ def test_install_layout(td: Path) -> dict:
     check("install: clones the checkout", (install_dir / ".git").is_dir(),
           str(install_dir))
     check("install: lays the launcher on PATH",
-          (bin_dir / "zimzilla").is_file(), str(bin_dir / "zimzilla"))
+          (bin_dir / "kuro").is_file(), str(bin_dir / "kuro"))
     check("install: the launcher is executable",
-          os.access(bin_dir / "zimzilla", os.X_OK))
+          os.access(bin_dir / "kuro", os.X_OK))
 
-    shim = (bin_dir / "zimzilla").read_text()
-    check("install: the shim pins ZIMZILLA_ROOT to the checkout",
-          f'ZIMZILLA_ROOT="{install_dir}"' in shim
-          or f"ZIMZILLA_ROOT={install_dir}" in shim, shim.strip())
+    shim = (bin_dir / "kuro").read_text()
+    check("install: the shim pins KURO_ROOT to the checkout",
+          f'KURO_ROOT="{install_dir}"' in shim
+          or f"KURO_ROOT={install_dir}" in shim, shim.strip())
     check("install: the shim execs the real launcher",
-          f"{install_dir}/packaging/zimzilla" in shim, shim.strip())
+          f"{install_dir}/packaging/kuro" in shim, shim.strip())
 
     return {"home": home, "install_dir": install_dir, "bin_dir": bin_dir, "src": src}
 
 
 # ---------------------------------------------------------------------------
-# The launcher — which interpreter it picks
+# The launcher â€” which interpreter it picks
 # ---------------------------------------------------------------------------
 
 def fake_bundled_venv(install_dir: Path) -> Path:
     """A stand-in venv: a python that exists, plus a stamp so sync_deps no-ops.
 
     The python is the real system interpreter, so the dependency import check
-    fails as it would on a fresh machine — which is the point: the failure
+    fails as it would on a fresh machine â€” which is the point: the failure
     message names the interpreter that was chosen.
     """
     venv_bin = install_dir / ".venv" / "bin"
@@ -147,7 +147,7 @@ def fake_bundled_venv(install_dir: Path) -> Path:
 
 def test_launcher_prefers_bundled_venv(ctx: dict) -> None:
     install_dir, bin_dir = ctx["install_dir"], ctx["bin_dir"]
-    launcher = install_dir / "packaging" / "zimzilla"
+    launcher = install_dir / "packaging" / "kuro"
     if not launcher.exists():
         # A failed install should read as a failed check, not a traceback.
         check("launcher: the checkout was installed", False, str(launcher))
@@ -156,13 +156,13 @@ def test_launcher_prefers_bundled_venv(ctx: dict) -> None:
     venv_py = fake_bundled_venv(install_dir)
     env = base_env(ctx["home"])
 
-    # Through the installed shim — the way a user runs it.
-    rc, out, err = run([str(bin_dir / "zimzilla"), "--version"], env=env, cwd=ctx["home"])
+    # Through the installed shim â€” the way a user runs it.
+    rc, out, err = run([str(bin_dir / "kuro"), "--version"], env=env, cwd=ctx["home"])
     check("launcher: the shim resolves the checkout's venv",
           str(venv_py) in err, err.strip()[-300:])
     check("launcher: fails closed on missing deps (exit 2)", rc == 2, f"rc={rc}")
 
-    # The launcher directly, with no ZIMZILLA_ROOT and from an unrelated cwd —
+    # The launcher directly, with no KURO_ROOT and from an unrelated cwd â€”
     # it must derive the checkout as the parent of packaging/ on its own.
     rc, out, err = run([str(launcher), "--version"], env=env, cwd="/")
     check("launcher: derives the checkout from its own location",
@@ -174,13 +174,13 @@ def test_launcher_falls_back_to_path_python(td: Path) -> None:
     # VIRTUAL_ENV either, it must fall back to python3 on PATH.
     root = td / "byo"
     (root / "packaging").mkdir(parents=True)
-    shutil.copy(ROOT / "packaging" / "zimzilla", root / "packaging" / "zimzilla")
-    os.chmod(root / "packaging" / "zimzilla", 0o755)
+    shutil.copy(ROOT / "packaging" / "kuro", root / "packaging" / "kuro")
+    os.chmod(root / "packaging" / "kuro", 0o755)
 
     home = td / "home2"
     home.mkdir()
     env = base_env(home)
-    rc, out, err = run([str(root / "packaging" / "zimzilla"), "--version"], env=env, cwd="/")
+    rc, out, err = run([str(root / "packaging" / "kuro"), "--version"], env=env, cwd="/")
     path_py = shutil.which("python3")
     check("launcher: falls back to python3 on PATH",
           path_py is not None and path_py in err, err.strip()[-300:])
@@ -189,12 +189,12 @@ def test_launcher_falls_back_to_path_python(td: Path) -> None:
 def test_setup_installs_without_a_key_and_without_prompting(td: Path) -> None:
     """A fresh install must neither stop to ask for a key nor invent one.
 
-    The install path is `curl … | bash` and then `zimzilla`, so a prompt for a
+    The install path is `curl â€¦ | bash` and then `kuro`, so a prompt for a
     third-party signup in the middle of that is friction worth avoiding. But the
     other half matters just as much: no credential ships in the tree, because a
     key committed to a public repository is spendable by anyone and cannot be
     unpublished. setup.sh therefore installs the route, writes a profile with no
-    token in it, and says where a key goes — with no terminal attached.
+    token in it, and says where a key goes â€” with no terminal attached.
 
     Run in a throwaway HOME with stdin closed. Every network step is stubbed
     (the proxy is never started, nothing is fetched): what is asserted is the
@@ -202,7 +202,7 @@ def test_setup_installs_without_a_key_and_without_prompting(td: Path) -> None:
     """
     home = td / "home-setup"
     home.mkdir()
-    zhome = home / ".zimzilla"
+    zhome = home / ".kuro"
     checkout = td / "checkout"
     (checkout / "packaging" / "logfare").mkdir(parents=True)
     # The shipped profile, as it lands in a clone: the real template, placeholder
@@ -225,14 +225,14 @@ def test_setup_installs_without_a_key_and_without_prompting(td: Path) -> None:
     os.chmod(shim, 0o755)
 
     env = base_env(home)
-    env["ZIMZILLA_HOME"] = str(zhome)
-    env["ZIMZILLA_ROOT"] = str(checkout)
+    env["KURO_HOME"] = str(zhome)
+    env["KURO_ROOT"] = str(checkout)
     env.pop("ANTHROPIC_AUTH_TOKEN", None)
     env.pop("ANTHROPIC_API_KEY", None)
     # Hermetic: no network, and nothing slow. `litellm` on PATH stops setup.sh
     # from building a proxy venv (a pip install), and a `curl` that always
     # fails stops the pagekite download and makes the health probes read as
-    # "nothing answering" — both are warnings, so the script still exits 0.
+    # "nothing answering" â€” both are warnings, so the script still exits 0.
     stubs = td / "stubs"
     stubs.mkdir()
     (stubs / "litellm").write_text("#!/bin/sh\nexit 0\n")
@@ -274,15 +274,15 @@ def test_setup_installs_without_a_key_and_without_prompting(td: Path) -> None:
     personal = td / "home-setup2"
     personal.mkdir()
     env2 = base_env(personal)
-    env2["ZIMZILLA_HOME"] = str(personal / ".zimzilla")
-    env2["ZIMZILLA_ROOT"] = str(checkout)
+    env2["KURO_HOME"] = str(personal / ".kuro")
+    env2["KURO_ROOT"] = str(checkout)
     env2["ANTHROPIC_AUTH_TOKEN"] = "lfu_personal_key_should_win"
     env2["PATH"] = env["PATH"]
     subprocess.run(["bash", str(checkout / "setup.sh")],
                    cwd=str(checkout), env=env2,
                    stdin=subprocess.DEVNULL, capture_output=True, text=True,
                    timeout=120)
-    written = (personal / ".zimzilla" / "logfare" / "source")
+    written = (personal / ".kuro" / "logfare" / "source")
     check("setup: a personal key in the environment is written to the profile",
           written.is_file() and "lfu_personal_key_should_win" in written.read_text(),
           written.read_text()[:120] if written.is_file() else "missing")
@@ -305,3 +305,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

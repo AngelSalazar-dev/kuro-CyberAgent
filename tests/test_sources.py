@@ -1,11 +1,11 @@
-"""Regression suite for upstream source discovery and proxy start.
+﻿"""Regression suite for upstream source discovery and proxy start.
 
 Run:  python tests/test_sources.py   (from an activated venv)
 
-Protects the /zim-tokenjuice switch: the installed ~/.zimzilla/tokenjuice
+Protects the /zim-tokenjuice switch: the installed ~/.kuro/tokenjuice
 route must win over a leftover $HOME/start-litellm.sh from an older
 deepseek-claude layout, and start_proxy must not wrap the service in flock.
-A leaked flock on /tmp/zimzilla-proxy.lock is what made the in-TUI switch
+A leaked flock on /tmp/kuro-proxy.lock is what made the in-TUI switch
 hang until timeout while a manual start of the same script finished in
 seconds.
 """
@@ -21,11 +21,11 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import sources  # noqa: E402
+from kuro import sources  # noqa: E402
 # Imported for the ``switchable`` suite: ``sources`` reaches for AntSeed inside
 # the function rather than at module level (to avoid a circular import), so the
 # module has to be patched where it actually lives.
-from zimzilla import antseed  # noqa: E402
+from kuro import antseed  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -45,8 +45,8 @@ def _touch(path: Path, mode: int = 0o644) -> Path:
 def test_tokenjuice_prefers_installed_route() -> None:
     with tempfile.TemporaryDirectory() as td:
         home = Path(td) / "home"
-        zhome = Path(td) / "zimzilla"
-        # Both layouts exist — the leftover $HOME copy must lose.
+        zhome = Path(td) / "kuro"
+        # Both layouts exist â€” the leftover $HOME copy must lose.
         _touch(home / "start-litellm.sh", 0o755)
         _touch(home / "litellm-config.yaml")
         _touch(home / "claude-source" / "deepseek-claude")
@@ -55,7 +55,7 @@ def test_tokenjuice_prefers_installed_route() -> None:
         installed_src = _touch(zhome / "tokenjuice" / "source")
 
         with mock.patch.object(sources, "DEFAULT_HOME", home), \
-             mock.patch.object(sources, "ZIMZILLA_HOME", zhome):
+             mock.patch.object(sources, "KURO_HOME", zhome):
             found = sources.discover()
 
         tj = found.get("tokenjuice")
@@ -73,14 +73,14 @@ def test_tokenjuice_prefers_installed_route() -> None:
 def test_tokenjuice_falls_back_to_home_layout() -> None:
     with tempfile.TemporaryDirectory() as td:
         home = Path(td) / "home"
-        zhome = Path(td) / "zimzilla"
+        zhome = Path(td) / "kuro"
         zhome.mkdir()
         home_svc = _touch(home / "start-litellm.sh", 0o755)
         home_cfg = _touch(home / "litellm-config.yaml")
         home_src = _touch(home / "claude-source" / "deepseek-claude")
 
         with mock.patch.object(sources, "DEFAULT_HOME", home), \
-             mock.patch.object(sources, "ZIMZILLA_HOME", zhome):
+             mock.patch.object(sources, "KURO_HOME", zhome):
             found = sources.discover()
 
         tj = found.get("tokenjuice")
@@ -138,7 +138,7 @@ def test_remote_gateways_are_identified_by_host() -> None:
 
     Logfare and Token Juice are local proxies, found by the port in their URL.
     TokenHarbour and OpenRouter are remote, so ``active_key`` has to recognise
-    them by host instead — and it must check them *before* the port regex, or a
+    them by host instead â€” and it must check them *before* the port regex, or a
     hosted URL falls through to ``None`` and the session is reported as pointing
     at nothing.
     """
@@ -166,7 +166,7 @@ def test_builtin_keys_survive_a_restart() -> None:
 
     ``current_key`` validates a *discovered* source by checking its files are
     present. The remote gateways have no profile, service or config to discover
-    — so gating them the same way would silently drop the selection and put the
+    â€” so gating them the same way would silently drop the selection and put the
     next launch back on Logfare.
     """
     check("builtin: both remote gateways are listed",
@@ -174,23 +174,23 @@ def test_builtin_keys_survive_a_restart() -> None:
           str(sorted(sources.BUILTIN_KEYS)))
 
     with tempfile.TemporaryDirectory() as td:
-        zhome = Path(td) / "zimzilla"
+        zhome = Path(td) / "kuro"
         zhome.mkdir()
         # BOTH homes are pinned to the empty temp tree. Patching only
-        # ZIMZILLA_HOME would leave the real $HOME in play, and a box with the
+        # KURO_HOME would leave the real $HOME in play, and a box with the
         # legacy $HOME/start-litellm.sh layout would legitimately discover
-        # tokenjuice — making the "absent source is discarded" check below fail
+        # tokenjuice â€” making the "absent source is discarded" check below fail
         # for a reason that has nothing to do with the code under test.
         empty_home = Path(td) / "home"
         empty_home.mkdir()
-        with mock.patch.object(sources, "ZIMZILLA_HOME", zhome), \
+        with mock.patch.object(sources, "KURO_HOME", zhome), \
              mock.patch.object(sources, "DEFAULT_HOME", empty_home):
             for key in ("tokenharbour", "openrouter"):
                 sources.set_current(key)
                 check(f"builtin: {key} survives a restart",
                       sources.current_key() == key, str(sources.current_key()))
 
-            # A discovered source that is NOT present must still be dropped —
+            # A discovered source that is NOT present must still be dropped â€”
             # the builtin exemption must not have loosened that.
             sources.set_current("tokenjuice")
             check("builtin: an absent local source is still discarded",
@@ -204,8 +204,8 @@ def test_models_for_reads_the_remote_catalogs() -> None:
     "this source serves nothing", and the two must not be confused or /model
     would show an empty list on a cold start instead of the declared one.
     """
-    from zimzilla import openrouter as or_mod
-    from zimzilla import tokenharbour as th_mod
+    from kuro import openrouter as or_mod
+    from kuro import tokenharbour as th_mod
 
     for key, mod, url in (
         ("tokenharbour", th_mod, "https://tokenharbor.ai"),
@@ -239,11 +239,11 @@ def test_logfare_is_a_switchable_route() -> None:
     # A selection of it must survive a restart, like any other discovered
     # source. This is the exact case the old park refused.
     with tempfile.TemporaryDirectory() as td:
-        zhome = Path(td) / "zimzilla"
+        zhome = Path(td) / "kuro"
         zhome.mkdir()
         empty_home = Path(td) / "home"
         empty_home.mkdir()
-        with mock.patch.object(sources, "ZIMZILLA_HOME", zhome), \
+        with mock.patch.object(sources, "KURO_HOME", zhome), \
              mock.patch.object(sources, "DEFAULT_HOME", empty_home):
             sources.set_current("logfare")
             check("logfare: a remembered selection is honoured",
@@ -255,7 +255,7 @@ def test_logfare_is_a_switchable_route() -> None:
                   sources.current_key() is None, str(sources.current_key()))
 
     # The shipped profile is what makes the route work out of the box, so it
-    # has to be in the tree — not gitignored, and carrying a usable key.
+    # has to be in the tree â€” not gitignored, and carrying a usable key.
     shipped = ROOT / "packaging" / "logfare" / "source"
     check("logfare: the shared profile ships in the tree",
           shipped.is_file(), str(shipped))
@@ -274,10 +274,10 @@ def test_logfare_offers_every_chat_model() -> None:
     cold cache shows. Leaving a served model out of it hid that model for the
     first seconds of every session. The proxy config is the other half: a name
     it does not register is rejected before the upstream is ever asked, so a
-    model missing there cannot be used at all — the wildcard is what keeps that
+    model missing there cannot be used at all â€” the wildcard is what keeps that
     from happening for a model Logfare adds later.
     """
-    from zimzilla.config import KNOWN_MODELS
+    from kuro.config import KNOWN_MODELS
 
     # The nine chat models Logfare served on 2026-10-19. The non-chat entries
     # (flux-*, whisper-*, aura-*, nova-*, phoenix-*, lucid-origin, sdxl-*) must
@@ -317,7 +317,7 @@ def test_switchable_names_only_what_would_work() -> None:
     message, so a wrong answer is worse than a short one.
 
     Fully stubbed: ``discover`` and the gateway modules are replaced, so this
-    asserts the policy without reading the real ~/.zimzilla or the network.
+    asserts the policy without reading the real ~/.kuro or the network.
     """
     class _Cred:
         """Stands in for a gateway module; ``key`` is what it holds, if any."""
@@ -348,7 +348,7 @@ def test_switchable_names_only_what_would_work() -> None:
     check("switchable: an empty machine offers nothing",
           run({}, {}) == [], str(run({}, {})))
 
-    # A gateway with no key is not offered — this is the bug the function was
+    # A gateway with no key is not offered â€” this is the bug the function was
     # written for.
     check("switchable: a gateway with no credential is omitted",
           run({}, {"openrouter": None}) == [], str(run({}, {"openrouter": None})))
@@ -373,7 +373,7 @@ def test_switchable_names_only_what_would_work() -> None:
           "infronai" in run({"infronai": fake}, {}),
           str(run({"infronai": fake}, {})))
 
-    # Parked sources are never offered, discovered or not — /zim-tokenjuice
+    # Parked sources are never offered, discovered or not â€” /zim-tokenjuice
     # refuses them, so naming it would send the operator into a refusal.
     # Parked *openrouter* here rather than using tokenjuice: tokenjuice is
     # already absent from the preference list, so offering it proves nothing
@@ -427,3 +427,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

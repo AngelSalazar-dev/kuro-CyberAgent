@@ -1,32 +1,32 @@
-"""Regression suite for the deliverable check in ``Agent.run_turn``.
+﻿"""Regression suite for the deliverable check in ``Agent.run_turn``.
 
 Run:  python tests/test_deliverable.py   (from an activated venv)
 
 This is the fix for a real failure. ``/osint instagram zimthegoat`` ran every
 phase, wrote 6 MB of real evidence into the case directory, printed
-``All phases complete. Writing the report.`` as plain text — and stopped. No
+``All phases complete. Writing the report.`` as plain text â€” and stopped. No
 ``report.md`` was ever written, so ``finalise_case`` correctly refused to delete
 anything and the operator got ``no report found``.
 
 The loop broke on ``if not tool_calls``, which is right for a chat turn and
 wrong for a turn whose whole purpose is to leave a file behind. Nothing
 distinguished "the model finished" from "the model stopped mid-task", and
-``stop_reason`` was read nowhere — so a ``Write`` cut off at ``max_tokens`` and a
+``stop_reason`` was read nowhere â€” so a ``Write`` cut off at ``max_tokens`` and a
 ``Write`` never attempted looked identical.
 
 Four behaviours are pinned here:
 
 1. A turn that declares a deliverable and stops without writing it is **nudged**,
    up to its budget, and no further.
-2. When the budget is spent the turn says plainly that the file is missing —
-   ``written: False`` — rather than ending as though it had succeeded.
+2. When the budget is spent the turn says plainly that the file is missing â€”
+   ``written: False`` â€” rather than ending as though it had succeeded.
 3. A model that writes the file after a nudge ends with ``written: True``.
 4. A finish at the token ceiling is reported as **truncated** and is **not**
-   nudged — re-prompting a model that was cut off mid-``Write`` just spends
+   nudged â€” re-prompting a model that was cut off mid-``Write`` just spends
    another ceiling on the same truncation.
 5. A finish at the token ceiling that carried **nothing at all** is a different
    shape and is handled differently: it is reported as ``reasoning_exhausted``
-   and retried once with a doubled ceiling. This is the reasoning-model case —
+   and retried once with a doubled ceiling. This is the reasoning-model case â€”
    the budget went to thinking the proxy never forwards, so there is no dropped
    work to protect and the ceiling is known to be too small. See the note on the
    branch in ``agent.run_turn``.
@@ -45,8 +45,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla.agent import Agent, Deliverable  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
+from kuro.agent import Agent, Deliverable  # noqa: E402
+from kuro.config import Config  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -82,7 +82,7 @@ def _cfg(workdir: Path, **kw) -> Config:
 
 
 def _text(msg: str, stop_reason: str | None = None) -> _Msg:
-    """A reply that is pure narration — no tool call. The failing shape."""
+    """A reply that is pure narration â€” no tool call. The failing shape."""
     return _Msg([_Blk(type="text", text=msg)], stop_reason=stop_reason)
 
 
@@ -90,7 +90,7 @@ def _empty(stop_reason: str = "max_tokens") -> _Msg:
     """A truncated reply that carries nothing: the reasoning-exhaustion shape.
 
     What a reasoning model looks like through a proxy that does not forward its
-    thinking — one ``text`` block holding an empty string, and no tool call. The
+    thinking â€” one ``text`` block holding an empty string, and no tool call. The
     budget went somewhere the harness never sees. Measured, not imagined: see the
     note on this branch in ``agent.run_turn``.
     """
@@ -112,7 +112,7 @@ def _write(path: Path, body: str = "the report") -> _Msg:
     ], stop_reason="tool_use")
 
 
-def _done(msg: str = "Done — the report is written.") -> _Msg:
+def _done(msg: str = "Done â€” the report is written.") -> _Msg:
     """A terminal narration with no tool call: the turn ends here.
 
     A real model stops after a successful write; a stub that keeps serving the
@@ -129,7 +129,7 @@ def _stub(agent: Agent, messages: list[_Msg]) -> dict:
     that fails to break then shows up as a runaway call count rather than a
     StopIteration swallowed into an "error" event. The consequence is that a
     test whose turn is meant to *finish* must end its list with a turn that
-    carries no tool call — a real model stops after writing, and a stub that
+    carries no tool call â€” a real model stops after writing, and a stub that
     keeps offering another ``write_file`` does not. See ``_done``.
     """
     state = {"n": 0, "ceilings": []}
@@ -198,7 +198,7 @@ async def test_narrate_then_narrate_gives_up_honestly(tmp: Path) -> None:
 
 
 async def test_a_nudged_model_can_recover(tmp: Path) -> None:
-    """Narration, then a nudge, then the file — written: True, one nudge."""
+    """Narration, then a nudge, then the file â€” written: True, one nudge."""
     report = tmp / "report.md"
     agent = Agent(_cfg(tmp))
     deliverable = Deliverable(path=report, label="report.md", max_nudges=2)
@@ -235,7 +235,7 @@ async def test_a_first_try_write_is_not_nudged(tmp: Path) -> None:
 
     check("happy: no nudge on a first-try write",
           "nudged" not in _kinds(events), str(_kinds(events)))
-    check("happy: write then stop — two calls, no retry loop",
+    check("happy: write then stop â€” two calls, no retry loop",
           state["n"] == 2, str(state["n"]))
     check("happy: the file exists", report.exists())
     check("happy: the deliverable is reported written",
@@ -248,7 +248,7 @@ async def test_a_truncated_finish_is_not_nudged(tmp: Path) -> None:
 
     This is the branch that makes the two failures distinguishable. The model
     was cut off mid-``Write``, so the tool call never reached ``final.content``
-    and the loop sees no tool call — exactly like a model that stopped. Without
+    and the loop sees no tool call â€” exactly like a model that stopped. Without
     the ``stop_reason`` check the two are the same thing, and nudging just burns
     another ceiling producing the same truncation.
     """
@@ -284,7 +284,7 @@ async def test_an_empty_truncation_retries_with_more_room(tmp: Path) -> None:
     The failure this pins: ``so where are we ?`` came back as
     "reply truncated at 32768 output tokens" with no reply above it. The model
     was a reasoning model, its thinking is billed against ``max_tokens``, and the
-    proxy forwards none of it — so the harness was handed an empty turn. Nothing
+    proxy forwards none of it â€” so the harness was handed an empty turn. Nothing
     the model asked for was dropped, so re-sending costs only the ceiling that
     was already known to be too small.
     """
@@ -315,7 +315,7 @@ async def test_an_empty_truncation_retries_with_more_room(tmp: Path) -> None:
 
 
 async def test_a_second_empty_truncation_stops_honestly(tmp: Path) -> None:
-    """The retry is bounded: double once, then say so — never a loop.
+    """The retry is bounded: double once, then say so â€” never a loop.
 
     A model that spends a doubled ceiling on reasoning and still emits nothing is
     not going to answer on a third attempt, so the second one is reported rather
@@ -369,7 +369,7 @@ async def test_no_deliverable_means_no_change(tmp: Path) -> None:
     nudge, no truncation and no deliverable event.
     """
     agent = Agent(_cfg(tmp))
-    state = _stub(agent, [_text("Sure — here is the answer, no files needed.")])
+    state = _stub(agent, [_text("Sure â€” here is the answer, no files needed.")])
 
     events = await _drive(agent, "just tell me something", None)
     kinds = _kinds(events)
@@ -382,7 +382,7 @@ async def test_no_deliverable_means_no_change(tmp: Path) -> None:
 
 
 async def test_a_zero_nudge_budget_never_nudges(tmp: Path) -> None:
-    """max_nudges=0 must mean zero — the boundary the caller could set."""
+    """max_nudges=0 must mean zero â€” the boundary the caller could set."""
     report = tmp / "report.md"
     agent = Agent(_cfg(tmp))
     deliverable = Deliverable(path=report, label="report.md", max_nudges=0)
@@ -402,7 +402,7 @@ async def test_the_nudge_message_is_a_real_user_turn(tmp: Path) -> None:
     """The nudge is appended as a user message, not smuggled into a system line.
 
     The history has to stay a clean user/assistant alternation, or the next API
-    call is rejected. The nudge must therefore be a genuine user message — the
+    call is rejected. The nudge must therefore be a genuine user message â€” the
     same constraint ``notice`` documents for why it folds rather than appends.
     """
     report = tmp / "report.md"
@@ -422,7 +422,7 @@ async def test_the_nudge_message_is_a_real_user_turn(tmp: Path) -> None:
     # The nudge is a real user message. It is NOT the last entry: the model's
     # final narration is appended before the loop breaks on a spent budget, so
     # the nudge sits second-to-last. Asserting its content rather than its
-    # position is the point — the invariant is the alternation, not the tail.
+    # position is the point â€” the invariant is the alternation, not the tail.
     nudges = [m for m in agent.messages
               if m["role"] == "user" and isinstance(m["content"], str)
               and "You stopped before writing" in m["content"]]
@@ -461,7 +461,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -470,3 +470,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -1,11 +1,11 @@
-"""Regression suite for the wave web and its tracker.
+﻿"""Regression suite for the wave web and its tracker.
 
 Run:  python tests/test_web.py   (from an activated venv)
 
 Two things here are load-bearing and neither is visual.
 
 **The geometry.** The web is drawn into a fixed character grid, so a pane that
-runs off the edge or a spoke that overwrites a border does not raise — it just
+runs off the edge or a spoke that overwrites a border does not raise â€” it just
 prints something wrong, and it prints it wrong on a terminal the author may not
 be sitting at. Every render here is asserted to be exactly *height* rows of
 exactly *width* columns, and the panes are asserted to sit inside the canvas.
@@ -36,8 +36,8 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 
 def _web(n: int = 10, **kw):
-    from zimzilla.ui.web import WaveWeb
-    from zimzilla.theme import get_palette
+    from kuro.ui.web import WaveWeb
+    from kuro.theme import get_palette
 
     w = WaveWeb("target.test", get_palette("green", None), wave=1, size=n, **kw)
     w.set_plan([{"name": f"agent-{i + 1}", "brief": f"vector {i + 1}"}
@@ -54,8 +54,8 @@ def _drawer_text(w, width: int, height: int) -> str:
 
     The canvas is a grid, so a row of the render interleaves the rail, three
     pane columns and the drawer side by side. Reading the whole render therefore
-    splices unrelated text into the middle of a drawer sentence — "Unauthenticated
-    order status" from the drawer, then a pane's border, then "read" — and an
+    splices unrelated text into the middle of a drawer sentence â€” "Unauthenticated
+    order status" from the drawer, then a pane's border, then "read" â€” and an
     assertion on the drawer's wording fails against text that was never
     contiguous. Slicing the drawer's own columns out first is what makes the
     assertion mean what it says.
@@ -66,9 +66,9 @@ def _drawer_text(w, width: int, height: int) -> str:
         return ""
     x = width - lay.drawer_w - 1
     # Drop the drawer's own border columns: they sit at both ends of every
-    # sliced row, so leaving them in puts a "┃" between the last word of one
+    # sliced row, so leaving them in puts a "â”ƒ" between the last word of one
     # wrapped line and the first word of the next and the joined sentence reads
-    # "orders/10┃42" instead of "orders/1042".
+    # "orders/10â”ƒ42" instead of "orders/1042".
     inner = [line[x + 1:x + lay.drawer_w - 1] for line in rendered.split("\n")]
     return " ".join("".join(inner).split())
 
@@ -99,7 +99,7 @@ def test_render_is_exact() -> None:
 
 def test_web_fits_at_minimum() -> None:
     """At exactly the minimum size the panes are drawn, not the fallback."""
-    from zimzilla.ui.web import MIN_HEIGHT, MIN_WIDTH
+    from kuro.ui.web import MIN_HEIGHT, MIN_WIDTH
 
     w = _web(10)
     w.add_finding({"agent": "agent-1", "severity": "high", "title": "X"})
@@ -107,7 +107,7 @@ def test_web_fits_at_minimum() -> None:
     check("minimum: the tracker rail is drawn at the minimum size",
           "ZIM-TRACK" in text)
     check("minimum: panes are drawn, not the list",
-          "┏" in text and "┌─" in text, text[:120].replace("\n", "|"))
+          "â”" in text and "â”Œâ”€" in text, text[:120].replace("\n", "|"))
     # Eight of ten fit at the minimum; the other two have to be accounted for
     # rather than silently missing, or the view reads as a wave that lost them.
     check("minimum: the agents that do not fit are named",
@@ -121,26 +121,26 @@ def test_panes_stay_inside_the_canvas() -> None:
     past the bottom loses its bottom border, which reads as a rendering fault
     rather than a layout one. The old geometry did exactly that: it asked for a
     fixed six-row pane and computed how many fit, which returned six at 118x36
-    while only four could be drawn — so two panes were laid out off the bottom
+    while only four could be drawn â€” so two panes were laid out off the bottom
     of the canvas, silently dropped, and their hit regions dropped with them.
 
     Asserted structurally rather than by counting corners: every pane that was
     drawn must have a bottom-right corner, at a row and column inside the
     canvas. That catches a pane clipped on any edge, at any layout.
     """
-    from zimzilla.ui.web import BOX_MIN_H
+    from kuro.ui.web import BOX_MIN_H
 
     w = _web(10)
     for width, height in ((118, 36), (80, 24), (78, 22), (200, 50), (92, 26)):
         lines = _lines(w.render(width, height))
         # Every top-left corner has a matching bottom-right one, so no box is
         # half-drawn. The rail is heavy-bordered and so does not count here.
-        tops = sum(line.count("┌") for line in lines)
-        bottoms = sum(line.count("┘") for line in lines)
+        tops = sum(line.count("â”Œ") for line in lines)
+        bottoms = sum(line.count("â”˜") for line in lines)
         check(f"panes: every box drawn at {width}x{height} is closed",
               tops == bottoms, f"tops={tops} bottoms={bottoms}")
         for i, line in enumerate(lines):
-            if "┘" in line:
+            if "â”˜" in line:
                 check(f"panes: no bottom border on the last row at {width}x{height}",
                       i < height - 1, f"row={i} of {height}")
         # And nothing may be drawn flush against the terminal's own edge, where
@@ -155,7 +155,7 @@ def test_adaptive_geometry() -> None:
 
     This is the regression that motivated the rewrite. The old view asked for a
     fixed six-row pane and then computed how many fit in the height, dividing by
-    ``BOX_H + 1`` per column — which reported six panes at 118x36 where only four
+    ``BOX_H + 1`` per column â€” which reported six panes at 118x36 where only four
     could be drawn. The two extra were laid out below the last row, the grid
     dropped them silently, and their hit regions were never recorded, so they
     were neither visible nor clickable.
@@ -164,7 +164,7 @@ def test_adaptive_geometry() -> None:
     layout promises must be a slot the render actually fills, at every size
     tried.
     """
-    from zimzilla.ui.web import BOX_MIN_H, PANE_MIN_W
+    from kuro.ui.web import BOX_MIN_H, PANE_MIN_W
 
     for width, height in ((118, 36), (120, 40), (150, 44), (200, 50), (92, 26),
                           (110, 34), (96, 28), (300, 60)):
@@ -220,22 +220,22 @@ def test_rail_border_survives() -> None:
     w = _web(10)
     for width, height in ((118, 36), (120, 40)):
         lines = _lines(w.render(width, height))
-        top = next((i for i, l in enumerate(lines) if "┏━ ZIM-TRACK" in l), None)
+        top = next((i for i, l in enumerate(lines) if "â”â” ZIM-TRACK" in l), None)
         check(f"rail: the tracker box is drawn at {width}x{height}", top is not None)
         if top is None:
             continue
         row = lines[top]
-        start = row.index("┏")
-        end = row.index("┓")
+        start = row.index("â”")
+        end = row.index("â”“")
         border = row[start:end + 1]
         check(f"rail: the top border is unbroken at {width}x{height}",
-              set(border) <= {"┏", "┓", "━", " ", "Z", "I", "M", "-", "T", "R",
+              set(border) <= {"â”", "â”“", "â”", " ", "Z", "I", "M", "-", "T", "R",
                               "A", "C", "K"},
               border)
         check(f"rail: it starts on the first row at {width}x{height}", top == 0,
               str(top))
         check(f"rail: it reaches the last row at {width}x{height}",
-              lines[height - 1].lstrip().startswith("┗"), lines[height - 1][:40])
+              lines[height - 1].lstrip().startswith("â”—"), lines[height - 1][:40])
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +293,7 @@ def test_worst_and_feed() -> None:
 
 def test_findings_light_their_agent() -> None:
     """A finding tallies against the agent that reported it, and only that one."""
-    from zimzilla.ui.web import FLASH_SECONDS
+    from kuro.ui.web import FLASH_SECONDS
 
     w = _web(10)
     w.add_finding({"agent": "agent-4", "severity": "critical", "title": "SQLi"})
@@ -308,7 +308,7 @@ def test_findings_light_their_agent() -> None:
     check("agents: a different agent is not flashing",
           not by_name["agent-5"].lit())
     # A finding attributed to an agent that is not in the roster must not raise
-    # — a wave can be replanned, and the tracker outlives the roster it started
+    # â€” a wave can be replanned, and the tracker outlives the roster it started
     # with.
     w.add_finding({"agent": "agent-99", "severity": "low", "title": "ghost"})
     check("agents: a finding from an unknown agent is still tallied",
@@ -373,7 +373,7 @@ def test_compact_fallback() -> None:
               len(lines) == height, str(len(lines)))
         text = "\n".join(lines)
         check(f"fallback: {width}x{height} does not draw panes",
-              "┏" not in text and "┌─" not in text)
+              "â”" not in text and "â”Œâ”€" not in text)
         check(f"fallback: {width}x{height} still names the tracker",
               "ZIM-TRACK" in text)
         check(f"fallback: {width}x{height} still shows the tally",
@@ -383,27 +383,27 @@ def test_compact_fallback() -> None:
         # for, or a nine-line list under a "10 agents" header reads as a lost
         # worker.
         listed = sum(1 for line in lines
-                     if line.strip().startswith(("·", "◆", "⠋", "⠙", "⠹", "⠸",
-                                                 "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"))
-                     and "─▶" not in line)
+                     if line.strip().startswith(("Â·", "â—†", "â ‹", "â ™", "â ¹", "â ¸",
+                                                 "â ¼", "â ´", "â ¦", "â §", "â ‡", "â "))
+                     and "â”€â–¶" not in line)
         check(f"fallback: {width}x{height} accounts for every agent it cannot "
               f"list", "more" in text or listed >= 10,
               f"listed={listed} text={text.replace(chr(10), '|')[:160]}")
         check(f"fallback: {width}x{height} names at least one agent",
               any(f"agent-{i}" in text for i in range(1, 11)),
               text.replace("\n", "|")[:200])
-    # A single agent still gets the pane layout — one column of one — rather
+    # A single agent still gets the pane layout â€” one column of one â€” rather
     # than a list, because the rail is worth drawing at any wave size.
     one = _web(1)
     check("fallback: a single agent still gets panes",
-          "┌─" in one.render(118, 36).plain)
+          "â”Œâ”€" in one.render(118, 36).plain)
 
 
 def test_truncated_roster_keeps_the_reporters() -> None:
     """A short terminal lists whoever is busy, then counts the rest.
 
     A wave is only interesting because of the agents that found or are chasing
-    something. If the list is cut, it must cut the idle tail — dropping the one
+    something. If the list is cut, it must cut the idle tail â€” dropping the one
     agent that reported a critical while listing eight that have done nothing
     would hide the only thing on the screen worth reading.
     """
@@ -421,17 +421,17 @@ def test_truncated_roster_keeps_the_reporters() -> None:
     # The count must add up. This is checked by arithmetic rather than against a
     # magic number, because the count itself was wrong: the roster was trimmed
     # to make room for the "+N more" row and then counted against the untrimmed
-    # list, so it listed five agents and claimed four hidden — nine, under a
+    # list, so it listed five agents and claimed four hidden â€” nine, under a
     # header reading ten.
-    # Agent rows read "· agent-N …"; the feed rows below the lanes read
-    # "· agent-N ─▶ [SEV] title", so the arrow is what tells them apart. The
+    # Agent rows read "Â· agent-N â€¦"; the feed rows below the lanes read
+    # "Â· agent-N â”€â–¶ [SEV] title", so the arrow is what tells them apart. The
     # "+N more" row is a count, not an agent, and must not be counted as one.
     listed = sum(1 for line in lines
-                 if "─▶" not in line and " more" not in line
+                 if "â”€â–¶" not in line and " more" not in line
                  and any(line.strip().startswith(p)
-                         for p in ("· agent-", "◆ agent-", "⠋ agent-", "⠙ agent-",
-                                   "⠹ agent-", "⠸ agent-", "⠼ agent-", "⠴ agent-",
-                                   "⠦ agent-", "⠧ agent-", "⠇ agent-", "⠏ agent-")))
+                         for p in ("Â· agent-", "â—† agent-", "â ‹ agent-", "â ™ agent-",
+                                   "â ¹ agent-", "â ¸ agent-", "â ¼ agent-", "â ´ agent-",
+                                   "â ¦ agent-", "â § agent-", "â ‡ agent-", "â  agent-")))
     hidden = next((int(t.split("+")[1].split()[0]) for t in lines
                    if "+" in t and "more" in t), 0)
     check("fallback: listed plus hidden accounts for the whole wave",
@@ -446,7 +446,7 @@ def test_splash_banner() -> None:
     """The banner is centred, and stays centred when the transcript reflows.
 
     The old splash padded its own lines with a hardcoded indent, so it was
-    centred for exactly one width — the width it was launched at. Dragging a
+    centred for exactly one width â€” the width it was launched at. Dragging a
     rail re-renders every block in the transcript at the new width, and a
     hand-padded banner does not survive that. The fix is to hand ``Align`` the
     renderable and let it centre on each render, so what is asserted here is
@@ -456,14 +456,14 @@ def test_splash_banner() -> None:
     from rich.align import Align
     from rich.console import Console
 
-    from zimzilla.ui.banner import EMBLEM, splash_mark
-    from zimzilla.theme import get_palette
+    from kuro.ui.banner import EMBLEM, splash_mark
+    from kuro.theme import get_palette
 
     p = get_palette("green", None)
     mark = splash_mark(p, model="deepseek-v4.1-flash",
                        base_url="http://localhost:4001")
     text = mark.plain
-    check("splash: the mark carries the name", "ZIMZILLA" in text)
+    check("splash: the mark carries the name", "KURO" in text)
     check("splash: the mark carries the model", "deepseek-v4.1-flash" in text)
     check("splash: the mark carries the endpoint", "localhost:4001" in text)
     check("splash: the mark is four rows", len(text.split("\n")) == len(EMBLEM),
@@ -474,7 +474,7 @@ def test_splash_banner() -> None:
         c.print(Align.center(mark))
         return c.export_text().rstrip("\n").split("\n")
 
-    # At every width, the emblem column starts at the same place on every row —
+    # At every width, the emblem column starts at the same place on every row â€”
     # that is what "the mark is not sheared" means, and a per-line indent gets
     # this wrong the moment one row is wider than the others.
     for width in (120, 100, 80, 70):
@@ -482,7 +482,7 @@ def test_splash_banner() -> None:
         check(f"splash: every row is the full pane width at {width}",
               {len(r) for r in rows} == {width}, str(sorted({len(r) for r in rows})))
         # The emblem's own first column: the row with the widest glyph starts
-        # leftmost, and the ▀ row is indented by one. So the emblem's left edge
+        # leftmost, and the â–€ row is indented by one. So the emblem's left edge
         # is where the widest row begins, and no row may begin further left.
         starts = [len(r) - len(r.lstrip()) for r in rows if r.strip()]
         check(f"splash: the emblem is not sheared at {width}",
@@ -514,18 +514,18 @@ def test_planning_state() -> None:
     The screen is pushed at ``hunt_wave_start``, but the roster only arrives with
     ``hunt_plan``, which is emitted after the planner's turn returns. That turn
     is a real model call over recon, findings, wave history and a long
-    instruction — tens of seconds. For all of it the view held zero agents and
-    drew "WAVE 1 · 0 agents", which reads as a wave that started with nobody in
+    instruction â€” tens of seconds. For all of it the view held zero agents and
+    drew "WAVE 1 Â· 0 agents", which reads as a wave that started with nobody in
     it: the exact fault this screen exists to make visible.
     """
-    from zimzilla.theme import get_palette
-    from zimzilla.ui.web import WaveWeb
+    from kuro.theme import get_palette
+    from kuro.ui.web import WaveWeb
 
     w = WaveWeb("*.lerevecraze.com", get_palette("green", None), wave=1, size=10)
     check("planning: a fresh web is planning", w.planning is True)
 
     # The wide view draws a PLANNING box where the panes would be, rather than
-    # falling back to a list — the rail is still worth drawing while the planner
+    # falling back to a list â€” the rail is still worth drawing while the planner
     # thinks, and the box has room for the reasoning the list does not.
     wide = w.render(118, 36).plain
     check("planning: the wide view says PLANNING", "PLANNING" in wide,
@@ -560,7 +560,7 @@ def test_planning_state() -> None:
     check("planning: a roster ends the planning state", w.planning is False)
     after = w.render(118, 36).plain
     check("planning: the panes are drawn, not the list",
-          "┌─" in after, after.replace("\n", "|")[:120])
+          "â”Œâ”€" in after, after.replace("\n", "|")[:120])
     check("planning: the rail goes back to LIVE", "LIVE" in after,
           after.replace("\n", "|")[:120])
     check("planning: the PLANNING box is gone", "PLANNING" not in after)
@@ -568,7 +568,7 @@ def test_planning_state() -> None:
     check("planning: the header counts the real roster",
           "10 agents" in header, header)
 
-    # A finding with no roster is not a planning wave — it is a wave that has
+    # A finding with no roster is not a planning wave â€” it is a wave that has
     # already reported, which only happens once agents exist. Guard the
     # predicate so a stray finding cannot leave the header stuck on PLANNING.
     w2 = WaveWeb("t.test", get_palette("green", None), wave=1, size=10)
@@ -580,7 +580,7 @@ def test_agent_output_reaches_the_pane() -> None:
     """A pane shows the command *and* what the command returned.
 
     The result half was being emitted by the hunt loop, routed to the wave
-    screen, and then dropped, so every pane drew a command over an empty box —
+    screen, and then dropped, so every pane drew a command over an empty box â€”
     the agent's actual findings were legible only by reading the scrolling
     transcript backwards.
     """
@@ -732,12 +732,12 @@ def test_pane_click_opens_the_agent_run() -> None:
 def test_asset_wrapping_keeps_urls_readable() -> None:
     """A long asset URL stays a URL when the drawer is too narrow for it.
 
-    The drawer is narrow by design — it exists to leave the panes their width —
+    The drawer is narrow by design â€” it exists to leave the panes their width â€”
     and an asset is the one thing in it the operator copies down. A URL broken
     at an arbitrary column reads as two URLs: ``orders/10`` above ``42`` is not
     the asset that was found.
     """
-    from zimzilla.ui.web import _wrap_asset
+    from kuro.ui.web import _wrap_asset
 
     url = "http://dev.target.test/orders/1042"
     # Wide enough: one line, unchanged.
@@ -780,11 +780,11 @@ def test_hover_and_spinner_animate() -> None:
     """The animations carry information rather than decorating.
 
     A spinner on a running agent is what distinguishes "working" from "stalled"
-    when its command and output have not changed for a while — the exact
+    when its command and output have not changed for a while â€” the exact
     ambiguity this view exists to remove. The hover highlight is what says a
     lane or a pane is clickable at all.
     """
-    from zimzilla.ui.web import SPINNER, spinner_at
+    from kuro.ui.web import SPINNER, spinner_at
 
     w = _web(10)
     w.agent_start("agent-1", "nuclei")
@@ -820,7 +820,7 @@ def test_hover_and_spinner_animate() -> None:
           w.render(118, 36).plain == before)
 
     # A pane's hover is a style change on its border, so the plain text is
-    # identical by design — compare the styled spans instead.
+    # identical by design â€” compare the styled spans instead.
     w.render(150, 44)
     pane_at = next(pos for pos, (kind, _) in w._hits.items() if kind == "pane")
     w.hover = (-1, -1)
@@ -841,7 +841,7 @@ def test_rail_and_drawer_resize() -> None:
     layout is: a wider rail fits more of a finding title, a narrower one fits
     another pane column.
     """
-    from zimzilla.ui.web import (DRAWER_MAX_W, DRAWER_MIN_W, RAIL_MAX_W,
+    from kuro.ui.web import (DRAWER_MAX_W, DRAWER_MIN_W, RAIL_MAX_W,
                                  RAIL_MIN_W)
 
     w = _web(10)
@@ -880,7 +880,7 @@ def test_stop_hint_is_advertised_and_confirmed() -> None:
     """The rail carries the stop key, and changes when it has been pressed.
 
     The wave view covers the prompt, so ``/stop-hunt`` cannot be typed while it
-    is up — the key that replaces it is only usable if the rail names it, and
+    is up â€” the key that replaces it is only usable if the rail names it, and
     only believable if the rail says it was heard. The line the app writes on a
     stop goes to the transcript *behind* this screen, so without the footer
     changing the key looks inert for however long the wave takes to unwind.
@@ -944,7 +944,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -953,3 +953,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

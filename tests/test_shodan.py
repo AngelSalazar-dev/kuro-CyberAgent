@@ -1,19 +1,19 @@
-"""`/shodan-*` regression suite: the key, the plan, the query, the facets, the turn.
+﻿"""`/shodan-*` regression suite: the key, the plan, the query, the facets, the turn.
 
 Run:  python tests/test_shodan.py
 
 Offline and model-free. Five layers:
 
-* **the key** — that `/shodan-api-setup` writes a mode-600 profile every other
+* **the key** â€” that `/shodan-api-setup` writes a mode-600 profile every other
   credential in the project can read, that a key set this session beats a stale
   environment, and that a pasted `export` line is refused;
-* **the plan** — that a free key is *known* to be free before a search is
+* **the plan** â€” that a free key is *known* to be free before a search is
   attempted, so the run degrades to facets instead of failing with a 403;
-* **the query** — that a facet composes the query it says it does, country and
+* **the query** â€” that a facet composes the query it says it does, country and
   extra included, and that no facet uses `OR`, which Shodan rejects;
-* **the result** — an actual ``urlopen`` stub: totals, facets, the limit clamp,
+* **the result** â€” an actual ``urlopen`` stub: totals, facets, the limit clamp,
   the error bodies, and the fields dropped on purpose;
-* **the turn** — that the prompt carries the evidence and the instruction to
+* **the turn** â€” that the prompt carries the evidence and the instruction to
   *ask* rather than act, and that it tells the model when there are no host rows
   so it cannot invent them.
 
@@ -23,7 +23,7 @@ break silently:
 * **A banner never reaches the result.** Shodan returns a host's raw ``data``
   alongside its metadata, and that blob routinely holds credentials and
   personal data. ``_parse_host`` must reduce a match to the triaging fields and
-  nothing else — a regression here is a secret dump, not a cosmetic bug.
+  nothing else â€” a regression here is a secret dump, not a cosmetic bug.
 * **A free key still answers.** The whole point of the count path is that
   ``/shodan/host/search`` being gated does not make the command useless. A test
   that only ever stubs a successful search would not notice the feature breaking
@@ -45,14 +45,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# A throwaway ZIMZILLA_HOME for the whole suite. The module resolves the path at
-# import time, so this has to be set before the import below — otherwise the key
+# A throwaway KURO_HOME for the whole suite. The module resolves the path at
+# import time, so this has to be set before the import below â€” otherwise the key
 # this suite writes lands in the operator's live install.
 _TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
-os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+os.environ["KURO_HOME"] = str(_TEST_HOME)
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
-from zimzilla import shodan as shodan_mod  # noqa: E402
+from kuro import shodan as shodan_mod  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -129,7 +129,7 @@ def test_key_roundtrip() -> None:
     check("key: written as a sourceable export",
           text.strip() == f'export SHODAN_API_KEY="{key}"', text.strip())
 
-    # The session key wins over the file and the environment — the correction
+    # The session key wins over the file and the environment â€” the correction
     # for an environment snapshot taken before the operator typed a new key.
     shodan_mod.remember_session_key("f" * 32)
     creds = shodan_mod.load_credentials()
@@ -175,7 +175,7 @@ def test_key_env_fallback() -> None:
 # ---------------------------------------------------------------------------
 
 def test_plan() -> None:
-    # The real shape of /api-info on the free plan — query_credits is 0 and the
+    # The real shape of /api-info on the free plan â€” query_credits is 0 and the
     # plan name is "oss". This is what the operator's key actually returned.
     oss = {"plan": "oss", "query_credits": 0, "scan_credits": 0,
            "unlocked": False,
@@ -195,7 +195,7 @@ def test_plan() -> None:
         plan, _ = shodan_mod.fetch_plan("k" * 32)
     check("plan: membership can search", plan.search is True, plan.name)
 
-    # A plan with no credits left cannot search, whatever it is called — the
+    # A plan with no credits left cannot search, whatever it is called â€” the
     # balance is the truth, not the label.
     spent = {"plan": "dev", "query_credits": 0,
              "usage_limits": {"query_credits": 0}}
@@ -238,7 +238,7 @@ def test_facet_queries() -> None:
           shodan_mod.VULN_FACET.build_query(extra="product:Apache").startswith(
               "has_vuln:true"))
 
-    # `tag:webcam` is gone from Shodan's index — a camera facet keyed on it
+    # `tag:webcam` is gone from Shodan's index â€” a camera facet keyed on it
     # would silently return nothing, which is the bug this asserts against.
     check("query: the camera facet does not rely on the dead webcam tag",
           "tag:webcam" not in shodan_mod.FACETS["cam"].query,
@@ -248,7 +248,7 @@ def test_facet_queries() -> None:
 
 
 # ---------------------------------------------------------------------------
-# the result — a free key, which is the case that used to fail
+# the result â€” a free key, which is the case that used to fail
 # ---------------------------------------------------------------------------
 
 def test_free_plan_still_answers() -> None:
@@ -312,7 +312,7 @@ def test_paid_plan_gets_rows() -> None:
           "tops3cret" not in blob and "Set-Cookie" not in blob, blob[:80])
 
     # A search that fails after a good count keeps the facet answer and says
-    # why the rows are missing — a degradation, not a failure. An exception
+    # why the rows are missing â€” a degradation, not a failure. An exception
     # *instance* in a side_effect list is raised; a function would be returned
     # as the response, which is not what a gated endpoint does.
     gated = urllib.error.HTTPError("http://x", 403, "nope", {}, None)
@@ -409,7 +409,7 @@ def test_prompt_paid() -> None:
 
 
 # ---------------------------------------------------------------------------
-# the environment note — the model must know where the key lives
+# the environment note â€” the model must know where the key lives
 # ---------------------------------------------------------------------------
 
 def test_environment_note() -> None:
@@ -420,8 +420,8 @@ def test_environment_note() -> None:
     CLI installed, while the key sat on disk and four commands already read it.
     A prompt that does not say where the key is invites that answer back.
     """
-    from zimzilla.agent import Agent
-    from zimzilla.config import Config
+    from kuro.agent import Agent
+    from kuro.config import Config
 
     # A key on disk, and a prompt built the way a live session builds it.
     shodan_mod.save_key("a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6")
@@ -446,7 +446,7 @@ def test_environment_note() -> None:
     check("env: the note names the other profiles too",
           "/tokenharbour/source" in prompt and "/ldxhub/source" in prompt)
 
-    # Every mode must carry it, not just the default one — the failure could
+    # Every mode must carry it, not just the default one â€” the failure could
     # happen in any of them.
     for mode in ("plan", "edits", "zim", "danger", "uncensored"):
         cfg = Config.from_env(workdir=Path("/tmp"), api_key="x",
@@ -454,7 +454,7 @@ def test_environment_note() -> None:
         p = Agent(cfg).system_prompt()
         check(f"env: {mode} mode carries the note", "/shodan/source" in p)
 
-    # With the key deleted the note must say so rather than claim one exists —
+    # With the key deleted the note must say so rather than claim one exists â€”
     # stale "a key is set" is worse than no note at all.
     saved = shodan_mod.PROFILE.read_text()
     shodan_mod.PROFILE.unlink()
@@ -478,12 +478,12 @@ def test_wiring() -> None:
     """Every command is reachable from every surface that lists commands.
 
     Read from the source rather than importing a copy, so a rename cannot
-    silently orphan a command — the same check test_osint and test_crack make.
+    silently orphan a command â€” the same check test_osint and test_crack make.
     ``app.py`` and ``complete.py`` are read as text because importing them needs
     textual, which this suite does not require.
     """
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text()
-    complete_src = (ROOT / "zimzilla" / "ui" / "complete.py").read_text()
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text()
+    complete_src = (ROOT / "kuro" / "ui" / "complete.py").read_text()
 
     check("wiring: shodan.py is imported",
           "from .. import shodan as shodan_mod" in app_src)
@@ -507,7 +507,7 @@ def test_wiring() -> None:
     check("wiring: setup is allowed while busy",
           '"shodan-api-setup",' in app_src)
 
-    # A search starts a turn, so it must not be busy-ok — letting one through
+    # A search starts a turn, so it must not be busy-ok â€” letting one through
     # the gate would interleave a second turn into a live one. Read the BUSY_OK
     # block out of app.py and assert none of the searches leaked into it.
     busy_block = app_src.split("BUSY_OK = frozenset({", 1)[1].split("})", 1)[0]
@@ -534,3 +534,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

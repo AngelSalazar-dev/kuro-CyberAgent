@@ -1,29 +1,29 @@
-"""`/model` must police against the ACTIVE gateway's catalog, not Logfare's.
+﻿"""`/model` must police against the ACTIVE gateway's catalog, not Logfare's.
 
 Run:  python tests/test_model_switch.py   (from an activated venv)
 
 This is the regression for a bug that only showed up once a session was actually
 pointed at OpenRouter and asked to switch model:
 
-    ⚠ dots-studio/dots-3-note-preview:free is not served by openrouter —
+    âš  dots-studio/dots-3-note-preview:free is not served by openrouter â€”
       see /model for the list
 
-…for a model that was the first row of `/models openrouter`, a second earlier.
+â€¦for a model that was the first row of `/models openrouter`, a second earlier.
 The switch was refused, the session stayed on the Logfare default name, and the
-next turn was sent to OpenRouter carrying `deepseek-v4.1-flash` — which that
+next turn was sent to OpenRouter carrying `deepseek-v4.1-flash` â€” which that
 gateway does not serve, so it answered 402 and the operator saw a billing error
 for a model they had never chosen.
 
 **The mechanism, because it is the part worth pinning.** Every hosted gateway's
 catalog is *fetched*, not declared, so on a cold cache ``sources.models_for``
-returns ``None`` and ``_cmd_model`` falls back to ``KNOWN_MODELS`` — which is
+returns ``None`` and ``_cmd_model`` falls back to ``KNOWN_MODELS`` â€” which is
 Logfare's list. A name not in *that* list is then rejected as "not served by
 <gateway>". The fallback is only safe when the active source has no catalog of
 its own; against a gateway it is a list from the wrong provider, and a wrong
 list is worse than no list, because it refuses things that work.
 
 **Why this test covers every gateway and not one.** The original warm-up branch
-was written for TokenHarbour alone — ``if active == "tokenharbour"``. OpenRouter
+was written for TokenHarbour alone â€” ``if active == "tokenharbour"``. OpenRouter
 was added later and silently inherited the broken path, because the guard named
 one gateway rather than the *class* of gateway that needs it. A test that pinned
 only OpenRouter would let the next provider repeat it. So both are driven here,
@@ -44,8 +44,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla.config import KNOWN_MODELS, Config  # noqa: E402
-from zimzilla.ui.app import ZimZillaApp  # noqa: E402
+from kuro.config import KNOWN_MODELS, Config  # noqa: E402
+from kuro.ui.app import KuroApp  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -88,16 +88,16 @@ async def _switch(app, pilot, name: str) -> None:
 async def _case_gateway(wd: Path, key: str, base_url: str, model: str) -> None:
     """A gateway's own model must be switchable, with a cold cache.
 
-    The cache is cold by construction — nothing has fetched for this process's
-    gateway module in this temp home — which is the state that triggered the bug.
+    The cache is cold by construction â€” nothing has fetched for this process's
+    gateway module in this temp home â€” which is the state that triggered the bug.
     """
-    from zimzilla import openrouter as or_mod
-    from zimzilla import tokenharbour as th_mod
+    from kuro import openrouter as or_mod
+    from kuro import tokenharbour as th_mod
 
     mod = {"openrouter": or_mod, "tokenharbour": th_mod}[key]
 
     cfg = _cfg(wd, base_url)
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
         await pilot.pause()
@@ -139,19 +139,19 @@ async def test_logfare_is_policed_against_its_own_live_catalog(wd: Path) -> None
     ``KNOWN_MODELS`` list, and the symptom was exact: ``mimo-v2.6-flash`` was
     live and served, absent from that list, and refused with
 
-        ⚠ mimo-v2.6-flash is not served by logfare — see /model for the list
+        âš  mimo-v2.6-flash is not served by logfare â€” see /model for the list
 
-    …leaving the session on the previous model. Logfare's own comment calls the
+    â€¦leaving the session on the previous model. Logfare's own comment calls the
     fallback a *stale* list that is only safe when the active source has no
     catalog; Logfare has one, so the fallback was a list from the wrong moment
     being used to refuse something that worked.
 
-    The mount warm-up is patched off so this drives the switch path alone — it
+    The mount warm-up is patched off so this drives the switch path alone â€” it
     is the switch that must fetch, and a warm cache left by mount would hide
     whether it does.
     """
-    from zimzilla import logfare as lf_mod
-    from zimzilla.ui import app as app_mod
+    from kuro import logfare as lf_mod
+    from kuro.ui import app as app_mod
 
     live = [_Model("deepseek-v4.1-flash"), _Model("mimo-v2.6-flash")]
     calls = {"n": 0}
@@ -161,8 +161,8 @@ async def test_logfare_is_policed_against_its_own_live_catalog(wd: Path) -> None
         return (live, "")
 
     cfg = _cfg(wd, "http://localhost:4001")
-    app = ZimZillaApp(cfg)
-    with mock.patch.object(app_mod.ZimZillaApp, "_warm_logfare_catalog"), \
+    app = KuroApp(cfg)
+    with mock.patch.object(app_mod.KuroApp, "_warm_logfare_catalog"), \
             mock.patch.object(lf_mod, "fetch_models", stub):
         lf_mod.clear_cache()
         async with app.run_test(size=(110, 40)) as pilot:
@@ -188,17 +188,17 @@ async def test_a_non_gateway_source_is_left_alone(wd: Path) -> None:
     """A Logfare endpoint must not trigger another gateway's fetch.
 
     The guard is a list of gateways with fetched catalogs, and Logfare is now
-    one of them — but the fetch it triggers must be *its own*. This pins the
+    one of them â€” but the fetch it triggers must be *its own*. This pins the
     other half: OpenRouter's fetch never fires for a local Logfare proxy, which
     would be a round-trip to an unrelated host carrying an unrelated key.
     """
     cfg = _cfg(wd, "http://localhost:4001")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
         await pilot.pause()
 
-        from zimzilla import openrouter as or_mod
+        from kuro import openrouter as or_mod
         called = {"n": 0}
 
         def spy(*a, **k):
@@ -217,7 +217,7 @@ async def test_a_non_gateway_source_is_left_alone(wd: Path) -> None:
               app.cfg.model == "deepseek-v4.1-flash", app.cfg.model)
         # Why no fetch fired: the name is in the declared fallback, so the
         # membership test passes before the fetch branch is reached. Stated
-        # rather than left implicit — if the fallback ever drops this name the
+        # rather than left implicit â€” if the fallback ever drops this name the
         # check above would start passing for the wrong reason.
         check("local: the name was in the fallback, so no fetch was needed",
               "deepseek-v4.1-flash" in KNOWN_MODELS)
@@ -228,7 +228,7 @@ async def test_the_footer_reports_the_catalogs_age(wd: Path) -> None:
 
     A cache filled at startup and one filled a second ago render identically,
     and the wording used to assert "the catalog is live" on the strength of the
-    list being non-empty — so a three-hour-old catalog was called live. The
+    list being non-empty â€” so a three-hour-old catalog was called live. The
     three states are pinned here: cold, fresh, expired.
     """
     import io
@@ -236,13 +236,13 @@ async def test_the_footer_reports_the_catalogs_age(wd: Path) -> None:
     import time
     import urllib.request
 
-    from zimzilla import logfare as lf_mod
-    from zimzilla.ui import app as app_mod
+    from kuro import logfare as lf_mod
+    from kuro.ui import app as app_mod
 
     # A real payload through the real parser, so the cache holds real Model
     # objects and the render path reads the same shapes it does in production.
     # `mimo-v2.6-flash` is the model that was live, absent from the fallback,
-    # and refused — the whole reason this line exists.
+    # and refused â€” the whole reason this line exists.
     payload = {"data": [
         {"model_id": "deepseek-v4.1-flash", "display_name": "D",
          "status": "operational", "uptime_percent": 93.6,
@@ -267,14 +267,14 @@ async def test_the_footer_reports_the_catalogs_age(wd: Path) -> None:
 
         The transcript accumulates, so an unscoped search would find the
         "catalog live" printed by an earlier /model and report the expired
-        case as a failure — or, worse, pass a stale assertion.
+        case as a failure â€” or, worse, pass a stale assertion.
         """
         lines = [l for l in _transcript(app).splitlines() if "catalog" in l]
         return lines[-1] if lines else ""
 
     cfg = _cfg(wd, "http://localhost:4001")
-    app = ZimZillaApp(cfg)
-    with mock.patch.object(app_mod.ZimZillaApp, "_warm_logfare_catalog"), \
+    app = KuroApp(cfg)
+    with mock.patch.object(app_mod.KuroApp, "_warm_logfare_catalog"), \
             mock.patch.object(urllib.request, "urlopen", stub):
         async with app.run_test(size=(110, 40)) as pilot:
             app.pop_screen()
@@ -294,8 +294,8 @@ async def test_the_footer_reports_the_catalogs_age(wd: Path) -> None:
             check("footer: a fresh cache reports live, with its age",
                   "catalog live (just now)" in line, line)
 
-            # Age it past the TTL. The list is already gone by then — the
-            # module returns None — so calling it live would contradict the
+            # Age it past the TTL. The list is already gone by then â€” the
+            # module returns None â€” so calling it live would contradict the
             # very list printed above the line.
             lf_mod._CACHE[:] = [(lf_mod._CACHE[0][0],
                                  time.monotonic() - (lf_mod.CACHE_TTL + 3600))]
@@ -318,12 +318,12 @@ async def test_a_retired_stored_model_is_replaced_on_switch(wd: Path) -> None:
     """A profile naming a retired model must not carry it into the session.
 
     ``/zim-logfare`` takes the model from ``ANTHROPIC_MODEL`` in the stored
-    profile — written by hand at setup and never revisited — so it can name a
+    profile â€” written by hand at setup and never revisited â€” so it can name a
     model the upstream has since retired. Left alone, the first turn 404s with
     a model name the operator never chose and has no reason to suspect. The
     switch is already paying for a round-trip, so it checks there.
     """
-    from zimzilla import logfare as lf_mod
+    from kuro import logfare as lf_mod
 
     class _Src:
         key, model = "logfare", "deepseek-v4.1-flash"
@@ -331,7 +331,7 @@ async def test_a_retired_stored_model_is_replaced_on_switch(wd: Path) -> None:
     live = [_Model("deepseek-v4.1-flash"), _Model("mimo-v2.6-flash")]
 
     cfg = _cfg(wd, "http://localhost:4001")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
         await pilot.pause()
@@ -375,7 +375,7 @@ async def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -384,3 +384,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

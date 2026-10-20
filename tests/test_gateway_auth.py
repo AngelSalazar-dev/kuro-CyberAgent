@@ -1,10 +1,10 @@
-"""Regressions for bugs found by pointing the harness at a hosted gateway live.
+﻿"""Regressions for bugs found by pointing the harness at a hosted gateway live.
 
 Run:  python tests/test_gateway_auth.py   (from an activated venv)
 
 None of these were caught by the existing suite, and all were shipping-blocking
 in the same way: the operator was told something false about their own tooling.
-They are grouped here because they share that shape — each is a case where the
+They are grouped here because they share that shape â€” each is a case where the
 harness had all the information needed to be right and said the wrong thing
 anyway.
 
@@ -12,7 +12,7 @@ anyway.
    built with ``api_key=cfg.api_key or "placeholder"``, so a session pointed at a
    gateway with an ``auth_token`` sent BOTH ``Authorization: Bearer <token>`` and
    ``x-api-key: placeholder``. That gateway validates ``x-api-key`` and rejects
-   the request 401 before it ever looks at the bearer — so a perfectly good key
+   the request 401 before it ever looks at the bearer â€” so a perfectly good key
    reported as "authentication failed". Both gateways still in the tree send
    ``x-api-key`` on their own catalog fetches, so this is not a quirk of the one
    it was measured against.
@@ -20,7 +20,7 @@ anyway.
 2. **A free model was billed at the paid model's rate.** ``price_for`` tolerates
    prefixes so dated and provider-qualified names resolve. A giveaway named
    ``deepseek-v4.1-flash-free`` starts with the paid ``deepseek-v4.1-flash`` row,
-   so the free model was charged $0.28/Mtok — and an *unknown* free model fell
+   so the free model was charged $0.28/Mtok â€” and an *unknown* free model fell
    through to ``DEFAULT_PRICE`` at $1/$3. The operator saw a cost line for a
    model they were told costs nothing. The ``-free`` convention is retained here
    because it is the one the prefix loop is most dangerous against.
@@ -34,8 +34,8 @@ anyway.
    OpenRouter reserves some ``:free`` models for an allowlist of apps (403
    ``permission_denied``, "only available on agentic harnesses") and throttles
    others per model (429). Neither is an auth failure and neither is fixable from
-   here, but both have a true, useful answer — the key is fine, pick another
-   model — and both were instead printed as ``{'type': 'error', ...}``.
+   here, but both have a true, useful answer â€” the key is fine, pick another
+   model â€” and both were instead printed as ``{'type': 'error', ...}``.
 
 No network: every case is constructed locally.
 """
@@ -52,11 +52,11 @@ sys.path.insert(0, str(ROOT))
 import anthropic  # noqa: E402
 # The SDK pins its HTTP client under the name ``httpx2`` (see
 # ``anthropic._base_client``), so this is the same class the SDK will hand back
-# in ``APIStatusError.response`` — not a stand-in that merely resembles it.
+# in ``APIStatusError.response`` â€” not a stand-in that merely resembles it.
 import httpx2  # noqa: E402
 
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import (  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import (  # noqa: E402
     DEFAULT_PRICE, PRICING, Config, price_for,
 )
 
@@ -71,7 +71,7 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 def _cfg(**kw) -> Config:
     """A Config with ONLY the credentials passed in.
 
-    The environment must already be cleared — see ``main``. Both ``Config`` and
+    The environment must already be cleared â€” see ``main``. Both ``Config`` and
     the SDK itself read ``ANTHROPIC_AUTH_TOKEN`` / ``ANTHROPIC_API_KEY`` from it,
     and on an operator's box those are set for real, so without clearing them
     every case here would be asserting about the shell rather than the code.
@@ -93,7 +93,7 @@ def _auth_headers(cfg: Config) -> dict[str, str]:
 # --- 1. one credential, not two -------------------------------------------
 
 def test_a_bearer_token_is_sent_alone() -> None:
-    """The bug: a bearer token plus ``x-api-key: placeholder`` → 401."""
+    """The bug: a bearer token plus ``x-api-key: placeholder`` â†’ 401."""
     hdrs = _auth_headers(_cfg(auth_token="sk-live-token", api_key=""))
     check("auth: the bearer token is sent", hdrs.get("authorization") == "Bearer sk-live-token",
           str(hdrs))
@@ -123,7 +123,7 @@ def test_no_credential_sends_no_auth_header() -> None:
     """Neither credential set: the SDK must still construct, with no auth at all.
 
     The placeholder existed only to give the SDK a non-empty string. ``None``
-    constructs just as well and puts nothing on the wire — which is what lets an
+    constructs just as well and puts nothing on the wire â€” which is what lets an
     unauthenticated local proxy work.
     """
     hdrs = _auth_headers(_cfg(api_key="", auth_token=""))
@@ -134,7 +134,7 @@ def test_no_credential_sends_no_auth_header() -> None:
 # --- 2. a free model costs nothing -----------------------------------------
 
 def test_a_free_suffix_is_priced_at_zero() -> None:
-    """The bug: prefix tolerance billed ``…-free`` at the paid row's rate."""
+    """The bug: prefix tolerance billed ``â€¦-free`` at the paid row's rate."""
     check("price: a -free suffix is free", price_for("deepseek-v4.1-flash-free") == (0.0, 0.0),
           str(price_for("deepseek-v4.1-flash-free")))
     check("price: OpenRouter's :free suffix is free",
@@ -166,7 +166,7 @@ def test_a_paid_model_keeps_its_price() -> None:
 
 
 def test_freebie_in_the_middle_is_not_free() -> None:
-    """The suffix has to be exact — a substring match would mis-price a real charge."""
+    """The suffix has to be exact â€” a substring match would mis-price a real charge."""
     got = price_for("some-paid:freebie")
     check("price: 'freebie' is not mistaken for 'free'",
           got != (0.0, 0.0), str(got))
@@ -181,7 +181,7 @@ def _status_error(code: int, body: dict) -> anthropic.APIStatusError:
     """The SDK error the gateway's response would actually produce.
 
     The class matters, not just the status: ``_friendly_error`` dispatches on
-    ``isinstance``, and the SDK raises ``AuthenticationError`` for a 401 — a bare
+    ``isinstance``, and the SDK raises ``AuthenticationError`` for a 401 â€” a bare
     ``APIStatusError`` would fall through to the generic branch and the test would
     be asserting about a shape the harness never sees. 402 has no dedicated
     subclass, so the base is correct there and ``_friendly_error`` reads its
@@ -223,7 +223,7 @@ def test_a_gated_model_is_not_an_auth_failure() -> None:
     Measured live: ``thinkingmachines/inkling:free`` on OpenRouter answers 403
     with "only available on agentic harnesses". The key is valid and thirteen
     other free models on it work in the same minute, so "check your key" would
-    send the operator to re-check something that is fine — and before this
+    send the operator to re-check something that is fine â€” and before this
     branch existed the raw SDK dict was printed at them instead.
     """
     err = _status_error(403, {"error": {
@@ -244,7 +244,7 @@ def test_a_throttled_free_model_suggests_another_model() -> None:
     """429 on a free tier is per-model, so the useful advice is 'pick another'.
 
     Measured: three free OpenRouter models 429'd while eleven others on the same
-    key answered, in the same minute — so "wait and retry" is the wrong advice.
+    key answered, in the same minute â€” so "wait and retry" is the wrong advice.
     """
     err = _status_error(429, {"error": {"type": "rate_limit_exceeded",
                                         "message": "Rate limit exceeded"}})
@@ -282,7 +282,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -291,3 +291,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -1,5 +1,5 @@
-general_settings:
-  # Required since litellm 1.104 — see the note in packaging/logfare's config.
+﻿general_settings:
+  # Required since litellm 1.104 â€” see the note in packaging/logfare's config.
   # Without a master key the proxy refuses to start rather than accept every
   # request unauthenticated. The harness's own upstream token is the proxy
   # credential, so requests it already sends keep working.
@@ -7,7 +7,7 @@ general_settings:
 
 model_list:
   # Token Juice's whole catalog is one chat model, exposed upstream as
-  # `deepseek-ai/DeepSeek-V4.1-Flash-1017`. The alias below is what ZimZilla
+  # `deepseek-ai/DeepSeek-V4.1-Flash-1017`. The alias below is what Kuro
   # (and anything else speaking Anthropic's protocol) asks for.
   #
   # The upstream name carries a snapshot suffix that Token Juice rotates, and
@@ -20,3 +20,4 @@ model_list:
       model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
       api_base: https://api.tokenjuice.ai/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
+

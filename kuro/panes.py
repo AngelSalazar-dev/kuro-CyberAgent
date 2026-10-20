@@ -1,0 +1,388 @@
+﻿"""Multi-pane Kuro: tmux prefix keys plus a mailbox so the panes' agents can talk.
+
+Layout
+------
+* ``ctrl+b h`` splits the current window horizontally and starts a new
+  Kuro in the new pane; ``ctrl+b v`` splits vertically. These are tmux
+  bindings, so the prefix is handled by tmux before Kuro ever sees the key.
+* **Nested tmux needs the prefix twice.** If the shell you launch from is
+  already inside a tmux session, that outer server reads the prefix first and
+  never forwards it, so ``ctrl+b h`` splits the *outer* window and these
+  bindings look dead. ``ctrl+b ctrl+b h`` forwards one prefix inward and works;
+  the generated config binds ``C-b`` to ``send-prefix`` for exactly that, and
+  says so in the status bar when it detects the nesting.
+* A pre-existing server on our socket would silently keep tmux's stock
+  bindings, because ``tmux -f`` is read only at server start â€” see
+  :func:`apply_config`, which sources the config into whatever server it finds.
+* Every pane is a separate Kuro process with its own Agent. They share a
+  mailbox directory, one per tmux session, and talk through three tools
+  (``agent_peers``, ``agent_send``, ``agent_inbox``).
+
+Mailbox
+-------
+``<state_dir>/panes/<session>/<agent>.jsonl`` is the inbox of ``<agent>``. A
+message is one JSON line appended by the sender and consumed by the receiver,
+which rewrites the file after reading. Appends are serialised with an
+``fcntl`` lock so two senders cannot interleave a line. Agent names are the
+tmux pane ids (``%3``) made filesystem-safe, so they are stable for the life of
+a pane and unique within a session.
+
+Nothing here touches the network. The mailbox is local to the machine.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+
+# Cross-platform file locking: fcntl.flock on POSIX, msvcrt.locking on Windows.
+if sys.platform == "win32":
+    import msvcrt
+
+    @contextmanager
+    def _file_lock(fh):
+        """Exclusive lock on an open file handle, Windows (msvcrt) edition."""
+        try:
+            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+        except OSError:
+            pass
+        try:
+            yield
+        finally:
+            try:
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+else:
+    import fcntl
+
+    @contextmanager
+    def _file_lock(fh):
+        """Exclusive lock on an open file handle, POSIX (fcntl) edition."""
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+#: Environment variable naming the mailbox session. Set in tmux's global
+#: session environment by the generated config, so every pane inherits it.
+ENV_SESSION = "KURO_PANE_SESSION"
+
+
+@dataclass(frozen=True)
+class Relaunch:
+    """A request from the running TUI to re-open this session under tmux.
+
+    ``/panes`` cannot start tmux from inside a running Textual app: tmux has to
+    own the terminal, and the app is holding it. So the command saves the
+    conversation, returns one of these as the app's exit value, and
+    ``__main__`` performs the relaunch once the terminal is free again.
+
+    ``resume`` is the session file the new process should pick the conversation
+    back up from, or None to start clean.
+    """
+
+    resume: str | None = None
+
+#: tmux server socket used by the pane launcher, so Kuro panes do not
+#: collide with the operator's own tmux.
+TMUX_SOCKET = "kuro"
+TMUX_SESSION = "kuro"
+
+#: Cap on one message body. A mailbox is a conversation, not a file transfer.
+MAX_MESSAGE_CHARS = 8000
+
+_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+# ---------------------------------------------------------------------------
+# tmux config
+# ---------------------------------------------------------------------------
+
+def nested_in_tmux() -> bool:
+    """True when this process already sits inside somebody else's tmux.
+
+    tmux exports ``TMUX`` in every pane it creates, so its presence here means
+    the operator started ``kuro --panes`` from a shell that is itself in a
+    tmux session. That outer server reads the prefix first and never forwards
+    it, so ``ctrl+b h`` splits the *outer* session and this one looks inert.
+    """
+    return bool(os.environ.get("TMUX"))
+
+
+def tmux_conf(kuro_cmd: str, nested: bool = False) -> str:
+    """The tmux config that gives ``ctrl+b h`` and ``ctrl+b v`` their meaning.
+
+    ``kuro_cmd`` is the command a new pane runs. It is shell-quoted here so
+    a path with spaces survives tmux's own command parsing.
+
+    ``nested`` only changes what the status bar *says*: when an outer tmux owns
+    the prefix the bindings need it pressed twice, and a hint that omits that is
+    the difference between the feature working and looking broken.
+    """
+    cmd = shlex.quote(kuro_cmd)
+    if nested:
+        hint = " ctrl+b ctrl+b h Â· ctrl+b ctrl+b v (outer tmux takes the prefix) "
+    else:
+        hint = " ctrl+b h split-right Â· ctrl+b v split-down "
+    return "\n".join([
+        "# Kuro panes â€” generated by `kuro --panes`.",
+        "set -g prefix C-b",
+        "unbind C-b",
+        # Doubling the prefix is what forwards one to the outer server, which is
+        # the only way to reach these bindings when nested. Harmless standalone.
+        "bind C-b send-prefix",
+        "set -g mouse on",
+        "set -g base-index 1",
+        "set -g pane-base-index 1",
+        "set -g status-style 'bg=#040704,fg=#00ff41'",
+        "set -g status-left '[kuro] '",
+        f"set -g status-right '{hint}'",
+        "set -g escape-time 10",
+        "set -g history-limit 20000",
+        # Global session environment: every pane tmux creates inherits it, so
+        # the mailbox session is known to every Kuro without per-bind -e.
+        f"set-environment -g {ENV_SESSION} {TMUX_SESSION}",
+        "",
+        "# prefix + h : new Kuro pane to the right (horizontal split)",
+        f"bind h split-window -h -c '#{{pane_current_path}}' {cmd}",
+        "# prefix + v : new Kuro pane below (vertical split)",
+        f"bind v split-window -v -c '#{{pane_current_path}}' {cmd}",
+        "",
+    ])
+
+
+def write_tmux_conf(state_dir: Path, kuro_cmd: str, nested: bool | None = None) -> Path:
+    """Write the config under the state dir and return its path.
+
+    ``nested`` defaults to :func:`nested_in_tmux`, so the caller only passes it
+    to override what the environment says.
+    """
+    if nested is None:
+        nested = nested_in_tmux()
+    path = Path(state_dir) / "panes" / "tmux.conf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(tmux_conf(kuro_cmd, nested=nested))
+    return path
+
+
+def tmux_available() -> bool:
+    return shutil.which("tmux") is not None
+
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+def current_session() -> str | None:
+    """The mailbox session this process belongs to, or None outside panes."""
+    return os.environ.get(ENV_SESSION) or None
+
+
+def current_agent() -> str | None:
+    """This pane's agent name. tmux sets ``TMUX_PANE`` in every pane itself."""
+    pane = tmux_pane_id()
+    return agent_name_for_pane(pane) if pane else None
+
+
+def agent_name_for_pane(pane_id: str) -> str:
+    """A filesystem-safe agent name from a tmux pane id like ``%3``."""
+    return _SAFE.sub("", pane_id.strip().lstrip("%")) or "pane"
+
+
+def _safe_name(name: str) -> str:
+    """A name safe to use as one filename: no separators, no leading dots."""
+    return _SAFE.sub("", str(name or "").strip()).lstrip(".")
+
+
+# ---------------------------------------------------------------------------
+# Mailbox
+# ---------------------------------------------------------------------------
+
+def mailbox_root(state_dir: Path, session: str) -> Path:
+    d = Path(state_dir) / "panes" / _safe_name(session)
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def register(root: Path, agent: str) -> None:
+    """Create this agent's inbox so its peers can find it. Idempotent."""
+    name = _safe_name(agent)
+    if name:
+        _inbox_path(root, name).touch(exist_ok=True)
+
+
+def _inbox_path(root: Path, agent: str) -> Path:
+    return root / f"{_safe_name(agent)}.jsonl"
+
+
+def known_agents(root: Path) -> list[str]:
+    """Every agent with an inbox in this session, sorted."""
+    return sorted(p.stem for p in Path(root).glob("*.jsonl"))
+
+
+def send(root: Path, sender: str, to: str, body: str) -> dict:
+    """Append a message to ``to``'s inbox. Returns the stored record.
+
+    Raises ValueError for an unknown recipient or an empty body, so the tool
+    layer can report it to the model instead of silently dropping the message.
+    """
+    body = str(body or "").strip()
+    if not body:
+        raise ValueError("message body is empty")
+    recipient = _safe_name(to)
+    if not recipient:
+        raise ValueError("recipient name is empty")
+    if recipient not in known_agents(root) and recipient != _safe_name(sender):
+        raise ValueError(
+            f"no agent named '{to}' in this session â€” "
+            f"known: {', '.join(known_agents(root)) or 'none'}"
+        )
+    if len(body) > MAX_MESSAGE_CHARS:
+        body = body[:MAX_MESSAGE_CHARS] + " â€¦[truncated]"
+    record = {
+        "from": _safe_name(sender) or "unknown",
+        "to": recipient,
+        "at": time.time(),
+        "body": body,
+    }
+    path = _inbox_path(root, recipient)
+    with open(path, "a", encoding="utf-8") as fh:
+        with _file_lock(fh):
+            fh.write(json.dumps(record) + "\n")
+            fh.flush()
+    return record
+
+
+def drain(root: Path, agent: str) -> list[dict]:
+    """Return and remove every unread message for ``agent``, oldest first."""
+    path = _inbox_path(root, agent)
+    if not path.exists():
+        return []
+    out: list[dict] = []
+    with open(path, "r+", encoding="utf-8") as fh:
+        with _file_lock(fh):
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    continue
+            fh.seek(0)
+            fh.truncate()
+    return out
+
+
+def format_messages(messages: list[dict]) -> str:
+    """Render received messages as a block the model can read."""
+    lines = []
+    for m in messages:
+        stamp = time.strftime("%H:%M:%S", time.localtime(m.get("at", 0)))
+        lines.append(f"[{stamp}] from {m.get('from', '?')}: {m.get('body', '')}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Resuming a conversation in the relaunched process
+# ---------------------------------------------------------------------------
+
+def transcript_of(messages: list[dict]) -> list[tuple[str, str]]:
+    """Flatten a stored conversation into ``(role, text)`` pairs for replay.
+
+    ``agent.messages`` is the wire format â€” a mix of plain strings and lists of
+    content blocks â€” which is what the model needs but not what a transcript
+    pane shows. This walks it into the two things a reader recognises: what the
+    operator typed, and what the assistant answered. Tool traffic is dropped
+    rather than replayed: the tool panels are live progress, and a wall of them
+    for work already finished would bury the conversation.
+
+    Pure, so the suite can test the walk without an app or a session file.
+    """
+    out: list[tuple[str, str]] = []
+    for m in messages:
+        role = m.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        content = m.get("content")
+        if isinstance(content, str):
+            text = content
+        else:
+            parts = []
+            for b in content or []:
+                if not isinstance(b, dict):
+                    continue
+                # Only prose. tool_use / tool_result blocks are deliberately
+                # skipped â€” see the docstring.
+                if b.get("type") == "text" and b.get("text"):
+                    parts.append(str(b["text"]))
+            text = "\n".join(parts)
+        text = text.strip()
+        if text:
+            out.append((role, text))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Spawning
+# ---------------------------------------------------------------------------
+
+def tmux_pane_id() -> str | None:
+    return os.environ.get("TMUX_PANE") or None
+
+
+def apply_config(conf: Path, socket: str = TMUX_SOCKET) -> None:
+    """Make sure the server on ``socket`` is carrying this config's bindings.
+
+    ``tmux -f`` is read only when a server *starts*. If one is already running
+    on the socket â€” left behind by an earlier run, or started by a bare
+    ``tmux -L kuro`` â€” then ``new-session -A`` silently attaches to it and
+    the generated config is never read at all. The bindings are then tmux's
+    stock ones, under which ``ctrl+b h`` is not a prefix binding and does
+    nothing whatsoever. So the config is sourced into whatever server we find,
+    whether we started it or merely attached to it. Sourcing is idempotent: the
+    file is our own, regenerated on every launch.
+    """
+    base = ["tmux", "-L", socket]
+    subprocess.call([*base, "-f", str(conf), "start-server"])
+    subprocess.call([*base, "source-file", str(conf)])
+
+
+def launch(conf: Path, kuro_cmd: str, workdir: Path,
+           first_cmd: str | None = None) -> int:
+    """Start (or attach to) the Kuro tmux session with the pane bindings.
+
+    ``first_cmd`` is what the *initial* pane runs, when that should differ from
+    what the ``ctrl+b h``/``v`` bindings run. ``/panes`` uses it to resume the
+    saved conversation in the first pane only: panes opened afterwards are new
+    agents, and cloning the same history into each of them would defeat the
+    point of them being separate agents that message each other.
+
+    Runs tmux in the foreground. Returns its exit status.
+    """
+    if not tmux_available():
+        raise RuntimeError(
+            "tmux is not installed â€” install it "
+            "(e.g. `winget install tmux` or `choco install tmux` on Windows, "
+            "`sudo apt install tmux` on Linux)"
+        )
+    apply_config(conf)
+    argv = [
+        "tmux", "-L", TMUX_SOCKET, "-f", str(conf),
+        "new-session", "-A", "-s", TMUX_SESSION,
+        "-c", str(workdir),
+        first_cmd or kuro_cmd,
+    ]
+    return subprocess.call(argv)
+

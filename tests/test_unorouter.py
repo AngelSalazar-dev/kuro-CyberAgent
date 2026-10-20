@@ -1,23 +1,23 @@
-"""Regression suite for the UnoRouter source.
+﻿"""Regression suite for the UnoRouter source.
 
 Run:  python tests/test_unorouter.py   (from an activated venv)
 
 Protects what is particular about this provider:
 
 * **``metadata`` is a JSON-encoded STRING.** Not an object. Every capability
-  this integration reads — ``supportsTools``, ``outputModalities``,
-  ``contextWindow``, ``maxOutputTokens``, ``isReasoning`` — lives inside that
+  this integration reads â€” ``supportsTools``, ``outputModalities``,
+  ``contextWindow``, ``maxOutputTokens``, ``isReasoning`` â€” lives inside that
   blob, so failing to decode it does not raise, it silently reports a catalog of
   featureless models. A dict, ``None`` and junk are all asserted to degrade to
   "unknown" rather than to a crash or a wrong answer.
 * **The free/usable filter has three clauses, and the modality one is
   load-bearing.** The gateway fronts SDXL image generators, embedding models,
-  Whisper transcription and TTS voices — all genuinely free, none able to answer
+  Whisper transcription and TTS voices â€” all genuinely free, none able to answer
   a Messages turn. A catalog containing exactly those cases is parsed here, and
   only the free, text, tool-capable chat models may survive.
 * **``model_ids`` keeps paid text models.** ``/model <name>`` tests membership
   against this list, so filtering it to the free tier would refuse a paid model
-  the operator named deliberately — while still dropping the image and speech
+  the operator named deliberately â€” while still dropping the image and speech
   entries, which cannot answer a turn at all.
 * **The composed message URL.** The catalog and the Messages API sit under
   *different roots* here (``/api/pricing`` is a sibling of ``/v1``, not a child),
@@ -60,13 +60,13 @@ def _meta(**kw) -> str:
 # Shaped like the real payload: ``data`` a list of entries keyed by
 # ``model_name``, ``is_free`` a real bool, and ``metadata`` a JSON **string**
 # rather than an object. The set covers every case the filter has to separate:
-#   - free, text, tools        → free and usable
-#   - free, image output       → free but NOT usable
-#   - free, embedding output   → free but NOT usable
-#   - free, audio output       → free but NOT usable
-#   - free, text, no tools     → free but NOT usable
-#   - paid, text, tools, :free suffix → free via the suffix
-#   - paid, text, tools        → usable, not free (kept by model_ids)
+#   - free, text, tools        â†’ free and usable
+#   - free, image output       â†’ free but NOT usable
+#   - free, embedding output   â†’ free but NOT usable
+#   - free, audio output       â†’ free but NOT usable
+#   - free, text, no tools     â†’ free but NOT usable
+#   - paid, text, tools, :free suffix â†’ free via the suffix
+#   - paid, text, tools        â†’ usable, not free (kept by model_ids)
 CATALOG = {
     "success": True,
     "data": [
@@ -118,7 +118,7 @@ CATALOG = {
          "metadata": _meta(supportsTools=False, outputModalities=["text"],
                            contextWindow=131072)},
         {"model_name": "qwen3.8-27b:free",
-         "description": "Qwen 3.8 27B — zeroed out without a rename",
+         "description": "Qwen 3.8 27B â€” zeroed out without a rename",
          "is_free": False, "online": True,
          "enable_groups": ["e1-qwen3.8-27b-free", "e2-qwen3.8-27b-free",
                            "e3-qwen3.8-27b-free"],
@@ -131,8 +131,8 @@ CATALOG = {
                            contextWindow=200000, maxOutputTokens=32000)},
         # Free, text, tool-capable, and deliberately NOT in
         # PREFERRED_FREE_MODELS: without a usable model the shortlist does not
-        # name, `default_free_model`'s last branch — "nothing preferred is
-        # present, take the catalog's own first" — has no case to exercise, and
+        # name, `default_free_model`'s last branch â€” "nothing preferred is
+        # present, take the catalog's own first" â€” has no case to exercise, and
         # the test for it would pass by finding a preferred entry instead.
         {"model_name": "claude-haiku-5-5:free",
          "description": "Claude Haiku 5.5 (free)",
@@ -145,20 +145,20 @@ CATALOG = {
     ],
 }
 
-#: The ids that survive `usable_free_models` — free AND text AND tool-capable.
+#: The ids that survive `usable_free_models` â€” free AND text AND tool-capable.
 #:
 #: **In the order that function now returns them: most upstreams first.** It
 #: sorts by redundancy, so this list is the assertion that the sort happened, not
 #: merely that the filter did. The counts are set in ``CATALOG`` to be distinct
 #: and descending (gpt-oss 14, gemini 12, qwen3.8 3, deepseek 1, haiku unknown),
 #: which is what makes the order a real test rather than a stable-sort
-#: coincidence — with every count equal, the input order would survive and this
+#: coincidence â€” with every count equal, the input order would survive and this
 #: would pass while asserting nothing.
 USABLE_FREE = ["gpt-oss-20b:free", "gemini-3.6-flash:free",
                "qwen3.8-27b:free", "deepseek-v4.1-flash:free",
                "claude-haiku-5-5:free"]
 
-#: The ids that survive `model_ids` — every text-output model, free or not.
+#: The ids that survive `model_ids` â€” every text-output model, free or not.
 TEXT_IDS = ["deepseek-v4.1-flash:free", "gemini-3.6-flash:free",
             "gpt-oss-20b:free", "mistral-small:free", "qwen3.8-27b:free",
             "claude-opus-5", "claude-haiku-5-5:free"]
@@ -199,10 +199,10 @@ def test_metadata_is_a_json_string() -> None:
     The shape invites a silent failure rather than a loud one: reading
     ``entry["metadata"]["supportsTools"]`` against a string raises TypeError, but
     a defensive ``isinstance(..., dict)`` guard that gives up would report every
-    model as featureless — no tools, no context window — and the free list would
+    model as featureless â€” no tools, no context window â€” and the free list would
     come back empty with nothing in the log to explain it.
     """
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     models = u._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -279,7 +279,7 @@ def test_metadata_is_a_json_string() -> None:
 
 def test_free_detection() -> None:
     """``is_free`` is the catalog's own flag; the ``:free`` suffix backs it up."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     models = u._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -304,17 +304,17 @@ def test_free_detection() -> None:
 
 
 def test_the_free_usable_filter() -> None:
-    """Free AND tools AND text output — all three, and the third is the point.
+    """Free AND tools AND text output â€” all three, and the third is the point.
 
     Without the modality clause this list fills with what the gateway also
     fronts for free: SDXL image generators, embedding models, Whisper
     transcription, TTS voices. All genuinely free, none able to answer a
     Messages turn. Measured against the live catalog on 2026-10-16: 97 free
-    entries, 46 usable here — the clause and the tool test together drop 51, so
+    entries, 46 usable here â€” the clause and the tool test together drop 51, so
     between them they are doing most of the work. (The exact counts drift
     between runs; the filter's behaviour is what this test pins.)
     """
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -354,7 +354,7 @@ def test_the_free_usable_filter() -> None:
     check("filter: text among several output modalities counts as chat",
           multi[0].chat)
 
-    # A failed fetch is None and an error, NOT an empty list — the caller can
+    # A failed fetch is None and an error, NOT an empty list â€” the caller can
     # tell "nothing is free" from "we could not ask".
     u.clear_cache()
     with mock.patch("urllib.request.urlopen",
@@ -369,7 +369,7 @@ def test_upstream_redundancy() -> None:
 
     The operator's complaint was that models rate limit and the picker gave no
     way to tell which ones would. The catalog does not publish per-channel
-    health — checked field by field, there is no such field — but it does publish
+    health â€” checked field by field, there is no such field â€” but it does publish
     ``enable_groups``, the list of channels that can serve the model, and its
     length is the redundancy that decides whether a rate limit on one channel is
     survivable. This pins the parse, the tiering, and the ordering.
@@ -378,7 +378,7 @@ def test_upstream_redundancy() -> None:
     business and lives in ``app.py``, while what matters here is that a count of
     one is never confused with a count the catalog did not give.
     """
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -434,7 +434,7 @@ def test_upstream_redundancy() -> None:
     check("upstreams: a numeric enable_groups is not counted either",
           junk[1].upstreams == 0, str(junk[1].upstreams))
 
-    # The note the UI prints, and its pluralisation — "1 upstreams" in the
+    # The note the UI prints, and its pluralisation â€” "1 upstreams" in the
     # column the operator scans is exactly the kind of detail that makes a
     # careful number look careless.
     check("upstreams: the note pluralises a single channel correctly",
@@ -447,7 +447,7 @@ def test_upstream_redundancy() -> None:
           haiku.upstream_note == "", repr(haiku.upstream_note))
 
     # The count must not have leaked into `blurb`, which is rendered in one dim
-    # style — a coloured segment needs its own boundary, so the count is a
+    # style â€” a coloured segment needs its own boundary, so the count is a
     # separate property by design.
     check("upstreams: the blurb does not carry the count",
           "upstream" not in by_id["gpt-oss-20b:free"].blurb,
@@ -465,7 +465,7 @@ def test_upstream_redundancy() -> None:
           [m.id for m in (usable or [])].index("gpt-oss-20b:free")
           < [m.id for m in (usable or [])].index("deepseek-v4.1-flash:free"))
 
-    # A paid model carries the count too — `_model_note` shows it in `/model`,
+    # A paid model carries the count too â€” `_model_note` shows it in `/model`,
     # which lists paid models as well as free ones.
     paid = [m for m in u._parse_models(CATALOG) if m.id == "qwen3.8-27b:free"]
     check("upstreams: a paid model still reports its channel count",
@@ -477,10 +477,10 @@ def test_model_ids_keep_paid_text_models() -> None:
 
     A list filtered to the free tier would refuse a paid model the operator
     named deliberately, with "not served by unorouter" against a list that was
-    never meant to be complete. The image and speech entries are still dropped —
+    never meant to be complete. The image and speech entries are still dropped â€”
     those cannot answer a turn, so offering them would be offering a failure.
     """
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -504,7 +504,7 @@ def test_model_ids_keep_paid_text_models() -> None:
 
 def test_catalog_needs_no_key() -> None:
     """``/api/pricing`` is public, so the free list precedes setup."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     seen = {}
@@ -537,7 +537,7 @@ def test_catalog_needs_no_key() -> None:
 
 def test_keyed_fetch_sends_the_credential() -> None:
     """With a key, the listing matches what this account would be charged."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     seen = {}
@@ -556,7 +556,7 @@ def test_keyed_fetch_sends_the_credential() -> None:
 
 def test_fetch_is_total() -> None:
     """fetch_models returns errors; it never raises into the TUI."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     with mock.patch("urllib.request.urlopen",
@@ -583,7 +583,7 @@ def test_fetch_is_total() -> None:
           models is None and "500" in err and "unorouter-api-setup" not in err,
           err)
 
-    # An empty catalog is [] and NOT an error — the caller can tell them apart.
+    # An empty catalog is [] and NOT an error â€” the caller can tell them apart.
     u.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen({"data": []})):
         models, err = u.fetch_models(use_cache=False)
@@ -620,7 +620,7 @@ def test_cache_expiry() -> None:
     """
     import time
 
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     check("expiry: a cold cache has no age", u.catalog_age() is None,
@@ -650,7 +650,7 @@ def test_cache_expiry() -> None:
 
 def test_cache_is_keyed_by_token() -> None:
     """A key change refetches rather than serving another account's list."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -675,7 +675,7 @@ def test_cache_is_keyed_by_token() -> None:
           len(calls) == 0, str(len(calls)))
 
     # Both slots coexist, so /model on one key is not disturbed by a fetch for
-    # another — but the newest wins for the display read.
+    # another â€” but the newest wins for the display read.
     check("cache: both slots are populated", len(u._CACHE) == 2,
           str(len(u._CACHE)))
 
@@ -688,7 +688,7 @@ def test_default_free_model() -> None:
     on whatever the previous source called its model, and the next turn sent
     that name to a provider that does not serve it.
     """
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     u.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -717,7 +717,7 @@ def test_default_free_model() -> None:
     # With no preferred name present at all, the catalog's own first usable
     # entry is used rather than nothing. `claude-haiku-5-5:free` is the only
     # free usable model left in this reduced catalog, so it is what "first"
-    # must mean — which is exactly why it is in the fixture and not on the
+    # must mean â€” which is exactly why it is in the fixture and not on the
     # shortlist.
     u.clear_cache()
     none_preferred = {"data": [m for m in CATALOG["data"]
@@ -729,7 +729,7 @@ def test_default_free_model() -> None:
           picked == "claude-haiku-5-5:free", str(picked))
 
     # Nothing free at all leaves the caller's model alone rather than inventing
-    # one — an empty catalog is not a reason to name a model.
+    # one â€” an empty catalog is not a reason to name a model.
     u.clear_cache()
     paid_only = {"data": [m for m in CATALOG["data"]
                           if m["model_name"] == "claude-opus-5"]}
@@ -764,7 +764,7 @@ def test_default_free_model() -> None:
 
 def test_profile_roundtrip() -> None:
     """save_key writes mode 600, in a format the parser reads back."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     token = "sk-saved0000000000000000000"
     path = u.save_key(token, "deepseek-v4.1-flash:free")
@@ -793,10 +793,10 @@ def test_profile_roundtrip() -> None:
 
 
 def test_looks_like_key() -> None:
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     # A shape-only sample, not a live credential: `looks_like_key` is a syntax
-    # check, so a fabricated token exercises it exactly as a real one would —
+    # check, so a fabricated token exercises it exactly as a real one would â€”
     # and a real one in a tracked file is a secret in the repo forever.
     check("key: a real-looking key passes",
           u.looks_like_key("sk-" + "0" * 48))
@@ -809,7 +809,7 @@ def test_looks_like_key() -> None:
 
 def test_active_key_recognises_host() -> None:
     """The hosted URL is matched by host, and the path is not confused."""
-    from zimzilla import sources as s
+    from kuro import sources as s
 
     check("sources: the UnoRouter host is the unorouter source",
           s.active_key("https://api.unorouter.com") == "unorouter")
@@ -834,7 +834,7 @@ def test_active_key_recognises_host() -> None:
 
     # The catalog is reachable through the generic accessor, and a cold cache
     # reports None rather than an empty list.
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
     u.clear_cache()
     check("sources: models_for returns None on a cold cache",
           s.models_for("https://api.unorouter.com") is None)
@@ -848,7 +848,7 @@ def test_active_key_recognises_host() -> None:
 
 def test_credential_precedence(tmp: Path) -> None:
     """Environment beats the profile; the profile beats ~/claude-source."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     claude_source = tmp / "claude-source"
     claude_source.mkdir(parents=True, exist_ok=True)
@@ -875,7 +875,7 @@ def test_credential_precedence(tmp: Path) -> None:
                 'export ANTHROPIC_AUTH_TOKEN="sk-ownprofile000000000000"\n')
             with mock.patch.object(u, "PROFILE", own):
                 creds = u.load_credentials()
-                check("creds: ZimZilla's own profile beats ~/claude-source",
+                check("creds: Kuro's own profile beats ~/claude-source",
                       creds is not None and creds[2] == str(own),
                       str(creds and creds[2]))
 
@@ -918,7 +918,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 def test_apply_and_guard() -> None:
     """apply_to aims a config; the guard keeps a stale choice from hijacking."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     class _Cfg:
         base_url = "http://localhost:4001"
@@ -940,7 +940,7 @@ def test_apply_and_guard() -> None:
         check("apply: the model is applied", cfg.model == "gemini-3.6-flash:free")
 
     # With no model named, a FREE one is chosen rather than leaving the previous
-    # source's name in place — the failure this whole path guards against.
+    # source's name in place â€” the failure this whole path guards against.
     with mock.patch.object(u, "load_credentials",
                            lambda: ("sk-x000000000000000000000", "", "test")), \
          mock.patch.object(u, "default_free_model",
@@ -951,7 +951,7 @@ def test_apply_and_guard() -> None:
               cfg.model == "deepseek-v4.1-flash:free", str(applied))
 
     # And when nothing free exists, the previous model is left alone rather than
-    # being blanked — a wrong name is better than no name for the next turn.
+    # being blanked â€” a wrong name is better than no name for the next turn.
     with mock.patch.object(u, "load_credentials",
                            lambda: ("sk-x000000000000000000000", "", "test")), \
          mock.patch.object(u, "default_free_model", lambda *a, **k: None):
@@ -988,13 +988,13 @@ def test_apply_and_guard() -> None:
 def test_price_for() -> None:
     """Only the free tier can be priced; a paid model must fall through.
 
-    UnoRouter publishes ``model_ratio``/``completion_ratio`` — dimensionless
-    multipliers against the gateway's own credit unit — not dollars per million
+    UnoRouter publishes ``model_ratio``/``completion_ratio`` â€” dimensionless
+    multipliers against the gateway's own credit unit â€” not dollars per million
     tokens. Converting them would be inventing a rate and printing it as the
     gateway's own, so a paid model returns ``None`` and the caller uses the
     local estimate table instead, which is labelled as an estimate.
     """
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     models = u._parse_models(CATALOG)
     check("price: a free model prices at exactly zero",
@@ -1013,7 +1013,7 @@ def test_price_for() -> None:
 
 def test_selection_file_is_shared() -> None:
     """The selection file is the same one sources.py reads."""
-    from zimzilla import sources as s, unorouter as u
+    from kuro import sources as s, unorouter as u
 
     u.set_current("unorouter")
     check("selection: sources.py sees the unorouter choice",
@@ -1023,7 +1023,7 @@ def test_selection_file_is_shared() -> None:
 
 def test_no_key_is_echoed(tmp: Path) -> None:
     """The display value is a path, never the key itself."""
-    from zimzilla import unorouter as u
+    from kuro import unorouter as u
 
     own = tmp / "own2" / "source"
     own.parent.mkdir(parents=True, exist_ok=True)
@@ -1050,26 +1050,26 @@ def test_no_key_is_echoed(tmp: Path) -> None:
 
 
 def test_the_composed_message_url_is_right() -> None:
-    """The URL the SDK actually builds — not the constant it is built from.
+    """The URL the SDK actually builds â€” not the constant it is built from.
 
     The catalog and the Messages API sit under *different roots* here:
     ``/api/pricing`` is a sibling of ``/v1``, not a child of it. So the base URL
-    must be ``https://api.unorouter.com`` with no ``/v1`` — the SDK appends
+    must be ``https://api.unorouter.com`` with no ``/v1`` â€” the SDK appends
     ``/v1/messages`` itself, and a base carrying ``/v1`` composes to
     ``/v1/v1/messages`` and 404s every turn while the catalog still works.
 
     Asserting the constant can only restate the bug; building the request
     through the real client is the only check that can catch it. The catalog
     path is asserted in the same breath, because a "fix" that moved the base to
-    ``/v1`` to please the messages path would silently break the catalog — the
+    ``/v1`` to please the messages path would silently break the catalog â€” the
     two are not siblings under one prefix the way OpenRouter's are.
     """
     import anthropic
     from anthropic._models import FinalRequestOptions
 
-    from zimzilla import unorouter as u
-    from zimzilla.agent import Agent
-    from zimzilla.config import Config
+    from kuro import unorouter as u
+    from kuro.agent import Agent
+    from kuro.config import Config
 
     cfg = Config(base_url=u.DEFAULT_BASE_URL,
                  auth_token="sk-x000000000000000000000")
@@ -1107,9 +1107,9 @@ def test_the_composed_message_url_is_right() -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-uno-test-"))
     # Pin the module's paths to the temp tree before anything imports it.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     test_metadata_is_a_json_string()
@@ -1136,7 +1136,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -1145,3 +1145,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

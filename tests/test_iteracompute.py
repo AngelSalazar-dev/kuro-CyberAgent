@@ -1,24 +1,24 @@
-"""Regression suite for the IteraCompute source.
+﻿"""Regression suite for the IteraCompute source.
 
 Run:  python tests/test_iteracompute.py   (from an activated venv)
 
 Protects what is particular about this provider:
 
 * **It is a local proxy, not a hosted gateway.** IteraCompute serves the OpenAI
-  protocol only — measured 2026-10-19, ``POST /v1/messages`` answers
-  ``404 edge_route_not_allowed`` — so the session talks to ``localhost:4002``
+  protocol only â€” measured 2026-10-19, ``POST /v1/messages`` answers
+  ``404 edge_route_not_allowed`` â€” so the session talks to ``localhost:4002``
   and the proxy config is what makes it usable. ``is_iteracompute`` must match
   the proxy and must NOT match ``api.iteracompute.com``: a session aimed at the
   upstream is broken, and calling it a working source would hide that.
 * **Free is the catalog's ``is_free`` flag, corroborated by a read 0/0 price.**
-  A *missing* price is not free — the same trap the other gateway modules
+  A *missing* price is not free â€” the same trap the other gateway modules
   document.
 * **Image entries are not chat models.** ``gpt-image-*`` and
   ``gemini-*-argon`` publish no ``context_window``; they are filtered on that,
   not on their names, so a new image model is excluded without an edit here.
 * **The catalog's limits are used.** ``max_output_tokens`` is 8192 on the free
   model while ``Config.max_tokens`` is 32768, so the agent's ceiling must come
-  from the catalog — a request above the limit is one the upstream rejects.
+  from the catalog â€” a request above the limit is one the upstream rejects.
 * **The free tier's 128K cap beats the model's larger window.** The catalog
   advertises 262144; the docs put a Free account at 128K. An API key does not
   say which tier the account is on, so the conservative figure is reported.
@@ -162,7 +162,7 @@ def _clean_env():
 # ---------------------------------------------------------------------------
 
 def test_free_is_the_flag_or_a_read_price() -> None:
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     models = ic._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -182,7 +182,7 @@ def test_free_is_the_flag_or_a_read_price() -> None:
 
 
 def test_priced_records_a_read() -> None:
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     by_id = {m.id: m for m in ic._parse_models(CATALOG)}
     check("priced: a real pair counts as priced",
@@ -197,7 +197,7 @@ def test_priced_records_a_read() -> None:
 
 def test_image_entries_are_not_chat() -> None:
     """The window, not the name, is what decides chat capability."""
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     by_id = {m.id: m for m in ic._parse_models(CATALOG)}
     check("chat: a text model is chat", by_id["qwen/qwen3.8-27b"].chat)
@@ -215,7 +215,7 @@ def test_image_entries_are_not_chat() -> None:
 
 def test_free_tier_context_is_conservative() -> None:
     """The catalog says 262144; the free account tier is 128K. Use 128K."""
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     by_id = {m.id: m for m in ic._parse_models(CATALOG)}
     free = by_id["qwen/qwen3.8-27b"]
@@ -232,17 +232,17 @@ def test_free_tier_context_is_conservative() -> None:
 
 def test_output_ceiling_comes_from_the_catalog() -> None:
     """The free model allows 8192 output; Config.max_tokens is 32768."""
-    from zimzilla import iteracompute as ic
-    from zimzilla import sources as s
-    from zimzilla.config import Config
-    from zimzilla.agent import Agent
+    from kuro import iteracompute as ic
+    from kuro import sources as s
+    from kuro.config import Config
+    from kuro.agent import Agent
 
     with mock.patch("urllib.request.urlopen", _stub()):
         ic.clear_cache()
         ic.fetch_models()
         got = s.max_output_for(ic.DEFAULT_BASE_URL, "qwen/qwen3.8-27b")
     check("ceiling: the catalog's max_output_tokens is read", got == 8192, str(got))
-    check("ceiling: the harness default is larger — the reason this matters",
+    check("ceiling: the harness default is larger â€” the reason this matters",
           Config().max_tokens > 8192, str(Config().max_tokens))
     check("ceiling: an unknown model has none",
           s.max_output_for(ic.DEFAULT_BASE_URL, "nope") is None)
@@ -252,9 +252,9 @@ def test_output_ceiling_comes_from_the_catalog() -> None:
     # The reasoning-retry path distinguishes the two: `output_ceiling()` is the
     # size to request (falling back to the config), `published_output_ceiling()`
     # is the hard cap. Conflating them capped a retry at the number it was
-    # trying to escape, so a model with no published limit could never retry —
+    # trying to escape, so a model with no published limit could never retry â€”
     # measured as 8 failures in tests/test_deliverable.py.
-    from zimzilla.config import Config as Cfg
+    from kuro.config import Config as Cfg
 
     def _agent(model, base):
         cfg = Cfg()
@@ -280,9 +280,9 @@ def test_output_ceiling_comes_from_the_catalog() -> None:
 
 def test_catalog_price_beats_the_estimate_table() -> None:
     """``qwen/qwen3.8-27b`` is not a key in PRICING, so the table would bill it."""
-    from zimzilla import iteracompute as ic
-    from zimzilla import sources as s
-    from zimzilla.config import DEFAULT_PRICE, price_for
+    from kuro import iteracompute as ic
+    from kuro import sources as s
+    from kuro.config import DEFAULT_PRICE, price_for
 
     check("price: the estimate table does not know the gateway's id",
           price_for("qwen/qwen3.8-27b") == DEFAULT_PRICE,
@@ -301,7 +301,7 @@ def test_catalog_price_beats_the_estimate_table() -> None:
 
 def test_catalog_is_public_and_the_url_is_right() -> None:
     seen, opener = _capture()
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     with mock.patch("urllib.request.urlopen", opener):
         ic.clear_cache()
@@ -328,7 +328,7 @@ def test_catalog_is_public_and_the_url_is_right() -> None:
 
 def test_fetch_is_total() -> None:
     """A network failure is returned, never raised."""
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     with mock.patch("urllib.request.urlopen",
                     _stub(error=urllib.error.URLError("down"))):
@@ -353,7 +353,7 @@ def test_fetch_is_total() -> None:
 
 
 def test_cache_is_keyed_and_expires() -> None:
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     with mock.patch("urllib.request.urlopen", _stub()):
         ic.clear_cache()
@@ -373,7 +373,7 @@ def test_cache_is_keyed_and_expires() -> None:
 
 def test_is_iteracompute_matches_only_the_proxy() -> None:
     """The upstream has no Messages endpoint; matching it would be a lie."""
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     check("endpoint: the local proxy matches",
           ic.is_iteracompute("http://localhost:4002"))
@@ -385,7 +385,7 @@ def test_is_iteracompute_matches_only_the_proxy() -> None:
           not ic.is_iteracompute("http://localhost:4001"))
     check("endpoint: empty is not a match", not ic.is_iteracompute(""))
 
-    from zimzilla import sources as s
+    from kuro import sources as s
     check("endpoint: sources identifies it by port",
           s.active_key("http://localhost:4002") == "iteracompute",
           str(s.active_key("http://localhost:4002")))
@@ -394,12 +394,12 @@ def test_is_iteracompute_matches_only_the_proxy() -> None:
 
 
 def test_profile_roundtrip(tmp: Path) -> None:
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     with _clean_env():
         path = ic.save_key("ic_test_key_1234567890", "qwen/qwen3.8-27b")
-        check("profile: written under ZIMZILLA_HOME",
-              path == tmp / ".zimzilla" / "iteracompute" / "source", str(path))
+        check("profile: written under KURO_HOME",
+              path == tmp / ".kuro" / "iteracompute" / "source", str(path))
         check("profile: mode 600", oct(path.stat().st_mode & 0o777) == "0o600",
               oct(path.stat().st_mode & 0o777))
         check("profile: parent is 700",
@@ -423,7 +423,7 @@ def test_profile_roundtrip(tmp: Path) -> None:
 
 
 def test_credential_precedence(tmp: Path) -> None:
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     with _clean_env():
         check("creds: nothing set is None", ic.load_credentials() is None)
@@ -450,7 +450,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 
 def test_looks_like_key() -> None:
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     check("key: a plausible token passes", ic.looks_like_key("ic_abc123456789XYZ"))
     check("key: a short string fails", not ic.looks_like_key("short"))
@@ -461,8 +461,8 @@ def test_looks_like_key() -> None:
 
 
 def test_sources_registry_dispatch() -> None:
-    from zimzilla import iteracompute as ic
-    from zimzilla import sources as s
+    from kuro import iteracompute as ic
+    from kuro import sources as s
 
     with mock.patch("urllib.request.urlopen", _stub()):
         ic.clear_cache()
@@ -488,18 +488,18 @@ def test_sources_registry_dispatch() -> None:
 
 def test_discovery_needs_a_profile() -> None:
     """The service and config ship; without the operator's key there is no route."""
-    from zimzilla import sources as s
+    from kuro import sources as s
 
     with tempfile.TemporaryDirectory() as td:
         home = Path(td) / "home"
-        zhome = Path(td) / "zimzilla"
+        zhome = Path(td) / "kuro"
         home.mkdir()
         (zhome / "iteracompute").mkdir(parents=True)
         for name in ("start-litellm.sh", "litellm-config.yaml"):
             (zhome / "iteracompute" / name).write_text("# test\n")
 
         with mock.patch.object(s, "DEFAULT_HOME", home), \
-             mock.patch.object(s, "ZIMZILLA_HOME", zhome):
+             mock.patch.object(s, "KURO_HOME", zhome):
             check("discovery: no profile means no source",
                   s.discover().get("iteracompute") is None)
             (zhome / "iteracompute" / "source").write_text(
@@ -520,7 +520,7 @@ def test_discovery_needs_a_profile() -> None:
 def test_proxy_config_agrees_with_the_module() -> None:
     """The yaml and the module must not drift apart on the upstream or the id."""
     config = (ROOT / "packaging" / "iteracompute" / "litellm-config.yaml").read_text()
-    from zimzilla import iteracompute as ic
+    from kuro import iteracompute as ic
 
     check("proxy: the config points at the same upstream",
           ic.API_BASE_URL in config, ic.API_BASE_URL)
@@ -537,7 +537,7 @@ def test_proxy_config_agrees_with_the_module() -> None:
     # Load-bearing, and measured: litellm 1.105.1 sends an `openai/`
     # deployment's /v1/messages to /v1/responses unless this is set. The
     # gateway documents Chat Completions only, so the default is the one path
-    # least likely to work — a turn would fail with the catalog still healthy.
+    # least likely to work â€” a turn would fail with the catalog still healthy.
     check("proxy: Messages are routed to Chat Completions, not Responses",
           "use_chat_completions_url_for_anthropic_messages: true" in config,
           "litellm's default would send /v1/responses")
@@ -551,10 +551,10 @@ def test_proxy_config_agrees_with_the_module() -> None:
 
 
 def test_tui_surfaces() -> None:
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
-    comp_src = (ROOT / "zimzilla" / "ui" / "complete.py").read_text(encoding="utf-8")
-    main_src = (ROOT / "zimzilla" / "__main__.py").read_text(encoding="utf-8")
-    launcher = (ROOT / "packaging" / "zimzilla").read_text(encoding="utf-8")
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text(encoding="utf-8")
+    comp_src = (ROOT / "kuro" / "ui" / "complete.py").read_text(encoding="utf-8")
+    main_src = (ROOT / "kuro" / "__main__.py").read_text(encoding="utf-8")
+    launcher = (ROOT / "packaging" / "kuro").read_text(encoding="utf-8")
     setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
 
     for cmd in ("zim-iteracompute", "iteracompute-api-setup",
@@ -572,7 +572,7 @@ def test_tui_surfaces() -> None:
           'if active == "iteracompute" else None' in app_src)
     check("tui: /model refetches for it", 'elif active == "iteracompute":' in app_src)
     # The set/list these two live in grows with each new gateway, so assert
-    # membership rather than the exact closing spelling — the next source to be
+    # membership rather than the exact closing spelling â€” the next source to be
     # added must not fail this suite.
     check("tui: /models accepts it", '"iteracompute"' in app_src)
     check("tui: the module is imported by the app",
@@ -583,7 +583,7 @@ def test_tui_surfaces() -> None:
     check("launcher: it starts the :4002 proxy",
           'LITELLM_PORT="${_port_override:-4002}"' in launcher)
     check("launcher: it sources the operator's profile",
-          '"$ZIMZILLA_HOME/iteracompute/source"' in launcher)
+          '"$KURO_HOME/iteracompute/source"' in launcher)
     check("setup: it installs the route",
           'packaging/iteracompute/litellm-config.yaml' in setup)
     check("setup: it does not ship a credential",
@@ -591,7 +591,7 @@ def test_tui_surfaces() -> None:
 
     # The launch-time restore loop applies hosted gateways only. IteraCompute
     # is restored by the launcher sourcing its profile, so it must NOT be in
-    # that tuple — the module has no ``apply_to`` and the loop would crash.
+    # that tuple â€” the module has no ``apply_to`` and the loop would crash.
     check("main: the restore loop is left to the launcher",
           '("iteracompute", ic_mod)' not in main_src)
 
@@ -599,9 +599,9 @@ def test_tui_surfaces() -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-ic-test-"))
     # Pin the module's paths to the temp tree before anything imports it.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     saved = {k: os.environ.get(k) for k in
@@ -635,7 +635,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -644,3 +644,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

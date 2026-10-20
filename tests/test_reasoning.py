@@ -1,4 +1,4 @@
-"""Regression suite for the model-reasoning display.
+﻿"""Regression suite for the model-reasoning display.
 
 Run:  ./.venv/bin/python tests/test_reasoning.py
 
@@ -12,11 +12,11 @@ The operator asked:
 What that required, and what is pinned here:
 
 The Anthropic protocol carries a model's reasoning as a ``thinking`` content
-block — a ``content_block_start`` of type ``thinking``, then a run of
+block â€” a ``content_block_start`` of type ``thinking``, then a run of
 ``content_block_delta`` events whose delta type is ``thinking_delta`` and whose
 text lives on ``delta.thinking`` (NOT ``delta.text``; the two deltas are
-different classes). ``_stream_once`` handled exactly one delta type —
-``text_delta`` — so every ``thinking_delta`` was discarded before the UI could
+different classes). ``_stream_once`` handled exactly one delta type â€”
+``text_delta`` â€” so every ``thinking_delta`` was discarded before the UI could
 see it. Measured against OpenRouter 2026-10-16: 107 ``thinking_delta`` events
 for one prompt, all silently dropped.
 
@@ -32,7 +32,7 @@ So the checks below are about two things:
    raise on empty input.
 
 Not covered here, and deliberately so: whether a given endpoint *sends*
-thinking blocks. That is a property of the endpoint, not of this code — an
+thinking blocks. That is a property of the endpoint, not of this code â€” an
 Anthropic-native one (OpenRouter) does, while LiteLLM's ``/v1/messages``
 bridge drops reasoning entirely, so Token Juice's ``deepseek-v4.1-flash``
 sends none. The code must therefore be correct and silent when none arrives,
@@ -51,10 +51,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
-from zimzilla.theme import get_palette  # noqa: E402
-from zimzilla.ui import renderers as R  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import Config  # noqa: E402
+from kuro.theme import get_palette  # noqa: E402
+from kuro.ui import renderers as R  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -65,7 +65,7 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fakes — the shape the SDK actually hands `_stream_once`
+# Fakes â€” the shape the SDK actually hands `_stream_once`
 # ---------------------------------------------------------------------------
 
 class _Delta:
@@ -155,7 +155,7 @@ def _agent_with(stream, tmp: Path, **kw) -> Agent:
 
 
 # ---------------------------------------------------------------------------
-# 1 — a thinking block is forwarded, as its own event type
+# 1 â€” a thinking block is forwarded, as its own event type
 # ---------------------------------------------------------------------------
 
 def test_thinking_is_forwarded(tmp: Path) -> None:
@@ -180,7 +180,7 @@ def test_thinking_is_forwarded(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2 — text is untouched, and the two interleave in arrival order
+# 2 â€” text is untouched, and the two interleave in arrival order
 # ---------------------------------------------------------------------------
 
 def test_text_still_works_and_order_holds(tmp: Path) -> None:
@@ -206,7 +206,7 @@ def test_text_still_works_and_order_holds(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3 — a reasoning-only reply (no text at all) does not crash or invent text
+# 3 â€” a reasoning-only reply (no text at all) does not crash or invent text
 # ---------------------------------------------------------------------------
 
 def test_reasoning_only(tmp: Path) -> None:
@@ -223,7 +223,7 @@ def test_reasoning_only(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4 — an endpoint that sends no thinking behaves exactly as before
+# 4 â€” an endpoint that sends no thinking behaves exactly as before
 # ---------------------------------------------------------------------------
 
 def test_no_thinking_endpoint_is_unchanged(tmp: Path) -> None:
@@ -240,7 +240,7 @@ def test_no_thinking_endpoint_is_unchanged(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5 — the ceiling override still works (the reasoning-exhaustion retry path)
+# 5 â€” the ceiling override still works (the reasoning-exhaustion retry path)
 # ---------------------------------------------------------------------------
 
 def test_ceiling_override_still_accepted(tmp: Path) -> None:
@@ -262,7 +262,7 @@ def test_ceiling_override_still_accepted(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 6 — the renderables
+# 6 â€” the renderables
 # ---------------------------------------------------------------------------
 
 def test_renderables(tmp: Path) -> None:
@@ -278,7 +278,7 @@ def test_renderables(tmp: Path) -> None:
           flat.count("\n") <= R.THINK_LIVE_LINES + 1,
           f"{flat.count(chr(10))} newlines")
     check("live view is labelled",
-          flat.startswith("✻ thinking"), repr(flat[:20]))
+          flat.startswith("âœ» thinking"), repr(flat[:20]))
 
     panel = R.reasoning_panel(long_text, p)
     body = panel.renderable.plain
@@ -287,7 +287,7 @@ def test_renderables(tmp: Path) -> None:
     check("committed panel reports its line count",
           "40 lines" in str(panel.subtitle), "")
 
-    # Empty input must not raise — a turn can end with a blank buffer.
+    # Empty input must not raise â€” a turn can end with a blank buffer.
     try:
         R.reasoning_live("", p)
         R.reasoning_panel("", p)
@@ -297,7 +297,7 @@ def test_renderables(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7 — the config toggle
+# 7 â€” the config toggle
 # ---------------------------------------------------------------------------
 
 def test_show_thinking_default(tmp: Path) -> None:
@@ -330,3 +330,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

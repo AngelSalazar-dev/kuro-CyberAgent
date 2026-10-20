@@ -1,4 +1,4 @@
-"""Regression suite for the AntSeed source.
+﻿"""Regression suite for the AntSeed source.
 
 Run:  python tests/test_antseed.py   (from an activated venv)
 
@@ -8,13 +8,13 @@ measured behaviour of the live network, not a guess:
 * **The pin is the feature.** AntSeed's router ranks by price *and* trust, and
   its ``minTrustScore`` defaults to 60 while free peers sit below it. So a free
   model requested by its bare name answers
-  ``502 model_not_found: No policy-allowed peer currently serves …`` even though
+  ``502 model_not_found: No policy-allowed peer currently serves â€¦`` even though
   the peer is online. The network's own ``<peerId>@<model>`` syntax bypasses the
-  ranking — measured 200 where the bare name gave 502. ``free_model_ids``
+  ranking â€” measured 200 where the bare name gave 502. ``free_model_ids``
   therefore hands back *pinned* ids, and this suite asserts that, because
   returning bare names would produce a list that looks right and fails on use.
 * **Free is a property of a peer, not a model.** There is no ``:free`` suffix and
-  no free tag — the only signal AntSeed publishes is the price on each seller.
+  no free tag â€” the only signal AntSeed publishes is the price on each seller.
   A model is free when at least one peer charges 0 in *and* 0 out, and a peer
   free in but paid out is not free at all.
 * **The catalog is OpenAI-shaped but must not be parsed as OpenAI's.** It has
@@ -23,7 +23,7 @@ measured behaviour of the live network, not a guess:
   model as free, because an entry with no peers parses to 0/0.
 * **The endpoint is identified by port, not by name.** The buyer hands out a
   plain ``http://localhost:8377`` with no "antseed" in it, and the two LiteLLM
-  proxies are on 4000/4001 — so the port is the only thing that distinguishes
+  proxies are on 4000/4001 â€” so the port is the only thing that distinguishes
   them, and a regression there would silently mislabel the active source.
 * **There is no key.** ``looks_like_key`` is False for everything, and a fetch
   sends no credential. That is the honest answer, not a stub.
@@ -53,11 +53,11 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 # Shaped like the real response: `object`/`data`, every entry carrying a nested
 # `peers` array whose members hold the pricing. The cases that matter:
-#   - one free peer, high trust            → free and pinnable
-#   - two free peers, one higher-trust     → the better one is pinned
-#   - a free peer that is free-in/paid-out → NOT free
-#   - no free peer at all                  → not free, not pinnable
-#   - an entry with no peers               → must NOT read as free
+#   - one free peer, high trust            â†’ free and pinnable
+#   - two free peers, one higher-trust     â†’ the better one is pinned
+#   - a free peer that is free-in/paid-out â†’ NOT free
+#   - no free peer at all                  â†’ not free, not pinnable
+#   - an entry with no peers               â†’ must NOT read as free
 CATALOG = {
     "object": "list",
     "data": [
@@ -118,7 +118,7 @@ CATALOG = {
                  "inputUsdPerMillion": 0, "outputUsdPerMillion": 0,
                  "effectiveReputationScore": 20.0},
                 # A paid seller alongside the free ones, so the blurb has a
-                # genuine "N of M" to render — all-free is the easy case.
+                # genuine "N of M" to render â€” all-free is the easy case.
                 {"peerId": "hhhh8888", "displayName": "Costs Money",
                  "protocol": "openai-chat-completions",
                  "inputUsdPerMillion": 1.5, "outputUsdPerMillion": 6.0,
@@ -177,14 +177,14 @@ def _url_of(req) -> str:
     """The URL out of whatever urlopen was handed.
 
     ``fetch_models`` passes a bare URL *string* rather than a ``Request``
-    object — there is no header to attach, because there is no credential.
+    object â€” there is no header to attach, because there is no credential.
     Accepting both shapes keeps these stubs working either way.
     """
     return req.full_url if hasattr(req, "full_url") else str(req)
 
 
 def _headers_of(req) -> dict:
-    """The headers urlopen was handed, lowercased — empty for a bare URL."""
+    """The headers urlopen was handed, lowercased â€” empty for a bare URL."""
     if not hasattr(req, "headers"):
         return {}
     return {k.lower(): v for k, v in req.headers.items()}
@@ -196,7 +196,7 @@ def _headers_of(req) -> dict:
 
 def test_free_is_a_peer_property() -> None:
     """Free is decided by the price on a seller, not by a tag or a suffix."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     models = a._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -222,7 +222,7 @@ def test_free_is_a_peer_property() -> None:
 
 def test_prices_are_per_million_floats() -> None:
     """AntSeed quotes per-million numbers; nothing is scaled on the way in."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     by_id = {m.id: m for m in a._parse_models(CATALOG)}
     c = by_id["claude-fable-5"].cheapest
@@ -245,12 +245,12 @@ def test_prices_are_per_million_floats() -> None:
 
 
 # ---------------------------------------------------------------------------
-# the pin — the whole point of this module
+# the pin â€” the whole point of this module
 # ---------------------------------------------------------------------------
 
 def test_pin_composes_peer_at_model() -> None:
     """The pin is `<peerId>@<model>`, which is what makes a free model route."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     by_id = {m.id: m for m in a._parse_models(CATALOG)}
     pin = by_id["glm-4.5-flash"].pin()
@@ -268,7 +268,7 @@ def test_pin_composes_peer_at_model() -> None:
 
 def test_pin_prefers_trust_then_anthropic() -> None:
     """Among free peers, Anthropic support wins, then reputation."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     by_id = {m.id: m for m in a._parse_models(CATALOG)}
     # glm-4.5-flash has a None-reputation peer and a 44.58 one: take the higher.
@@ -276,7 +276,7 @@ def test_pin_prefers_trust_then_anthropic() -> None:
           by_id["glm-4.5-flash"].pin() == "bbbb2222@glm-4.5-flash",
           str(by_id["glm-4.5-flash"].pin()))
     # A peer advertising anthropic-messages outranks one that does not, even at
-    # a *lower* trust — measured: one free peer rejects Anthropic outright.
+    # a *lower* trust â€” measured: one free peer rejects Anthropic outright.
     check("pin: an anthropic-capable peer outranks a higher-trust one",
           by_id["dual-free"].pin() == "gggg7777@dual-free",
           f"{by_id['dual-free'].pin()} (80-trust OpenAI peer must lose to "
@@ -306,24 +306,24 @@ def test_pin_prefers_trust_then_anthropic() -> None:
 
 
 def test_blurb_says_which_count_is_the_free_one() -> None:
-    """`free · 4 of 9 sellers` — the counts must not read as a contradiction.
+    """`free Â· 4 of 9 sellers` â€” the counts must not read as a contradiction.
 
     "peer" and "seller" are the same thing in AntSeed's vocabulary, so a blurb
-    reading "4 peers · 9 sellers" leaves the operator unable to tell which
+    reading "4 peers Â· 9 sellers" leaves the operator unable to tell which
     number is the free one. Every free model here is pinnable, so the free
     count is the one that matters.
     """
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     by_id = {m.id: m for m in a._parse_models(CATALOG)}
-    # All sellers free → a single count, no ratio.
+    # All sellers free â†’ a single count, no ratio.
     check("blurb: all-free reads as one count",
-          by_id["glm-4.5-flash"].blurb.startswith("free · 2 sellers"),
+          by_id["glm-4.5-flash"].blurb.startswith("free Â· 2 sellers"),
           by_id["glm-4.5-flash"].blurb)
-    # Some free → the ratio, free first. This is the case that used to render
-    # as "2 peers · 2 sellers" — two numbers, no way to tell them apart.
+    # Some free â†’ the ratio, free first. This is the case that used to render
+    # as "2 peers Â· 2 sellers" â€” two numbers, no way to tell them apart.
     check("blurb: part-free reads as 'N of M sellers'",
-          by_id["dual-free"].blurb.startswith("free · 2 of 3 sellers"),
+          by_id["dual-free"].blurb.startswith("free Â· 2 of 3 sellers"),
           by_id["dual-free"].blurb)
     # A paid model quotes a price and never says "free".
     paid = by_id["claude-fable-5"].blurb
@@ -346,18 +346,18 @@ def test_a_pin_bypasses_ranking_not_the_seller() -> None:
     Measured across the eight free pins on the live network: one 200, one 429,
     one ``502 "pinned peer could not complete"``, one ``400
     unsupported_protocol``. So this module must hand back a *set* of free pins
-    and order them sensibly, never present one as guaranteed — and must not
+    and order them sensibly, never present one as guaranteed â€” and must not
     quietly drop the peers that are merely untried. The set is what the picker
     shows; a single "the free model" would be a promise the network cannot keep.
     """
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     a.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
         ids, _ = a.free_model_ids(use_cache=False)
     check("pin: every free model is offered, not just the best one",
           ids is not None and len(ids) == 3,
-          f"{len(ids or [])} pins — a pin can 429 or 502, so all are offered")
+          f"{len(ids or [])} pins â€” a pin can 429 or 502, so all are offered")
     check("pin: no duplicate pins",
           ids is not None and len(set(ids)) == len(ids))
     # The pins carry the peer that was chosen, so a failure names a peer the
@@ -372,8 +372,8 @@ def test_a_pin_bypasses_ranking_not_the_seller() -> None:
 
 
 def test_free_model_ids_are_pinned() -> None:
-    """`free_model_ids` must return pinned ids — bare ones would 502."""
-    from zimzilla import antseed as a
+    """`free_model_ids` must return pinned ids â€” bare ones would 502."""
+    from kuro import antseed as a
 
     a.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -396,12 +396,12 @@ def test_default_free_pin_never_names_a_paid_model() -> None:
     """The 402 regression: a fresh switch must land on a free pin.
 
     Measured before this existed: with no saved preference, ``apply_to`` left
-    ``cfg.model`` on the previous source's name — ``deepseek-v4.1-flash`` — and
+    ``cfg.model`` on the previous source's name â€” ``deepseek-v4.1-flash`` â€” and
     the router, refusing to route a paid name to a free peer, answered
     ``402 antseed_buyer_fault`` on a wallet holding 0.0 USDC. So the property
     under test is not "a pin is returned" but "whatever is returned is free".
     """
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     a.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -439,7 +439,7 @@ def test_default_free_pin_never_names_a_paid_model() -> None:
 
 def test_usable_free_models_is_the_pinnable_set() -> None:
     """`/models antseed` reads this, so a free-but-unpinnable model is out."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     a.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -461,7 +461,7 @@ def test_usable_free_models_is_the_pinnable_set() -> None:
 
 def test_catalog_needs_no_key() -> None:
     """The buyer authenticates nothing; a fetch must send no credential."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     a.clear_cache()
     seen = {}
@@ -489,8 +489,8 @@ def test_catalog_needs_no_key() -> None:
 
 
 def test_base_url_is_the_prefix_before_v1() -> None:
-    """The SDK appends /v1/messages — a base carrying /v1 would 404."""
-    from zimzilla import antseed as a
+    """The SDK appends /v1/messages â€” a base carrying /v1 would 404."""
+    from kuro import antseed as a
 
     check("base: DEFAULT_BASE_URL has no /v1",
           "/v1" not in a.DEFAULT_BASE_URL, a.DEFAULT_BASE_URL)
@@ -511,7 +511,7 @@ def test_base_url_is_the_prefix_before_v1() -> None:
 
 def test_fetch_is_total() -> None:
     """Every failure is a message, never an exception."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
     import urllib.error
 
     for label, err in [
@@ -544,7 +544,7 @@ def test_fetch_is_total() -> None:
 
 def test_cache_is_keyed_by_endpoint() -> None:
     """Two endpoints must not share one cache slot."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     a.clear_cache()
     calls = {"n": 0}
@@ -571,18 +571,18 @@ def test_cache_expiry() -> None:
     """An expired catalog must not be served as if it were live.
 
     ``fetch_models`` has always refused to *reuse* an entry past ``CACHE_TTL``,
-    but ``cached_models`` read it back regardless — so a catalog fetched once
+    but ``cached_models`` read it back regardless â€” so a catalog fetched once
     was reported by ``/model`` for the rest of the session. AntSeed's seller set
     is the most volatile of any source here, since peers join and leave
     constantly, so a stale list is the worst case of the four.
 
     Nothing sleeps: the entry's timestamp is moved backwards, which is the same
     thing to a ``monotonic()`` comparison. Note the value tuple here is
-    ``(at, models)`` — reversed relative to the other three modules.
+    ``(at, models)`` â€” reversed relative to the other three modules.
     """
     import time
 
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     a.clear_cache()
     check("expiry: a cold cache has no age", a.catalog_age() is None,
@@ -614,8 +614,8 @@ def test_cache_expiry() -> None:
 # ---------------------------------------------------------------------------
 
 def test_is_antseed_by_port_not_name() -> None:
-    """The buyer's URL contains no 'antseed' — the port is the identifier."""
-    from zimzilla import antseed as a
+    """The buyer's URL contains no 'antseed' â€” the port is the identifier."""
+    from kuro import antseed as a
 
     check("ident: the plain buyer URL is recognised",
           a.is_antseed("http://localhost:8377"))
@@ -647,10 +647,10 @@ def test_active_key_does_not_confuse_sources(tmp: Path) -> None:
     """
     from unittest import mock
 
-    from zimzilla import sources as s
+    from kuro import sources as s
 
     home = tmp / "active-key-home"
-    zhome = tmp / "active-key-zimzilla"
+    zhome = tmp / "active-key-kuro"
     for route in ("logfare", "tokenjuice"):
         for name in ("source", "start-litellm.sh", "litellm-config.yaml"):
             path = zhome / route / name
@@ -658,7 +658,7 @@ def test_active_key_does_not_confuse_sources(tmp: Path) -> None:
             path.write_text("# test\n", encoding="utf-8")
 
     with mock.patch.object(s, "DEFAULT_HOME", home), \
-         mock.patch.object(s, "ZIMZILLA_HOME", zhome):
+         mock.patch.object(s, "KURO_HOME", zhome):
         check("sources: 8377 is antseed",
               s.active_key("http://localhost:8377") == "antseed")
         check("sources: 4001 is logfare",
@@ -673,7 +673,7 @@ def test_active_key_does_not_confuse_sources(tmp: Path) -> None:
 
 def test_proxy_port_comes_from_the_buyer_config(tmp) -> None:
     """The port is read from AntSeed's own config, with a sane fallback."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     fake_home = tmp / "antseed-home"
     fake_home.mkdir(parents=True, exist_ok=True)
@@ -699,7 +699,7 @@ def test_proxy_port_comes_from_the_buyer_config(tmp) -> None:
 
 def test_profile_roundtrip(tmp) -> None:
     """The preference file round-trips, is mode 600, and holds no key."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     own = tmp / "profile" / "source"
     with mock.patch.object(a, "PROFILE", own):
@@ -726,8 +726,8 @@ def test_profile_roundtrip(tmp) -> None:
 
 def test_apply_and_guard(tmp) -> None:
     """apply_to points the config here; the guard leaves other hosts alone."""
-    from zimzilla import antseed as a
-    from zimzilla.config import Config
+    from kuro import antseed as a
+    from kuro.config import Config
 
     cfg = Config(base_url="http://localhost:4001", model="deepseek-v4.1-flash")
     with mock.patch.object(a, "reachable", lambda *x, **k: False):
@@ -777,7 +777,7 @@ def test_apply_and_guard(tmp) -> None:
 
 def test_selection_file_is_shared() -> None:
     """One selection file, so /zim-antseed and /zim-source agree."""
-    from zimzilla import antseed as a, sources as s
+    from kuro import antseed as a, sources as s
 
     original = s.current_key()
     try:
@@ -798,7 +798,7 @@ def test_selection_file_is_shared() -> None:
 
 def test_price_for_unwraps_a_pin() -> None:
     """A pinned model still prices, so /cost is not blank on a free run."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     models = a._parse_models(CATALOG)
     check("price_for: a bare free model prices at zero",
@@ -815,7 +815,7 @@ def test_price_for_unwraps_a_pin() -> None:
 
 def test_no_key_is_echoed(tmp) -> None:
     """Nothing this module writes or returns looks like a secret."""
-    from zimzilla import antseed as a
+    from kuro import antseed as a
 
     own = tmp / "nokey" / "source"
     with mock.patch.object(a, "PROFILE", own):
@@ -830,8 +830,8 @@ def test_no_key_is_echoed(tmp) -> None:
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-antseed-test-"))
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     test_free_is_a_peer_property()
@@ -860,7 +860,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -869,3 +869,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

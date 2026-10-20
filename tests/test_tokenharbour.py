@@ -1,17 +1,17 @@
-"""Regression suite for the TokenHarbour source.
+﻿"""Regression suite for the TokenHarbour source.
 
 Run:  python tests/test_tokenharbour.py   (from an activated venv)
 
 Protects three things that are easy to break and expensive to notice:
 
-* **Credential precedence.** ``source ~/claude-source/<name> && zimzilla`` is
+* **Credential precedence.** ``source ~/claude-source/<name> && kuro`` is
   the whole point of the feature: a key the operator already has in the
   environment must win over everything, and the gateway's host must be
   recognised without a port to match on.
 * **The key file.** It is written mode 600, in the profile format the rest of
   the project reads, and never echoed back.
 * **The live catalog.** Free models are found from the gateway's own response
-  — by ``:free`` suffix *or* a zero price — and a failed fetch returns an error
+  â€” by ``:free`` suffix *or* a zero price â€” and a failed fetch returns an error
   rather than raising, because the caller is a TUI command.
 
 No test here touches the network: every fetch is served by a stub urlopen.
@@ -90,8 +90,8 @@ def _stub_urlopen(payload: dict | None = None, error: Exception | None = None):
 # ---------------------------------------------------------------------------
 
 def test_free_detection() -> None:
-    """Free is the suffix OR a zero price — either signal alone is enough."""
-    from zimzilla import tokenharbour as th
+    """Free is the suffix OR a zero price â€” either signal alone is enough."""
+    from kuro import tokenharbour as th
 
     models = th._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -122,7 +122,7 @@ def test_free_detection() -> None:
 
 def test_fetch_is_total() -> None:
     """fetch_models returns errors; it never raises into the TUI."""
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     th.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -148,7 +148,7 @@ def test_fetch_is_total() -> None:
 
 def test_cache_is_keyed_by_token() -> None:
     """A different key must not be served the previous key's catalog."""
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     th.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -171,7 +171,7 @@ def test_cache_expiry() -> None:
     """An expired catalog must not be served as if it were live.
 
     ``fetch_models`` has always refused to *reuse* an entry past ``CACHE_TTL``,
-    but ``cached_models`` read it back regardless — so a catalog fetched once
+    but ``cached_models`` read it back regardless â€” so a catalog fetched once
     was reported by ``/model`` for the rest of the session. The picker exists to
     show what the gateway serves now; a stale list is the bug it was written to
     fix. Nothing sleeps: the entry's timestamp is moved backwards, which is the
@@ -179,7 +179,7 @@ def test_cache_expiry() -> None:
     """
     import time
 
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     th.clear_cache()
     check("expiry: a cold cache has no age", th.catalog_age() is None,
@@ -206,7 +206,7 @@ def test_cache_expiry() -> None:
 
 
 def test_free_models_only() -> None:
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     th.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -218,7 +218,7 @@ def test_free_models_only() -> None:
 
 def test_profile_roundtrip() -> None:
     """save_key writes mode 600, in a format the parser reads back."""
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     token = "thk_live_saved0000000000000000"
     path = th.save_key(token, "mimo-v2.5:free")
@@ -239,7 +239,7 @@ def test_profile_roundtrip() -> None:
 
 
 def test_looks_like_key() -> None:
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     check("key: a real-looking key passes",
           th.looks_like_key("thk_live_rcYcM3enKGzKrtuhxdJBzN3QWNW10KlFFvxs5rpz"))
@@ -252,7 +252,7 @@ def test_looks_like_key() -> None:
 
 def test_active_key_recognises_host() -> None:
     """A hosted URL has no port, so it must be matched by host."""
-    from zimzilla import sources as s
+    from kuro import sources as s
 
     check("sources: the gateway host is the tokenharbour source",
           s.active_key("https://tokenharbor.ai/") == "tokenharbour")
@@ -271,11 +271,11 @@ def test_credential_precedence(tmp: Path) -> None:
     setup`` wrote the new key, printed "key saved", and every lookup then
     returned the token the launching shell had exported instead. The operator
     created a second TokenHarbour account, set its key, and kept getting the
-    first account's rate limit — because the first account's key was still the
+    first account's rate limit â€” because the first account's key was still the
     one on the wire. The saved profile is the explicit in-app choice and must
     win; the environment is consulted when nothing has been saved.
     """
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     claude_source = tmp / "claude-source"
     claude_source.mkdir(parents=True, exist_ok=True)
@@ -304,11 +304,11 @@ def test_credential_precedence(tmp: Path) -> None:
                 own.write_text('export ANTHROPIC_AUTH_TOKEN="thk_live_ownprofile000000000"\n')
                 with mock.patch.object(th, "PROFILE", own):
                     creds = th.load_credentials()
-                    check("creds: ZimZilla's own profile beats ~/claude-source",
+                    check("creds: Kuro's own profile beats ~/claude-source",
                           creds is not None and creds[2] == str(own),
                           str(creds and creds[2]))
 
-                    # And the profile beats the environment — the fix.
+                    # And the profile beats the environment â€” the fix.
                     os.environ["ANTHROPIC_BASE_URL"] = "https://tokenharbor.ai/"
                     os.environ["ANTHROPIC_AUTH_TOKEN"] = "thk_live_fromenv00000000000000"
                     os.environ["ANTHROPIC_MODEL"] = "claude-haiku-5.5:free"
@@ -344,7 +344,7 @@ def test_credential_precedence(tmp: Path) -> None:
                           creds is not None and creds[1] == "claude-haiku-5.5:free")
 
                     # An env key pointed at ANOTHER host must not be mistaken
-                    # for ours — and the profile still answers.
+                    # for ours â€” and the profile still answers.
                     own.write_text(
                         'export ANTHROPIC_AUTH_TOKEN="thk_live_ownprofile000000000"\n')
                     os.environ["ANTHROPIC_BASE_URL"] = "https://elsewhere.example.com"
@@ -362,7 +362,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 def test_apply_and_guard() -> None:
     """apply_to aims a config; the guard keeps a stale choice from hijacking."""
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     class _Cfg:
         base_url = "http://localhost:4001"
@@ -401,7 +401,7 @@ def test_apply_and_guard() -> None:
 
 def test_selection_file_is_shared() -> None:
     """The selection file is the same one sources.py reads."""
-    from zimzilla import sources as s, tokenharbour as th
+    from kuro import sources as s, tokenharbour as th
 
     th.set_current("tokenharbour")
     check("selection: sources.py sees the tokenharbour choice",
@@ -412,7 +412,7 @@ def test_selection_file_is_shared() -> None:
 
 def test_no_key_is_echoed(tmp: Path) -> None:
     """The display value is a path, never the key itself."""
-    from zimzilla import tokenharbour as th
+    from kuro import tokenharbour as th
 
     own = tmp / "own2" / "source"
     own.parent.mkdir(parents=True, exist_ok=True)
@@ -427,9 +427,9 @@ def test_no_key_is_echoed(tmp: Path) -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-th-test-"))
     # Pin the module's paths to the temp tree before anything imports it.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     test_free_detection()
@@ -448,7 +448,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -457,3 +457,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

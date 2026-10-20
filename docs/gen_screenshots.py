@@ -1,10 +1,10 @@
-"""Regenerate the README screenshots (docs/screenshots/*.png).
+﻿"""Regenerate the README screenshots (docs/screenshots/*.png).
 
 Run:  python docs/gen_screenshots.py   (from an activated venv)
 
-Each shot is a real ZimZilla app driven by a stub agent, exported with
+Each shot is a real Kuro app driven by a stub agent, exported with
 Textual's own ``export_screenshot()`` and rasterised with headless chromium.
-Nothing here is mocked up by hand — if the UI changes, re-run this and the
+Nothing here is mocked up by hand â€” if the UI changes, re-run this and the
 README follows.
 
 The stub agent is deliberately *slow* (see ``_slow_execute``): a tool that
@@ -27,10 +27,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from zimzilla import agent as agent_mod  # noqa: E402
-from zimzilla import tools as tools_mod  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
-from zimzilla.ui.app import ZimZillaApp  # noqa: E402
+from kuro import agent as agent_mod  # noqa: E402
+from kuro import tools as tools_mod  # noqa: E402
+from kuro.config import Config  # noqa: E402
+from kuro.ui.app import KuroApp  # noqa: E402
 
 from test_phase4 import _Blk, _Msg, _Usage  # noqa: E402
 
@@ -40,7 +40,7 @@ OUT = Path(__file__).resolve().parent / "screenshots"
 SHELL_SIZE = (128, 36)
 #: Boot is a centred card, so it needs less width and more height.
 BOOT_SIZE = (104, 32)
-#: The list shots are transcript-only — no rails to show off. The header
+#: The list shots are transcript-only â€” no rails to show off. The header
 #: needs ~120 cols to show every field, so keep the width above that.
 LIST_SIZE = (124, 34)
 
@@ -97,7 +97,7 @@ def _stub(workdir: Path):
             ], _Usage(88_100, 140)))
             return
         yield (None, _Msg([
-            _Blk(type="text", text="Fixed — the comparison was against zero "
+            _Blk(type="text", text="Fixed â€” the comparison was against zero "
                                    "instead of the TTL. Re-ran the suite: 9 passed."),
         ], _Usage(91_300, 88)))
 
@@ -117,7 +117,7 @@ def _slow_execute(real, delay: float = 1.1):
 
 # Rich's ``export_svg`` frames the terminal in a fake OS window: a #292929
 # rounded rect, a centred title, and three macOS traffic-light dots. None of it
-# is the app — the compositor fills every cell with the palette background, so
+# is the app â€” the compositor fills every cell with the palette background, so
 # the terminal is uniformly black. In a README the frame reads as a grey band
 # around the whole interface, and the rect's rounded corners show through
 # behind the corner glyphs of every bordered box. Strip the chrome, and slide
@@ -139,7 +139,7 @@ def _strip_export_chrome(svg: str) -> str:
 
 
 #: Textual exports one SVG user-unit per terminal cell, and the SVG's viewBox is
-#: sized in those units — so the window has to match that shape or chromium
+#: sized in those units â€” so the window has to match that shape or chromium
 #: letterboxes it. With the window chrome stripped a letterbox is black on
 #: black, which silently pads every shot with a dead margin.
 _VIEWBOX = re.compile(r'viewBox="0 0 ([\d.]+) ([\d.]+)"')
@@ -157,7 +157,7 @@ def _rasterise(svg_text: str, png: Path) -> None:
     chrome = (shutil.which("chromium") or shutil.which("chromium-browser")
               or shutil.which("google-chrome"))
     if chrome is None:
-        raise SystemExit("chromium not found — cannot rasterise the SVGs")
+        raise SystemExit("chromium not found â€” cannot rasterise the SVGs")
     m = _VIEWBOX.search(svg_text)
     if m is None:
         raise SystemExit("no viewBox in the exported SVG")
@@ -188,10 +188,10 @@ async def _shot_boot(wd: Path) -> None:
 
     The animation runs at 0.045s/tick: the banner reveal takes ~0.2s, the
     eight check rows resolve one per ~0.18s (~1.6s all told), and the screen
-    auto-continues 2.2s after the fade — so ~2.1s in is the frame where the
+    auto-continues 2.2s after the fade â€” so ~2.1s in is the frame where the
     whole checklist is legible and the ready line is up.
     """
-    app = ZimZillaApp(_cfg(wd, theme="green", allow_path=wd / "allow.yaml"))
+    app = KuroApp(_cfg(wd, theme="green", allow_path=wd / "allow.yaml"))
     async with app.run_test(size=BOOT_SIZE) as pilot:
         # Do NOT pop the boot screen: this shot *is* the boot screen.
         await pilot.pause()
@@ -205,7 +205,7 @@ async def _shot_shell(wd: Path) -> None:
     real = tools_mod.execute
     tools_mod.execute = _slow_execute(real)
     try:
-        app = ZimZillaApp(_cfg(wd, boot_rain=False, theme="green"))
+        app = KuroApp(_cfg(wd, boot_rain=False, theme="green"))
         app.agent = _stub(wd)
         async with app.run_test(size=SHELL_SIZE) as pilot:
             app.pop_screen()
@@ -215,7 +215,7 @@ async def _shot_shell(wd: Path) -> None:
 
             # Seed the waveform and the file river so the rails read as busy
             # rather than as a session that just started.
-            from zimzilla.ui.rails import TelemetryRail
+            from kuro.ui.rails import TelemetryRail
             tele = app.query_one(TelemetryRail)
             for v in (42, 88, 130, 96, 168, 205, 152, 118, 176):
                 tele.push_wave(float(v))
@@ -225,7 +225,7 @@ async def _shot_shell(wd: Path) -> None:
             await pilot.pause()
 
             app._run_turn("fix the auth bug")
-            from zimzilla.ui.widgets import ChatPane
+            from kuro.ui.widgets import ChatPane
             for _ in range(40):
                 await pilot.pause()
                 if app.query_one(ChatPane).card_active:
@@ -245,7 +245,7 @@ async def _shot_shell(wd: Path) -> None:
 
 async def _shot_list(wd: Path, name: str, command: str) -> None:
     """A transcript-only shot: the /model or /mode listing."""
-    app = ZimZillaApp(_cfg(wd, boot_rain=False, theme="green"))
+    app = KuroApp(_cfg(wd, boot_rain=False, theme="green"))
     app.agent = _stub(wd)
     async with app.run_test(size=LIST_SIZE) as pilot:
         app.pop_screen()
@@ -277,7 +277,7 @@ async def main() -> None:
         allow = wd / "allow.yaml"
         allow.write_text("in_scope:\n  - api.example.com\n  - 10.0.0.0/24\n")
 
-        print("generating screenshots…")
+        print("generating screenshotsâ€¦")
         await _shot_boot(wd)
         await _shot_shell(wd)
         await _shot_list(wd, "03-models", "/model")
@@ -287,3 +287,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+

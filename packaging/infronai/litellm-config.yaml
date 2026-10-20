@@ -1,27 +1,27 @@
-# InfronAI — the LiteLLM translation proxy.
+﻿# InfronAI â€” the LiteLLM translation proxy.
 #
-#     ZimZilla (Anthropic /v1/messages) --▶ LiteLLM :4003 --▶ InfronAI (OpenAI)
+#     Kuro (Anthropic /v1/messages) --â–¶ LiteLLM :4003 --â–¶ InfronAI (OpenAI)
 #
 # InfronAI serves the Anthropic protocol natively, so a proxy looks unnecessary
 # at first glance. It is not, and the catalog is what says so: every `:free`
 # chat model lists `supported_endpoint_types: ["openai"]` and nothing else.
-# Measured 2026-10-20 — 503 entries, 6 free chat models, none of them reachable
+# Measured 2026-10-20 â€” 503 entries, 6 free chat models, none of them reachable
 # over `/v1/messages`. Of 341 LLM entries only 21 list `anthropic`, and all of
 # those are paid. A session pointed straight at the upstream would work for a
 # paid Claude model and fail for exactly the models this route exists to serve.
 #
 # The upstream key is read from ANTHROPIC_AUTH_TOKEN, which the profile in this
-# directory exports. It is also the proxy's master key: ZimZilla already sends
+# directory exports. It is also the proxy's master key: Kuro already sends
 # it as x-api-key, so the request that worked before keeps working, while
 # anything else on the box that finds the port is rejected.
 #
-# Model ids are `provider/model` and must be forwarded verbatim — the docs say
+# Model ids are `provider/model` and must be forwarded verbatim â€” the docs say
 # to use the Models endpoint's `id` exactly as returned, with no `infronai/`
 # prefix. `openai/*` does that: it forwards the requested name unchanged. The
 # named entry is the free model this route defaults to; the wildcard is what
 # lets any other model the catalog serves work without a release here.
 #
-# Chat Completions only — and that needs saying, because LiteLLM's default is
+# Chat Completions only â€” and that needs saying, because LiteLLM's default is
 # the opposite. Since 1.x, a `/v1/messages` request whose deployment is the
 # `openai/` provider is routed through the **Responses API** by default.
 # InfronAI serves `/v1/chat/completions` for all 503 catalog entries and
@@ -48,7 +48,7 @@ model_list:
       api_base: https://llm.onerouter.pro/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
 
-  # Any other model the catalog serves — the rest of the free lineup included.
+  # Any other model the catalog serves â€” the rest of the free lineup included.
   # A paid model is reachable here too, and the account's balance decides
   # whether the upstream answers, so this is a fallback rather than a
   # free-only route.
@@ -57,3 +57,4 @@ model_list:
       model: openai/*
       api_base: https://llm.onerouter.pro/v1
       api_key: os.environ/ANTHROPIC_AUTH_TOKEN
+

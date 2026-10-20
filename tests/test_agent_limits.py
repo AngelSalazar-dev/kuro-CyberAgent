@@ -1,4 +1,4 @@
-"""Regression suite for the round caps, auto-continue and auto-compact.
+﻿"""Regression suite for the round caps, auto-continue and auto-compact.
 
 Run:  ./.venv/bin/python tests/test_agent_limits.py
 
@@ -8,7 +8,7 @@ This pins the fix for a real, reported failure. The operator said:
      reson ? i think it's because of the context issue"
 
 The cause was neither idle nor context. ``run_turn`` ran
-``for iteration in range(cfg.max_iterations)`` — 40 by default — and on the
+``for iteration in range(cfg.max_iterations)`` â€” 40 by default â€” and on the
 41st round the loop simply *fell out* and yielded an ordinary ``turn_end``. The
 UI turns ``turn_end`` into ``loop.set_stage("idle")``, so a turn that ran out of
 rounds was rendered exactly like a turn that had finished, and nothing
@@ -20,7 +20,7 @@ re-triggered it. Reproduced before the fix:
 Six behaviours are pinned here:
 
 1. A turn that stops at the soft cap with **no progress** emits
-   ``iteration_cap`` — the cap can never again be swallowed into a plain
+   ``iteration_cap`` â€” the cap can never again be swallowed into a plain
    ``turn_end``.
 2. A turn that reaches the soft cap **still progressing** continues instead of
    stopping, and says so with ``continuing``. This is the long-task case.
@@ -49,8 +49,8 @@ sys.path.insert(0, str(ROOT))
 
 import anthropic  # noqa: E402
 
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import Config  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -149,7 +149,7 @@ def _of(events, kind: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# 1 & 2 — the soft cap: reported when stuck, continued when progressing
+# 1 & 2 â€” the soft cap: reported when stuck, continued when progressing
 # ---------------------------------------------------------------------------
 
 async def test_stuck_at_soft_cap_is_reported(tmp: Path) -> None:
@@ -183,7 +183,7 @@ async def test_progressing_turn_continues_past_the_cap(tmp: Path) -> None:
     cfg = _cfg(tmp, max_iterations=3, max_rounds=12)
     agent = Agent(cfg)
     # Nine successful tool rounds, then a terminal narration. With a 3-round
-    # cap that is a continue at round 3, 6 and 9 — three of them, because the
+    # cap that is a continue at round 3, 6 and 9 â€” three of them, because the
     # cap is checked at each multiple and the turn is still progressing at
     # every one.
     state = _stub(agent, [_tool() for _ in range(9)] + [_done()])
@@ -225,7 +225,7 @@ async def test_progress_that_stops_is_not_carried(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3 — the hard limit
+# 3 â€” the hard limit
 # ---------------------------------------------------------------------------
 
 async def test_hard_limit_is_reported_as_hard(tmp: Path) -> None:
@@ -250,7 +250,7 @@ async def test_hard_limit_is_reported_as_hard(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4 — auto-compact on a measured threshold
+# 4 â€” auto-compact on a measured threshold
 # ---------------------------------------------------------------------------
 
 async def test_auto_compact_fires_above_the_threshold(tmp: Path) -> None:
@@ -263,7 +263,7 @@ async def test_auto_compact_fires_above_the_threshold(tmp: Path) -> None:
 
     # What each request actually saw. This is the assertion that matters: the
     # event stream cannot show "before the request" directly, because the
-    # request is not itself an event — but the stub sees the history the
+    # request is not itself an event â€” but the stub sees the history the
     # request was built from, so a compaction that ran too late shows up here
     # as a second call still carrying the full history.
     seen: list[int] = []
@@ -281,7 +281,7 @@ async def test_auto_compact_fires_above_the_threshold(tmp: Path) -> None:
     async def fake_compact():
         compacted.append("yes")
         # Stand in for the real thing, which replaces the history with a single
-        # summary message — that shrink is what the assertion below measures.
+        # summary message â€” that shrink is what the assertion below measures.
         agent.messages = [{"role": "user", "content": "[summary]"}]
         return True, "a summary"
 
@@ -362,7 +362,7 @@ async def test_auto_compact_respects_the_off_switch(tmp: Path) -> None:
 
 
 async def test_should_compact_never_fires_without_a_measurement(tmp: Path) -> None:
-    """No measurement must never trip the threshold — 0 is not 'nearly full'."""
+    """No measurement must never trip the threshold â€” 0 is not 'nearly full'."""
     cfg = _cfg(tmp, context_window=1_000)
     agent = Agent(cfg)
     agent.messages = [{"role": "user", "content": f"m{i}"} for i in range(6)]
@@ -385,7 +385,7 @@ async def test_should_compact_skips_short_history(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5 — overflow: detected, compacted, retried once
+# 5 â€” overflow: detected, compacted, retried once
 # ---------------------------------------------------------------------------
 
 def _overflow_error(text: str = "prompt is too long: 210000 tokens > 200000 maximum"):
@@ -476,7 +476,7 @@ async def test_overflow_is_retried_only_once(tmp: Path) -> None:
 
     async def stream(max_tokens=None):
         # A function that raises before reaching a `yield` is a coroutine, not
-        # an async generator — `async for` rejects it with a TypeError that
+        # an async generator â€” `async for` rejects it with a TypeError that
         # would mask the very thing under test. The unreachable `yield` is what
         # makes this an async generator; it is never reached.
         calls["n"] += 1
@@ -548,7 +548,7 @@ def test_window_prefers_the_catalog(tmp: Path) -> None:
 
 def test_window_lookup_never_raises(tmp: Path) -> None:
     """A broken lookup must not break a turn."""
-    from zimzilla import sources
+    from kuro import sources
 
     check("window: an unknown source returns None",
           sources.context_window_for("http://127.0.0.1:9/nothing", "x") is None)
@@ -583,14 +583,14 @@ def test_rate_limit_classification() -> None:
     retry storm instead of an explanation. Measured on TokenHarbour, which
     answers both from the same endpoint.
     """
-    from zimzilla.agent import _rate_limit_detail, _rate_limit_is_a_window
+    from kuro.agent import _rate_limit_detail, _rate_limit_is_a_window
 
     check("429: a per-minute limit is a window",
           _rate_limit_is_a_window(
-              _rate_limited("Per-minute rate limit reached — slow down a bit.")))
+              _rate_limited("Per-minute rate limit reached â€” slow down a bit.")))
     check("429: an hourly limit is a window",
           _rate_limit_is_a_window(
-              _rate_limited("Hourly rate limit reached — come back in a little while.")))
+              _rate_limited("Hourly rate limit reached â€” come back in a little while.")))
     check("429: an allowance message is a window",
           _rate_limit_is_a_window(
               _rate_limited("Free-tier allowance exhausted for this period.")))
@@ -640,11 +640,11 @@ def test_rate_limit_classification() -> None:
           "/zim-source" in msg or "/zim-" in msg, msg)
 
     # The hint names the sources this machine can actually switch to, so it
-    # must be stubbed rather than read from ~/.zimzilla — otherwise the
+    # must be stubbed rather than read from ~/.kuro â€” otherwise the
     # assertion depends on which keys the developer happens to have set up,
     # and fails on a fresh checkout. Both branches are pinned: a machine with
     # options names them, an empty one points at /zim-source.
-    from zimzilla import sources as sources_mod
+    from kuro import sources as sources_mod
 
     def _hint(options: list[str]) -> str:
         with mock.patch.object(sources_mod, "switchable",
@@ -714,12 +714,12 @@ async def test_window_429_is_not_retried(tmp: Path) -> None:
     """The retry storm this pins: a window 429 must surface on the first hit.
 
     Five exponential retries against TokenHarbour's hourly cap spent ~30s and
-    returned the same 429; the operator saw "retry 1/5 … 2/5" and then
+    returned the same 429; the operator saw "retry 1/5 â€¦ 2/5" and then
     interrupted. What they needed was the reason, immediately.
     """
     agent = Agent(_cfg(tmp))
     failing = _FailingStream(
-        _rate_limited("Hourly rate limit reached — come back in a little while."))
+        _rate_limited("Hourly rate limit reached â€” come back in a little while."))
     agent._client = _FakeClient(failing)
     events = await _drive(agent, "Hi")
 
@@ -734,7 +734,7 @@ async def test_window_429_is_not_retried(tmp: Path) -> None:
         check("429: the reason names the allowance",
               "allowance" in errors[0]["message"], errors[0]["message"])
 
-    # And the burst case still retries — the fix must not have removed the
+    # And the burst case still retries â€” the fix must not have removed the
     # backoff that a genuinely transient 429 needs. Two failures then success.
     agent2 = Agent(_cfg(tmp))
     burst = _FailingStream(_rate_limited("Too many requests."), fail_times=2)
@@ -774,7 +774,7 @@ class _ParamRejectingStream:
     This is claude-haiku-5-5's actual behaviour on Logfare, measured
     2026-10-19: the identical request answers 400 with `temperature` present
     and 200 without it. The fake reads the request the way the real endpoint
-    does, so a fix that merely retries the same body fails here — and it
+    does, so a fix that merely retries the same body fails here â€” and it
     records every body, so the test can prove the parameter was dropped rather
     than assume it.
     """
@@ -826,8 +826,8 @@ async def test_rejected_param_is_dropped_and_retried(tmp: Path) -> None:
     The failure this pins: claude-haiku-5-5 answers 400 "`temperature` is
     deprecated for this model" to every turn, because cfg.temperature defaults
     to 0.0 and the harness sends it unconditionally. The model was unusable,
-    and the 400 was reported as a bad model *name* — the upstream's sentence
-    contains the word "model" — so the one thing that was correct got blamed.
+    and the 400 was reported as a bad model *name* â€” the upstream's sentence
+    contains the word "model" â€” so the one thing that was correct got blamed.
     """
     agent = Agent(_cfg(tmp))
     stream = _ParamRejectingStream()
@@ -853,7 +853,7 @@ async def test_rejected_param_is_dropped_and_retried(tmp: Path) -> None:
     check("param: the retry does not", "temperature" not in stream.bodies[-1],
           str(stream.bodies))
     # The retry must actually SUCCEED. An earlier version of this fake raised
-    # None on the retry, which the turn loop caught as a generic error — the
+    # None on the retry, which the turn loop caught as a generic error â€” the
     # assertions above still passed, so the test proved nothing about recovery.
     check("param: the retry produced a real reply", stream.finals == 1,
           f"finals={stream.finals} bodies={stream.bodies}")
@@ -866,7 +866,7 @@ async def test_rejected_param_is_dropped_and_retried(tmp: Path) -> None:
     check("param: it is remembered for later turns",
           "temperature" in agent._dropped_params, str(agent._dropped_params))
 
-    # And it must not be re-sent on the NEXT turn — the fix is a session
+    # And it must not be re-sent on the NEXT turn â€” the fix is a session
     # decision, not a one-off retry that the next request undoes.
     stream.bodies.clear()
     await _drive(agent, "Again")
@@ -879,7 +879,7 @@ def test_param_rejection_is_not_a_model_name_problem() -> None:
     """The message must not blame the model name.
 
     The upstream says "for this model", which the old `"model" in msg` test
-    read as a bad name and answered with "run /model" — sending the operator to
+    read as a bad name and answered with "run /model" â€” sending the operator to
     re-pick a model that was already correct.
     """
     e = _bad_request("`temperature` is deprecated for this model.")
@@ -908,7 +908,7 @@ async def test_compaction_survives_a_param_rejecting_model(tmp: Path) -> None:
 
     ``compact()`` hard-coded ``extra_body={"temperature": 0}``. On
     claude-haiku-5-5 that made compaction fail with the same 400 the turn path
-    hits — so the one recovery mechanism for a full context was dead on the
+    hits â€” so the one recovery mechanism for a full context was dead on the
     model that needed it most.
     """
     agent = Agent(_cfg(tmp))
@@ -988,3 +988,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

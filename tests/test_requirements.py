@@ -1,4 +1,4 @@
-"""Guards the dependency split between the harness and the LiteLLM proxy.
+﻿"""Guards the dependency split between the harness and the LiteLLM proxy.
 
 Run:  python tests/test_requirements.py
 
@@ -6,7 +6,7 @@ requirements.txt describes the HARNESS environment. The proxy is installed
 separately, into its own venv (see setup.sh), because the two cannot share one:
 litellm[proxy] requires rich<14.0, while textual 8.x requires rich>=14.2. While
 litellm[proxy] was listed in requirements.txt, `pip install -r requirements.txt`
-did not merely pick a poor version — it failed to resolve at all
+did not merely pick a poor version â€” it failed to resolve at all
 (ResolutionImpossible) and installed *nothing*. That is indistinguishable from
 a broken installer, and it is the failure this file exists to prevent.
 
@@ -46,9 +46,9 @@ def main() -> int:
 
     check("requirements: parses to a non-empty list", bool(reqs), str(reqs))
 
-    # The editable install is what puts the `zimzilla` console script in the
+    # The editable install is what puts the `kuro` console script in the
     # venv's bin; dropping it silently leaves a venv that cannot run the app.
-    check("requirements: installs zimzilla itself (-e .)", "-e ." in reqs, str(reqs))
+    check("requirements: installs kuro itself (-e .)", "-e ." in reqs, str(reqs))
 
     # The unsatisfiable pair. Neither of these belongs to the harness.
     check("requirements: no litellm (unsatisfiable with textual 8.x's rich>=14.2)",
@@ -61,20 +61,20 @@ def main() -> int:
     check("requirements: keeps textual's rich>=14.2 floor",
           bool(rich) and ">=14.2" in rich[0], str(rich))
 
-    # zimzilla/ui/markdown.py imports markdown_it directly. rich and textual
-    # both require it today, so it would arrive anyway — which is exactly why
+    # kuro/ui/markdown.py imports markdown_it directly. rich and textual
+    # both require it today, so it would arrive anyway â€” which is exactly why
     # it needs declaring: an undeclared import that happens to work is one an
     # upstream release can remove, and the failure would be an ImportError at
     # startup, not a test failure.
     check("requirements: declares markdown-it-py, which ui/markdown.py imports",
           "markdown-it-py" in names, str(names))
-    md_mod = (ROOT / "zimzilla" / "ui" / "markdown.py").read_text()
+    md_mod = (ROOT / "kuro" / "ui" / "markdown.py").read_text()
     check("requirements: and ui/markdown.py really does import it",
           "from markdown_it import" in md_mod,
           "no 'from markdown_it import' in ui/markdown.py")
 
     # Cross-check: the interpreter check setup.sh runs before it wires up a
-    # proxy must test the HARNESS's deps, not the proxy's — `import litellm`
+    # proxy must test the HARNESS's deps, not the proxy's â€” `import litellm`
     # there would fail on every correctly-installed machine.
     setup = (ROOT / "setup.sh").read_text()
     dep_check = [ln for ln in setup.splitlines() if "import anthropic" in ln]
@@ -93,3 +93,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

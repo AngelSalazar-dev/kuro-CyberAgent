@@ -1,9 +1,9 @@
-"""Prove the event loop keeps ticking while a slow bash tool runs."""
+﻿"""Prove the event loop keeps ticking while a slow bash tool runs."""
 import asyncio, sys, time
 from pathlib import Path
-sys.path.insert(0, "/home/zim/Projects/ZimZilla")
-from zimzilla.agent import Agent
-from zimzilla.config import Config
+sys.path.insert(0, "/home/zim/Projects/Kuro")
+from kuro.agent import Agent
+from kuro.config import Config
 
 class Blk:
     def __init__(self, **k): self.__dict__.update(k)
@@ -45,10 +45,11 @@ async def main():
     print(f"tool output: {out.strip()!r}")
     # A frozen loop would tick ~0 times; a healthy one ticks ~60.
     ok = ticks > 30 and "DONE" in out
-    print("VERDICT:", "PASS — loop stayed responsive" if ok else "FAIL — loop was blocked")
+    print("VERDICT:", "PASS â€” loop stayed responsive" if ok else "FAIL â€” loop was blocked")
     return 0 if ok else 1
 
 raise SystemExit(asyncio.run(main()))
 
 # Run: python tests/check_no_freeze.py   (from an activated venv)
 # A blocking tool call would report ~0 ticks here; a threaded one reports ~60.
+

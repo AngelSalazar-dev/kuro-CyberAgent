@@ -1,4 +1,4 @@
-"""App-level coverage for the deliverable check, driven through the live TUI.
+﻿"""App-level coverage for the deliverable check, driven through the live TUI.
 
 Run:  python tests/test_deliverable_ui.py   (from an activated venv)
 
@@ -8,7 +8,7 @@ and that ``_handle_event`` renders the two new events as the operator's own
 sentence rather than leaving them to be inferred from the transcript.
 
 That distinction matters here. The original failure was not a missing branch in
-the agent — it was a run that printed ``All phases complete. Writing the
+the agent â€” it was a run that printed ``All phases complete. Writing the
 report.`` and stopped, with nothing anywhere saying the file was absent. A
 correct agent that the app forgets to pass a ``Deliverable`` to would reproduce
 the failure exactly, and ``test_deliverable.py`` would stay green throughout,
@@ -29,8 +29,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla.config import Config  # noqa: E402
-from zimzilla.ui.app import ZimZillaApp  # noqa: E402
+from kuro.config import Config  # noqa: E402
+from kuro.ui.app import KuroApp  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -68,7 +68,7 @@ def _text(msg: str, stop_reason: str | None = None) -> _Msg:
 def _empty() -> _Msg:
     """A truncated reply carrying nothing: the reasoning-exhaustion shape.
 
-    One ``text`` block holding an empty string and no tool call — what a
+    One ``text`` block holding an empty string and no tool call â€” what a
     reasoning model looks like when its thinking spends the whole ceiling and the
     proxy forwards none of it. See the note on this branch in ``agent.run_turn``.
     """
@@ -76,7 +76,7 @@ def _empty() -> _Msg:
 
 
 def _write(path: Path, body: str = "# the report\n") -> _Msg:
-    """A reply that calls the real write tool — ``write_file``, not ``write``."""
+    """A reply that calls the real write tool â€” ``write_file``, not ``write``."""
     return _Msg([
         _Blk(type="text", text="Writing the report."),
         _Blk(type="tool_use", id="t-write", name="write_file",
@@ -95,12 +95,12 @@ def _scripted(app, plan) -> dict:
     pairs and the loop keeps only the *last* ``final_msg`` a call produces, so
     yielding two in one call silently discards the first. That is not
     hypothetical: an earlier draft of this file yielded the write and a terminal
-    narration from the same call, and the write was dropped on the floor — the
+    narration from the same call, and the write was dropped on the floor â€” the
     loop then saw pure narration, nudged twice, and the test read as a broken
     deliverable check when the stub was what was broken.
 
     *plan* is a callable ``(call_index) -> _Msg`` rather than a list, so a
-    message can be built from state that only exists once the turn is running —
+    message can be built from state that only exists once the turn is running â€”
     the timestamped case directory, above all. Past the plan's end it is called
     with a growing index, so a plan that never terminates shows up as a runaway
     call count rather than a swallowed StopIteration.
@@ -140,11 +140,11 @@ async def test_a_missing_report_is_said_out_loud(wd: Path) -> None:
 
     The model narrates the exact sentence that ended the real run and stops. The
     deliverable must be declared by ``/osint``, nudged to exhaustion, and then
-    reported in the transcript — not left as a transcript that merely stops.
+    reported in the transcript â€” not left as a transcript that merely stops.
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "ui-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
@@ -187,13 +187,13 @@ async def test_a_written_report_is_confirmed_and_finalised(wd: Path) -> None:
     """The happy path through the app: written, said so, case dir cleared."""
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "ui-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
         await pilot.pause()
 
-        # The plan reads the case dir that /osint creates — globbed at call time
+        # The plan reads the case dir that /osint creates â€” globbed at call time
         # rather than predicted, because the name carries a timestamp. It also
         # records the path, since by the time the turn settles the finalise hook
         # has removed it and a fresh glob would find nothing to assert about.
@@ -214,7 +214,7 @@ async def test_a_written_report_is_confirmed_and_finalised(wd: Path) -> None:
 
         case = seen.get("case")
         blob = _transcript(app)
-        check("ui: the write ran and the turn stopped — two calls",
+        check("ui: the write ran and the turn stopped â€” two calls",
               state["n"] == 2, f"{state['n']} stream calls")
         check("ui: the written deliverable was confirmed",
               "report.md written:" in blob, blob[-900:])
@@ -239,7 +239,7 @@ async def test_a_truncated_finish_is_named_as_truncation(wd: Path) -> None:
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "ui-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
@@ -258,7 +258,7 @@ async def test_a_truncated_finish_is_named_as_truncation(wd: Path) -> None:
               f"truncated at {app.cfg.max_tokens}" in blob, blob[-900:])
         check("ui: the ceiling is well clear of a real report",
               app.cfg.max_tokens >= 32768, str(app.cfg.max_tokens))
-        # Truncation must NOT be nudged — re-prompting spends another ceiling.
+        # Truncation must NOT be nudged â€” re-prompting spends another ceiling.
         check("ui: a truncation spent no extra call", state["n"] == 1,
               f"{state['n']} stream calls")
         check("ui: a truncation was not announced as a nudge",
@@ -271,13 +271,13 @@ async def test_an_empty_truncation_is_named_and_retried(wd: Path) -> None:
     The reported failure as the operator met it: ``so where are we ?`` rendered
     ``reply truncated at 32768 output tokens`` with no reply above it, because
     the model reasoned its way to the ceiling and the proxy forwarded none of it.
-    Two things must be visible here — that the reply was *empty* rather than cut
+    Two things must be visible here â€” that the reply was *empty* rather than cut
     mid-work, and that a retry with more room is what happens next, rather than a
     silent second call that leaves the operator guessing why the bill grew.
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "ui-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
@@ -317,7 +317,7 @@ async def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -326,3 +326,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

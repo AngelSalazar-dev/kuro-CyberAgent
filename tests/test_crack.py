@@ -1,25 +1,25 @@
-"""`/crack` regression suite: identification, arithmetic, the ladder, the real crack.
+﻿"""`/crack` regression suite: identification, arithmetic, the ladder, the real crack.
 
 Run:  python tests/test_crack.py   (from an activated venv)
 
 Offline and model-free, like `test_ad.py` and `test_osint.py`. Four layers:
 
-* **identification** — signature matching over written-down text, so a format is
+* **identification** â€” signature matching over written-down text, so a format is
   recognised (or not) by a pure function of the bytes;
-* **the arithmetic** — `estimate` is a division, and it is the one number in this
+* **the arithmetic** â€” `estimate` is a division, and it is the one number in this
   command that actively misleads an operator if it is wrong, so it is asserted
   against the module's own tables rather than trusted;
-* **the ladder** — that a stage over budget is *dropped and named*, never run
+* **the ladder** â€” that a stage over budget is *dropped and named*, never run
   past the cap, and that a dropped stage does not consume the budget of the one
   after it;
-* **the real crack** — hashcat's own example hash for mode 13100, with a known
+* **the real crack** â€” hashcat's own example hash for mode 13100, with a known
   plaintext, run through the actual `run_stage`/`recovered` path. This is the
   test that proves the feature works rather than that it formats strings.
 
 Two invariants worth stating, because they are the ones a refactor would break:
 
 * **A rule file is never passed as a wordlist.** `hashcat -a 0 <hash> <wordlist>
-  -r <rule>` — the positional argument is the dictionary. Getting this wrong
+  -r <rule>` â€” the positional argument is the dictionary. Getting this wrong
   produces a hashcat invocation that *looks* plausible and cracks nothing.
 * **The scope guard does not block cracking.** A local hashcat run against a file
   whose *path* contains a deny-listed domain must pass, while a real network
@@ -43,17 +43,17 @@ from unittest.mock import PropertyMock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# A throwaway ZIMZILLA_HOME for the whole suite. ``Config.state_dir`` defaults
-# to ~/.zimzilla and is resolved at import time, so this has to be set before
+# A throwaway KURO_HOME for the whole suite. ``Config.state_dir`` defaults
+# to ~/.kuro and is resolved at import time, so this has to be set before
 # the imports below. Without it every case directory, potfile and archived
 # report this suite builds landed in the operator's live install.
 _TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
-os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+os.environ["KURO_HOME"] = str(_TEST_HOME)
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
-from zimzilla import crack as crack_mod  # noqa: E402
-from zimzilla import scope as scope_mod  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
+from kuro import crack as crack_mod  # noqa: E402
+from kuro import scope as scope_mod  # noqa: E402
+from kuro.config import Config  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -108,7 +108,7 @@ def test_identify_text() -> None:
               bool(got) and got[0].mode == want,
               str([d.mode for d in got]))
 
-    # Bare hex digests, by length. 32 is NTLM and not MD5 — both are 32 chars and
+    # Bare hex digests, by length. 32 is NTLM and not MD5 â€” both are 32 chars and
     # NTLM is overwhelmingly the more likely source in an engagement, so the
     # module resolves the ambiguity that way and the test pins it.
     for digest, want in [
@@ -122,7 +122,7 @@ def test_identify_text() -> None:
               bool(got) and got[0].mode == want,
               str([d.mode for d in got]))
 
-    # A pwdump line is `user:rid:lm:nt:::` — the hash to crack is the NTLM tail,
+    # A pwdump line is `user:rid:lm:nt:::` â€” the hash to crack is the NTLM tail,
     # not the whole line, so the length test has to look past the colons.
     pwdump = f"Administrator:500:aad3b435b51404eeaad3b435b51404ee:{'b' * 32}:::"
     got = crack_mod.identify_text(pwdump)
@@ -187,11 +187,11 @@ def test_estimate() -> None:
     operator reads the duration and decides whether to start a run. Two terms are
     easy to get wrong and both were, during development:
 
-    * **startup** — each stage is its own hashcat process, ~2.8s of context setup
+    * **startup** â€” each stage is its own hashcat process, ~2.8s of context setup
       and autotune. Omitting it understates the cheap stages badly: the rockyou
       dictionary against a Kerberoast hash is ~12s of work, so startup is a fifth
       of the wall time.
-    * **the rule ceiling** — a rule stage generates 77 candidates per word, and on
+    * **the rule ceiling** â€” a rule stage generates 77 candidates per word, and on
       a *fast* hash that generator is the bottleneck, so the stage runs at 12-24
       MH/s where NTLM's own rate is 119. Ignoring it plans a best64 run at five
       times the speed it will achieve.
@@ -204,7 +204,7 @@ def test_estimate() -> None:
             check(f"estimate: {stage.name[:24]} @ {mode}",
                   abs(got - want) < 1e-9, f"{got} vs {want}")
 
-    # Startup is a real, non-zero term — not a rounding detail.
+    # Startup is a real, non-zero term â€” not a rounding detail.
     check("estimate: startup is included and non-zero",
           crack_mod.HASHCAT_STARTUP > 0, str(crack_mod.HASHCAT_STARTUP))
     tiny = crack_mod.Stage(name="tiny", candidates=1)
@@ -262,7 +262,7 @@ def test_human_time() -> None:
 def _wordlists_present():
     """Make every stage read as available, whatever this host has installed.
 
-    ``plan`` drops a stage whose wordlist is missing — correct behaviour, and a
+    ``plan`` drops a stage whose wordlist is missing â€” correct behaviour, and a
     different question from the one these tests ask. rockyou.txt ships with
     neither the distro nor the repo, so on a machine without it every dictionary
     stage is dropped for "missing" before the budget is ever consulted, and the
@@ -309,7 +309,7 @@ def test_plan_budget() -> None:
 def _test_plan_budget() -> None:
     # A generous budget runs every default stage and no more. The count is
     # asserted rather than written as a literal so adding a rung to the ladder
-    # does not fail this for the wrong reason — what matters is that the deep
+    # does not fail this for the wrong reason â€” what matters is that the deep
     # one is the only one held back.
     full = crack_mod.plan(1000, 86400)
     default = [s for s in crack_mod.LADDER if not s.deep]
@@ -325,7 +325,7 @@ def _test_plan_budget() -> None:
     check("plan: the deep stage says why it is not running",
           any("--deep" in p.reason for p in full if p.stage.deep))
 
-    # A tiny budget runs nothing — and says so for each, rather than silently
+    # A tiny budget runs nothing â€” and says so for each, rather than silently
     # producing an empty plan that reads like "there was nothing to do".
     tiny = crack_mod.plan(13100, 1)
     check("plan: a 1-second budget runs nothing", not any(p.run for p in tiny))
@@ -344,7 +344,7 @@ def _test_plan_budget() -> None:
 
     # The mask is 30.9 billion candidates: minutes on NTLM, hours on Kerberos.
     # This is the mode-dependent decision the estimate exists to make, so it is
-    # asserted for both — a budget generous enough for the mask on NTLM, and the
+    # asserted for both â€” a budget generous enough for the mask on NTLM, and the
     # same budget on Kerberos where it must be dropped.
     mask_ntlm = [p for p in crack_mod.plan(1000, 3600)
                  if "mask" in p.stage.name][0]
@@ -382,7 +382,7 @@ def _test_plan_deep() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Argument construction — where a rule file gets mistaken for a wordlist
+# Argument construction â€” where a rule file gets mistaken for a wordlist
 # ---------------------------------------------------------------------------
 
 def test_hashcat_argv() -> None:
@@ -392,7 +392,7 @@ def test_hashcat_argv() -> None:
     plausible-looking invocation that cracks nothing:
 
     * **The positional order is `<hashfile> [wordlist|mask]`.** A mask emitted
-      before the hashfile is read *as* the hashfile — hashcat says "Separator
+      before the hashfile is read *as* the hashfile â€” hashcat says "Separator
       unmatched" and loads no hashes. Found by the budget test below, which is
       why the ordering is pinned here rather than trusted.
     * **The rule is never the positional argument.** `-a 0 <hash> <wordlist> -r
@@ -465,7 +465,7 @@ def test_validate_path(tmp: Path) -> None:
     check("validate: a missing path is refused", got is None and bool(err), err)
 
     # A hash typed inline is the classic mistake, and the error has to name it
-    # rather than say "no such file" — the operator needs to know *why*.
+    # rather than say "no such file" â€” the operator needs to know *why*.
     got, err = crack_mod.validate_path(TGS_EXAMPLE)
     check("validate: an inline hash is refused with an explanation",
           got is None and "looks like a hash" in err, err)
@@ -509,14 +509,14 @@ def test_case_dir(tmp: Path) -> None:
     case.mkdir(parents=True, exist_ok=True)
     check("finalise: no report means no archive",
           crack_mod.finalise_case(cfg, case) is None)
-    (case / "report.md").write_text("# Password cracking — tgs.txt\n")
+    (case / "report.md").write_text("# Password cracking â€” tgs.txt\n")
     dest = crack_mod.finalise_case(cfg, case)
     check("finalise: a report is archived into reports/",
           dest is not None and dest.parent == crack_mod.reports_dir(cfg),
           str(dest))
     check("finalise: the archive keeps the report's content",
           dest is not None and "Password cracking" in dest.read_text())
-    # Unlike osint, the case survives — the hash copy and the potfile are the
+    # Unlike osint, the case survives â€” the hash copy and the potfile are the
     # evidence, and deleting them would make the next run redo work.
     check("finalise: the case directory is NOT deleted",
           case.is_dir(), str(case))
@@ -551,7 +551,7 @@ def test_playbook(tmp: Path) -> None:
           str(case / "report.md") in prompt)
 
     # With nothing identified, the prompt must say so and tell the agent to
-    # establish the mode itself — not silently omit the field.
+    # establish the mode itself â€” not silently omit the field.
     empty = crack_mod.build_prompt(cfg, Path("/x/u.txt"), case, [], 900)
     check("playbook: an unidentified file says so and asks for --identify",
           "--identify" in empty and "none recognised" in empty)
@@ -567,7 +567,7 @@ def test_real_crack(tmp: Path) -> None:
     Mode 13100, plaintext `hashcat`, a four-word dictionary that contains it. The
     stage runs through the same `run_stage`/`recovered` path the agent drives, so
     what is asserted is the feature rather than a string format. It is offline
-    and takes about a second — the wordlist is four words.
+    and takes about a second â€” the wordlist is four words.
 
     Skipped, with a PASS and a reason, when hashcat is not installed: a missing
     binary is not a regression in this repo.
@@ -584,7 +584,7 @@ def test_real_crack(tmp: Path) -> None:
     pot = tmp / "real.potfile"
 
     # A wordlist stage built from the real class, pointed at the test's
-    # dictionary instead of rockyou — the ladder entry is the shape under test,
+    # dictionary instead of rockyou â€” the ladder entry is the shape under test,
     # not its specific wordlist.
     stage = crack_mod.Stage(name="test dictionary", candidates=4,
                             args=("-a", "0"), positional=(str(wordlist),))
@@ -610,7 +610,7 @@ def test_real_crack(tmp: Path) -> None:
     check("crack: a re-run still reports the crack",
           len(crack_mod.recovered(hashfile, 13100, pot)) == 1)
 
-    # And a hash that is NOT in the potfile must not be reported as cracked —
+    # And a hash that is NOT in the potfile must not be reported as cracked â€”
     # `--show` filters to the hashes in the given file, which is the whole
     # reason `recovered` asks hashcat rather than reading the potfile.
     other = tmp / "other.txt"
@@ -645,7 +645,7 @@ def test_budget_holds(tmp: Path) -> None:
           elapsed < 60, f"{elapsed:.1f}s")
     check("budget: it did not crack anything",
           crack_mod.recovered(hashfile, 13100, pot) == [])
-    # The cap is reached, so hashcat stops — and *stopping is not failing*. Exit
+    # The cap is reached, so hashcat stops â€” and *stopping is not failing*. Exit
     # 4 ("aborted by runtime") is the correct outcome of a bounded run, and the
     # distinction is asserted here because treating it as an error would make
     # every correctly-capped stage look broken.
@@ -660,7 +660,7 @@ def test_exit_codes() -> None:
     """The exit-code table, from hashcat's own `exit_status_code.txt`.
 
     Pinned as data because the whole point of `STOPPED` is that a bounded run is
-    not a failure. If hashcat's numbering were misread — 4 as an error, say —
+    not a failure. If hashcat's numbering were misread â€” 4 as an error, say â€”
     every `--runtime`-capped stage would report as broken.
     """
     check("exit: 0 is cracked", crack_mod.EXIT_CRACKED == 0)
@@ -699,7 +699,7 @@ def test_rates_are_real_run_figures() -> None:
 
     The table was built from `hashcat -b` first and that was wrong: the benchmark
     reports the kernel's best case, and a real run against a specific salt is
-    consistently slower — 11x on NetNTLMv2. Planning from benchmark figures calls
+    consistently slower â€” 11x on NetNTLMv2. Planning from benchmark figures calls
     a stage affordable when it is not, which is the one way this command
     misleads. So these assertions pin the *shape* that makes the table honest.
     """
@@ -716,7 +716,7 @@ def test_rates_are_real_run_figures() -> None:
     check("rates: NetNTLMv2 is under 5 MH/s here",
           crack_mod.rate_for(5600) < 5e6, f"{crack_mod.rate_for(5600):,}")
 
-    # The fallback is no faster than the slowest measured mode — the property
+    # The fallback is no faster than the slowest measured mode â€” the property
     # that makes an unknown mode plan conservatively.
     check("rates: the fallback is no faster than any measured mode",
           crack_mod.FALLBACK_RATE <= min(crack_mod.RATES.values()),
@@ -738,7 +738,7 @@ def test_scope_does_not_block_cracking() -> None:
     Pin the finding from planning. `/ad` writes its hashes under a directory
     named for the domain (`hunts/ad-corp.local/loot/tgs.txt`), so a crack run
     against that file has a deny-listed string in its argument. `hashcat` is not
-    a network tool and the guard must not treat it as one — while a real network
+    a network tool and the guard must not treat it as one â€” while a real network
     command against the same domain is still blocked, which is the half that
     proves the guard is still working.
     """
@@ -772,7 +772,7 @@ def test_scope_does_not_block_cracking() -> None:
 
 def test_arg_parse() -> None:
     """`/crack`'s flag parsing, which is where a typo becomes a wasted budget."""
-    from zimzilla.ui.app import CRACK_DEFAULT_BUDGET, _parse_crack_args
+    from kuro.ui.app import CRACK_DEFAULT_BUDGET, _parse_crack_args
 
     path, mode, mt, deep, err = _parse_crack_args(["hashes.txt"])
     check("parse: a bare path", path == "hashes.txt" and not err, err)
@@ -793,7 +793,7 @@ def test_arg_parse() -> None:
           mode == 1000 and mt == 60.0 and not err, f"{mode} {mt} {err}")
 
     # A mode the command does not know is refused with the list, because a wrong
-    # mode number does not fail — it burns the whole budget on a format that
+    # mode number does not fail â€” it burns the whole budget on a format that
     # cannot match.
     path, mode, mt, deep, err = _parse_crack_args(["h.txt", "--mode", "999999"])
     check("parse: an unknown mode is refused", bool(err), err)
@@ -816,15 +816,15 @@ def test_wiring() -> None:
     """The command is reachable from every surface that lists commands.
 
     Read from the source rather than importing a copy, so a rename in one place
-    cannot silently orphan the command in another — the same check `test_osint`
+    cannot silently orphan the command in another â€” the same check `test_osint`
     makes for `/osint`.
     """
-    from zimzilla.ui.complete import SLASH_COMMANDS
+    from kuro.ui.complete import SLASH_COMMANDS
 
     names = [c for c, _ in SLASH_COMMANDS]
     check("wiring: /crack is in the completion menu", "/crack" in names, str(names))
 
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text()
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text()
     check("wiring: dispatch has a crack entry",
           '"crack": lambda a: self._cmd_crack(a)' in app_src)
     check("wiring: _cmd_crack is defined", "def _cmd_crack(" in app_src)
@@ -877,3 +877,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

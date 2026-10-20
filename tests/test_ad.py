@@ -1,11 +1,11 @@
-"""`/ad` regression suite: the gate, the interlock, the probe, the doctrine.
+﻿"""`/ad` regression suite: the gate, the interlock, the probe, the doctrine.
 
 Run:  python tests/test_ad.py   (from an activated venv)
 
 Everything here is offline and model-free. The interlock is the reason that is
 possible: ``ad.inspect`` is a pure function of a command string, and
-``Throttle``/``AttemptBudget`` are plain objects, so the entire safety surface —
-what is refused, what spends budget, when the breaker trips — is asserted by
+``Throttle``/``AttemptBudget`` are plain objects, so the entire safety surface â€”
+what is refused, what spends budget, when the breaker trips â€” is asserted by
 writing commands down. No campaign, no network, no domain.
 
 Three invariants this file is built around:
@@ -30,10 +30,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import ad as ad_mod  # noqa: E402
-from zimzilla import hunt as hunt_mod  # noqa: E402
-from zimzilla import scope as scope_mod  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
+from kuro import ad as ad_mod  # noqa: E402
+from kuro import hunt as hunt_mod  # noqa: E402
+from kuro import scope as scope_mod  # noqa: E402
+from kuro.config import Config  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -62,7 +62,7 @@ def _probes(*present: str) -> list[ad_mod.ToolProbe]:
 # ---------------------------------------------------------------------------
 
 def test_validate_target() -> None:
-    """The domain, normalised — and everything that is not one, refused."""
+    """The domain, normalised â€” and everything that is not one, refused."""
 
     # --- accepted, and normalised
     check("gate: a plain domain is accepted",
@@ -83,7 +83,7 @@ def test_validate_target() -> None:
     # --- refused, each with a message rather than a bare False
     for raw, why in [
         ("", "empty"),
-        ("corp", "no dot — a bare label is not a domain"),
+        ("corp", "no dot â€” a bare label is not a domain"),
         ("https://dc01.corp.local/owa", "a URL"),
         ("http://corp.local", "a URL"),
         ("corp.local/owa", "a path"),
@@ -122,12 +122,12 @@ def test_validate_target() -> None:
 
 
 # ---------------------------------------------------------------------------
-# inspect() — the decision surface, as a pure function
+# inspect() â€” the decision surface, as a pure function
 # ---------------------------------------------------------------------------
 
 #: ``(command, credential, destructive)``. Every row is a claim about what the
 #: interlock does with one shell command, and the whole safety argument rests on
-#: these being right — which is why they are written out rather than derived.
+#: these being right â€” which is why they are written out rather than derived.
 _TABLE: tuple[tuple[str, bool, bool], ...] = (
     # --- reads. None of these may spend budget.
     ("smbclient -L //dc01.corp.local -N", False, False),
@@ -252,7 +252,7 @@ def test_inspect_details() -> None:
     """The properties the table cannot express."""
 
     # `-usersfile` names *usernames*, not passwords. Counting it would spend the
-    # campaign's whole budget on the one technique that cannot lock anything —
+    # campaign's whole budget on the one technique that cannot lock anything â€”
     # the most serious way this table could have been wrong.
     v = ad_mod.inspect("GetNPUsers.py corp.local/ -usersfile users.txt "
                        "-no-pass -dc-ip 10.10.10.5")
@@ -287,7 +287,7 @@ def test_inspect_details() -> None:
           ad_mod.inspect("kerbrute passwordspray -d corp.local u.txt 'x'").credential)
 
     # `relevant` is what keeps the interlock out of everything that is not AD
-    # work — a false positive here would throttle the agent's ordinary shell.
+    # work â€” a false positive here would throttle the agent's ordinary shell.
     for cmd in ("ls -la", "python3 -m http.server", "echo hi",
                 "pip install certipy-ad"):
         check(f"inspect: {cmd!r} is not the interlock's business",
@@ -313,7 +313,7 @@ def test_inspect_details() -> None:
 async def test_throttle() -> None:
     """The token bucket's arithmetic, and that it is shared."""
 
-    # rate <= 0 is genuinely free — the honest meaning of "no throttle".
+    # rate <= 0 is genuinely free â€” the honest meaning of "no throttle".
     free = ad_mod.Throttle(rate=0, burst=1)
     start = time.monotonic()
     for _ in range(50):
@@ -348,7 +348,7 @@ async def test_throttle() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AttemptBudget — the circuit breaker
+# AttemptBudget â€” the circuit breaker
 # ---------------------------------------------------------------------------
 
 def test_budget() -> None:
@@ -377,11 +377,11 @@ def test_budget() -> None:
               str(e)[:120])
     check("budget: the refusal tripped the breaker", b.tripped)
     # Refused *before* incrementing, so `spent` is always the number of
-    # attempts that actually ran — never an overcount.
+    # attempts that actually ran â€” never an overcount.
     check("budget: a refused attempt does not increment the count",
           b.spent == 4, str(b.spent))
 
-    # Once tripped, everything after is refused too — a wave that walked into
+    # Once tripped, everything after is refused too â€” a wave that walked into
     # the threshold has no business trying a sixth account.
     for i in range(6, 9):
         try:
@@ -406,7 +406,7 @@ def test_budget() -> None:
 
 
 # ---------------------------------------------------------------------------
-# make_interlock — the ToolHook
+# make_interlock â€” the ToolHook
 # ---------------------------------------------------------------------------
 
 async def _call(hook, cmd: str) -> str:
@@ -450,14 +450,14 @@ async def test_interlock() -> None:
     check("interlock: the report carries the command",
           bool(refusals) and "hydra" in refusals[0][1])
 
-    # A read still runs after the trip — the campaign degrades rather than dies.
+    # A read still runs after the trip â€” the campaign degrades rather than dies.
     check("interlock: reads still run after the trip",
           await _call(hook, "nmap -sV dc01.corp.local") == "ran")
     check("interlock: and a credential command still does not",
           (await _call(hook, "nxc smb dc01.corp.local -u a -p b"))
           .startswith("refused"))
 
-    # Destructive, refused before the budget — and it must not consume one.
+    # Destructive, refused before the budget â€” and it must not consume one.
     b2 = ad_mod.AttemptBudget(lockout=3)
     seen: list[tuple] = []
     hook2 = ad_mod.make_interlock(ad_mod.Throttle(rate=0), b2,
@@ -567,8 +567,8 @@ def test_probe() -> None:
     check("probe: with everything installed, none is", every == [], str(every))
 
     # A vector with one tool present is runnable with a worse method.
-    # `kerberoast` is the one with a fallback chain — SPN enumeration and the
-    # cracking can each come from a different tool — so hashcat alone keeps it
+    # `kerberoast` is the one with a fallback chain â€” SPN enumeration and the
+    # cracking can each come from a different tool â€” so hashcat alone keeps it
     # alive. `asrep-roast` needs `GetNPUsers.py` specifically and is still
     # skipped; asserting it here would be asserting the absence of a fallback.
     partial = ad_mod.unavailable_vectors(_probes("hashcat"))
@@ -633,7 +633,7 @@ def test_doctrine() -> None:
     check("doctrine: and its own throttle, so one run cannot spend another's",
           a.recon_prompt == b.recon_prompt)
 
-    # The probe result reaches the recon prompt — that is "detect and degrade".
+    # The probe result reaches the recon prompt â€” that is "detect and degrade".
     with_tools = ad_mod.build_recon_prompt(_probes("nmap"))
     check("doctrine: the recon prompt carries the probe result",
           "PRESENT on this host" in with_tools and "nmap" in with_tools)
@@ -724,7 +724,7 @@ def test_ad_case_dir(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The scope guard — this is what made `/ad` safe to ship at all
+# The scope guard â€” this is what made `/ad` safe to ship at all
 # ---------------------------------------------------------------------------
 
 #: Commands whose target is an AD domain or a domain controller. Every one of
@@ -753,7 +753,7 @@ def _scope_with_denied(denied: list[str]) -> scope_mod.Scope:
 
     The key is `domains`, not `deny`. `HostSet.from_mapping` reads only
     `domain`/`domains`/`in_scope` for hostnames, `ip`/`ips`/`hosts` for
-    addresses and `cidr`/`cidrs`/`networks` for ranges — it is polarity-neutral,
+    addresses and `cidr`/`cidrs`/`networks` for ranges â€” it is polarity-neutral,
     because the same reader fills both the allow-list and the deny-list and only
     the caller knows which is which. An unrecognised key is silently dropped, so
     `{"deny": [...]}` builds an *empty* set that permits everything and every
@@ -772,7 +772,7 @@ def test_scope_guard() -> None:
     This is the defect that had to be fixed before `/ad` could ship: the guard
     could not see `smbclient -L //dc01.corp.local`, impacket's
     `domain/user:pass@host`, or a UNC path, so a deny-listed domain was
-    reachable from a plain `/bug-hunt` — never mind `/ad`.
+    reachable from a plain `/bug-hunt` â€” never mind `/ad`.
     """
     scope = _scope_with_denied(["corp.local"])
     for cmd, host in _SCOPE_TABLE:
@@ -785,7 +785,7 @@ def test_scope_guard() -> None:
 
 
 def test_scope_still_ignores_filenames() -> None:
-    """The filename heuristic still runs — it just stops eating AD forms."""
+    """The filename heuristic still runs â€” it just stops eating AD forms."""
     scope = _scope_with_denied(["corp.local"])
     for token in ("./report.json", "src/app.py", "notes.txt"):
         targets = scope.extract_targets(f"cat {token}")
@@ -820,3 +820,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

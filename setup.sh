@@ -1,15 +1,15 @@
-#!/usr/bin/env bash
-# setup.sh — configure the Logfare route for ZimZilla.
+﻿#!/usr/bin/env bash
+# setup.sh â€” configure the Logfare route for Kuro.
 #
 #   ./setup.sh
 #
-# Finds a Logfare credential — an existing profile, then $ANTHROPIC_AUTH_TOKEN —
-# writes the profile to ~/.zimzilla/logfare/source with mode 600, installs the
+# Finds a Logfare credential â€” an existing profile, then $ANTHROPIC_AUTH_TOKEN â€”
+# writes the profile to ~/.kuro/logfare/source with mode 600, installs the
 # LiteLLM proxy if it is missing, starts it, and verifies the route end to end.
 #
 # It never prompts. If there is no key it does not invent one: the route is
 # installed and left unstarted, and the script says where a key goes. A
-# credential committed to this repository is not a credential — it is a public
+# credential committed to this repository is not a credential â€” it is a public
 # budget that anyone can spend, and it cannot be taken back out of the history
 # of everyone who cloned it. So none ships.
 #
@@ -20,20 +20,20 @@
 set -euo pipefail
 
 SELF="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-ZIMZILLA_HOME="${ZIMZILLA_HOME:-$HOME/.zimzilla}"
-LOG_DIR="$ZIMZILLA_HOME/logfare"
+KURO_HOME="${KURO_HOME:-$HOME/.kuro}"
+LOG_DIR="$KURO_HOME/logfare"
 PROFILE="$LOG_DIR/source"
 CONFIG="$LOG_DIR/litellm-config.yaml"
 SERVICE="$LOG_DIR/start-litellm.sh"
 PORT="${LITELLM_PORT:-4001}"
 
-# The interpreter that carries ZimZilla's dependencies.
+# The interpreter that carries Kuro's dependencies.
 #
-# Prefer the checkout's own venv — the one install.sh builds — so `./setup.sh`
+# Prefer the checkout's own venv â€” the one install.sh builds â€” so `./setup.sh`
 # works with no activation after a global install. Then an activated venv
 # ($VIRTUAL_ENV), then a python3 on PATH. This script never creates a venv.
 _self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
-_root="${ZIMZILLA_ROOT:-$_self_dir}"
+_root="${KURO_ROOT:-$_self_dir}"
 if [[ -x "$_root/.venv/bin/python" ]]; then
   PY="$_root/.venv/bin/python"
 elif [[ -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/bin/python" ]]; then
@@ -45,30 +45,30 @@ else
 fi
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
-step() { printf '\n\033[36m▸\033[0m \033[1m%s\033[0m\n' "$*"; }
-ok()   { printf '  \033[32m✔\033[0m %s\n' "$*"; }
-warn() { printf '  \033[33m⚠\033[0m %s\n' "$*" >&2; }
-die()  { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
+step() { printf '\n\033[36mâ–¸\033[0m \033[1m%s\033[0m\n' "$*"; }
+ok()   { printf '  \033[32mâœ”\033[0m %s\n' "$*"; }
+warn() { printf '  \033[33mâš \033[0m %s\n' "$*" >&2; }
+die()  { printf '\n\033[31mâœ– %s\033[0m\n' "$*" >&2; exit 1; }
 # A command the user should run by hand. stderr, like the warnings around it.
 note() { printf '      \033[36m%s\033[0m\n' "$*" >&2; }
 
-bold "╭──────────────────────────────────────────────╮"
-bold "│  ZIMZILLA · setup                         │"
-bold "╰──────────────────────────────────────────────╯"
+bold "â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®"
+bold "â”‚  KURO Â· setup                         â”‚"
+bold "â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯"
 
-[[ -n "$PY" ]] || die "no python3 on PATH — create a venv, activate it, then: pip install -r requirements.txt"
+[[ -n "$PY" ]] || die "no python3 on PATH â€” create a venv, activate it, then: pip install -r requirements.txt"
 command -v curl >/dev/null 2>&1 || die "curl is required."
 
 # The harness must be runnable by this interpreter, or this script would wire
 # up a proxy for something that cannot start.
 #
-# Check the THIRD-PARTY dependencies, not `import zimzilla`: zimzilla is
-# imported from the checkout itself (see PYTHONPATH below), so `import zimzilla`
+# Check the THIRD-PARTY dependencies, not `import kuro`: kuro is
+# imported from the checkout itself (see PYTHONPATH below), so `import kuro`
 # would succeed from the source tree even in a bare venv with nothing
-# installed — passing the check that exists to catch exactly that. The deps are
+# installed â€” passing the check that exists to catch exactly that. The deps are
 # what the user's `pip install -r requirements.txt` actually provides.
 if ! ( cd / && "$PY" -c 'import anthropic, textual, rich, yaml' ) >/dev/null 2>&1; then
-  printf '\n\033[31m✖ ZimZilla dependencies are not installed for %s\033[0m\n\n' "$PY" >&2
+  printf '\n\033[31mâœ– Kuro dependencies are not installed for %s\033[0m\n\n' "$PY" >&2
   printf '  Activate your venv and install them, then re-run ./setup.sh:\n\n' >&2
   note "python3 -m venv .venv && source .venv/bin/activate"
   note "pip install -r requirements.txt"
@@ -84,7 +84,7 @@ KEY=""
 KEY_SRC=""
 
 # A Logfare key starts with `lfu_`. Only a key with that prefix is trusted
-# automatically — a shell often has ANTHROPIC_AUTH_TOKEN exported for a
+# automatically â€” a shell often has ANTHROPIC_AUTH_TOKEN exported for a
 # *different* provider (another proxy, another vendor), and silently adopting
 # it would point the harness at the wrong service with no visible symptom.
 # That is exactly the failure this whole profile mechanism exists to prevent.
@@ -99,7 +99,7 @@ for candidate in "$PROFILE" "$HOME/logfare/source" "$SELF/../logfare/source"; do
   if is_logfare_key "$found"; then
     KEY="$found"; KEY_SRC="$candidate"; break
   elif [[ -n "$found" ]]; then
-    warn "ignoring $candidate — its token is not a Logfare key (no lfu_ prefix)"
+    warn "ignoring $candidate â€” its token is not a Logfare key (no lfu_ prefix)"
   fi
 done
 
@@ -111,7 +111,7 @@ fi
 # 3. Nothing else. There is deliberately no shipped key: packaging/logfare/source
 #    is a template whose token is a placeholder, so a key committed there would
 #    be public, spendable by anyone, and impossible to unpublish. A fresh install
-#    therefore finishes without a Logfare credential and says how to add one —
+#    therefore finishes without a Logfare credential and says how to add one â€”
 #    `/logfare-api-setup <key>` in the TUI, or the profile file directly.
 #
 #    A profile that already exists is never overwritten, so anyone with their own
@@ -119,9 +119,9 @@ fi
 
 if [[ -n "$KEY" ]]; then
   ok "using the credential from $KEY_SRC"
-  [[ "$KEY" == lfu_* ]] || warn "that key does not start with 'lfu_' — continuing anyway"
+  [[ "$KEY" == lfu_* ]] || warn "that key does not start with 'lfu_' â€” continuing anyway"
 else
-  warn "no Logfare key found — installing the route without starting it"
+  warn "no Logfare key found â€” installing the route without starting it"
   warn "get one at https://logfare.ai (they start with 'lfu_'), then either"
   warn "  run  /logfare-api-setup <key>  in the TUI, or"
   warn "  write it to $PROFILE"
@@ -135,22 +135,22 @@ mkdir -p "$LOG_DIR"
 # it would make every file created later in this script (the proxy config, the
 # manager, the Token Juice route) 0600/0700 instead of 0644/0755.
 (
-  umask 077   # create the file 600 from the start — never world-readable
+  umask 077   # create the file 600 from the start â€” never world-readable
   {
-    printf '# ZimZilla — Logfare profile (generated by setup.sh)\n'
+    printf '# Kuro â€” Logfare profile (generated by setup.sh)\n'
     printf '# Treat this file as a credential. Never commit it.\n\n'
     printf 'export ANTHROPIC_BASE_URL="http://localhost:%s"\n' "$PORT"
     if [[ -n "$KEY" ]]; then
       printf 'export ANTHROPIC_AUTH_TOKEN="%s"\n' "$KEY"
     else
-      printf '# No key yet — /logfare-api-setup <key> in the TUI writes this line.\n'
+      printf '# No key yet â€” /logfare-api-setup <key> in the TUI writes this line.\n'
       printf 'export ANTHROPIC_AUTH_TOKEN=""\n'
     fi
     printf 'export ANTHROPIC_MODEL="deepseek-v4.1-flash"\n\n'
     printf '# Load-bearing: an empty string keeps ANTHROPIC_AUTH_TOKEN authoritative\n'
     printf '# and clears any real API key inherited from the shell.\n'
     printf 'export ANTHROPIC_API_KEY=""\n\n'
-    printf '# Model aliases — the models Logfare currently serves.\n'
+    printf '# Model aliases â€” the models Logfare currently serves.\n'
     printf '# Logfare retires models without notice; /logfare-models in the TUI\n'
     printf '# lists what is live right now.\n'
     printf 'export MODEL_DEFAULT="deepseek-v4.1-flash"\n'
@@ -170,14 +170,14 @@ step "Checking the proxy files"
 # These are shipped artifacts, not user config: the catalog and the manager are
 # maintained in packaging/ and an install has to track them. Copying only when
 # the file is *missing* left every existing install frozen at whatever it first
-# received — so a fix in packaging/ (a required config key, a pidfile guard)
+# received â€” so a fix in packaging/ (a required config key, a pidfile guard)
 # never reached the copy that actually runs, and the proxy kept failing on a bug
 # that was already fixed in the tree. Sync on content instead, but keep a .bak
 # of any locally-edited copy rather than silently overwriting someone's work.
 sync_shipped() {
   local src="$1" dst="$2" mode="${3:-}"
   if [[ ! -f "$src" ]]; then
-    warn "missing from packaging/: $(basename "$src") — leaving $dst alone"
+    warn "missing from packaging/: $(basename "$src") â€” leaving $dst alone"
     return 0
   fi
   if [[ ! -f "$dst" ]]; then
@@ -189,7 +189,7 @@ sync_shipped() {
   else
     cp -f "$dst" "$dst.bak"
     cp -f "$src" "$dst"; [[ -n "$mode" ]] && chmod "$mode" "$dst"
-    warn "$(basename "$dst") updated — previous copy kept at $dst.bak"
+    warn "$(basename "$dst") updated â€” previous copy kept at $dst.bak"
   fi
 }
 
@@ -198,16 +198,16 @@ sync_shipped "$SELF/packaging/logfare/start-litellm.sh"     "$SERVICE" 755
 
 # The Token Juice route is a sibling install, not a variant: its own port,
 # profile and manager. This step lays the files down and seeds a profile when
-# one can be found — it does not start anything, and the route is used on
+# one can be found â€” it does not start anything, and the route is used on
 # demand via /zim-tokenjuice.
 #
 # No credential ships in the tree. `source` was committed here once, holding a
 # live key; that is a leak on a public repo and it is not coming back. The
-# route is seeded from, in order: an existing ~/.zimzilla profile (left alone),
+# route is seeded from, in order: an existing ~/.kuro profile (left alone),
 # a $ANTHROPIC_AUTH_TOKEN that already looks like a Token Juice key, or nothing
-# — and in that last case it is simply not discovered, so /zim-tokenjuice
+# â€” and in that last case it is simply not discovered, so /zim-tokenjuice
 # reports the route as unavailable instead of failing later at request time.
-TJ_DIR="$ZIMZILLA_HOME/tokenjuice"
+TJ_DIR="$KURO_HOME/tokenjuice"
 if [[ -d "$SELF/packaging/tokenjuice" ]]; then
   mkdir -p "$TJ_DIR"
   sync_shipped "$SELF/packaging/tokenjuice/litellm-config.yaml" "$TJ_DIR/litellm-config.yaml"
@@ -220,7 +220,7 @@ if [[ -d "$SELF/packaging/tokenjuice" ]]; then
     (
       umask 077
       {
-        printf '# ZimZilla — Token Juice profile (generated by setup.sh)\n'
+        printf '# Kuro â€” Token Juice profile (generated by setup.sh)\n'
         printf '# Treat this file as a credential. Never commit it.\n\n'
         printf 'export ANTHROPIC_BASE_URL="http://localhost:4000"\n'
         printf 'export ANTHROPIC_AUTH_TOKEN="%s"\n' "$ANTHROPIC_AUTH_TOKEN"
@@ -231,29 +231,29 @@ if [[ -d "$SELF/packaging/tokenjuice" ]]; then
     chmod 600 "$TJ_DIR/source"
     ok "tokenjuice profile written from \$ANTHROPIC_AUTH_TOKEN"
   else
-    warn "no Token Juice credential — the :4000 route will not be discovered"
+    warn "no Token Juice credential â€” the :4000 route will not be discovered"
     note "to enable /zim-tokenjuice, write your tj_ key to:"
     note "  $TJ_DIR/source   (mode 600)"
     note "the format is in $TJ_DIR/source.example"
   fi
   ok "installed tokenjuice route (:4000)"
 else
-  warn "no tokenjuice packaging — /zim-tokenjuice will be unavailable"
+  warn "no tokenjuice packaging â€” /zim-tokenjuice will be unavailable"
 fi
 
 # The IteraCompute route is a sibling install like Token Juice: its own port,
 # profile and manager. This step lays the files down and seeds a profile only
-# when a key can be found — it does not start anything, and the route is used on
+# when a key can be found â€” it does not start anything, and the route is used on
 # demand via /zim-iteracompute.
 #
 # IteraCompute serves the OpenAI protocol only, so the proxy is not optional:
 # a session pointed straight at the upstream 404s every turn. No credential
-# ships in the tree, and none could — the key is per-account. The route is
-# seeded from an existing ~/.zimzilla profile (left alone) or a
+# ships in the tree, and none could â€” the key is per-account. The route is
+# seeded from an existing ~/.kuro profile (left alone) or a
 # $ANTHROPIC_AUTH_TOKEN that looks like an IteraCompute key; with neither it is
 # not discovered, and `/zim-iteracompute` says to run /iteracompute-api-setup
 # rather than failing later at request time.
-IC_DIR="$ZIMZILLA_HOME/iteracompute"
+IC_DIR="$KURO_HOME/iteracompute"
 if [[ -d "$SELF/packaging/iteracompute" ]]; then
   mkdir -p "$IC_DIR"
   sync_shipped "$SELF/packaging/iteracompute/litellm-config.yaml" "$IC_DIR/litellm-config.yaml"
@@ -270,7 +270,7 @@ if [[ -d "$SELF/packaging/iteracompute" ]]; then
     (
       umask 077
       {
-        printf '# ZimZilla — IteraCompute profile (generated by setup.sh)\n'
+        printf '# Kuro â€” IteraCompute profile (generated by setup.sh)\n'
         printf '# Treat this file as a credential. Never commit it.\n\n'
         printf 'export ANTHROPIC_BASE_URL="http://localhost:4002"\n'
         printf 'export ANTHROPIC_AUTH_TOKEN="%s"\n' "$ANTHROPIC_AUTH_TOKEN"
@@ -287,7 +287,7 @@ if [[ -d "$SELF/packaging/iteracompute" ]]; then
   fi
   ok "installed iteracompute route (:4002)"
 else
-  warn "no iteracompute packaging — /zim-iteracompute will be unavailable"
+  warn "no iteracompute packaging â€” /zim-iteracompute will be unavailable"
 fi
 
 # The InfronAI route is the same shape as IteraCompute's, one port over: its own
@@ -296,12 +296,12 @@ fi
 #
 # InfronAI does serve the Anthropic protocol natively, but its free models are
 # `openai`-endpoint only in the catalog, so the proxy is not optional for the
-# free tier. No credential ships in the tree, and none could — the key is
+# free tier. No credential ships in the tree, and none could â€” the key is
 # per-account, and a free account still needs a $5 balance. The route is seeded
 # from a $ANTHROPIC_AUTH_TOKEN only when the environment is already aimed at
 # InfronAI; with neither that nor an existing profile it is not discovered, and
 # `/zim-infronai` names /infronai-api-setup rather than failing at request time.
-INFRON_DIR="$ZIMZILLA_HOME/infronai"
+INFRON_DIR="$KURO_HOME/infronai"
 if [[ -d "$SELF/packaging/infronai" ]]; then
   mkdir -p "$INFRON_DIR"
   sync_shipped "$SELF/packaging/infronai/litellm-config.yaml" "$INFRON_DIR/litellm-config.yaml"
@@ -318,7 +318,7 @@ if [[ -d "$SELF/packaging/infronai" ]]; then
     (
       umask 077
       {
-        printf '# ZimZilla — InfronAI profile (generated by setup.sh)\n'
+        printf '# Kuro â€” InfronAI profile (generated by setup.sh)\n'
         printf '# Treat this file as a credential. Never commit it.\n\n'
         printf 'export ANTHROPIC_BASE_URL="http://localhost:4003"\n'
         printf 'export ANTHROPIC_AUTH_TOKEN="%s"\n' "$ANTHROPIC_AUTH_TOKEN"
@@ -335,28 +335,28 @@ if [[ -d "$SELF/packaging/infronai" ]]; then
   fi
   ok "installed infronai route (:4003)"
 else
-  warn "no infronai packaging — /zim-infronai will be unavailable"
+  warn "no infronai packaging â€” /zim-infronai will be unavailable"
 fi
 
-# The doctrine file zim mode follows. Installed into ZIMZILLA_HOME so that
-# `zimzilla --mode zim` works from ANY directory: without a copy here, a session
+# The doctrine file zim mode follows. Installed into KURO_HOME so that
+# `kuro --mode zim` works from ANY directory: without a copy here, a session
 # opened in an unrelated project finds no AGENTS.md and silently falls back to
-# the default prompt. A project's own AGENTS.md still wins — the workdir is
-# searched first — so this is a fallback, not an override.
+# the default prompt. A project's own AGENTS.md still wins â€” the workdir is
+# searched first â€” so this is a fallback, not an override.
 #
 # Synced on content like the proxy files, but a locally-edited copy is kept as
 # .bak rather than overwritten silently: the operator may have tuned their
 # doctrine, and that is the one file here that is genuinely theirs.
 if [[ -f "$SELF/AGENTS.md" ]]; then
-  sync_shipped "$SELF/AGENTS.md" "$ZIMZILLA_HOME/AGENTS.md"
+  sync_shipped "$SELF/AGENTS.md" "$KURO_HOME/AGENTS.md"
 else
-  warn "no AGENTS.md in the checkout — zim mode will fall back to the default prompt"
+  warn "no AGENTS.md in the checkout â€” zim mode will fall back to the default prompt"
 fi
 
 # --- 3b. pagekite (worldwide /phish forwarder) -------------------------------
 
 step "Checking PageKite"
-PK_DIR="$ZIMZILLA_HOME/pagekite"
+PK_DIR="$KURO_HOME/pagekite"
 mkdir -p "$PK_DIR"
 if [[ -f "$SELF/packaging/pagekite/pagekite.py" ]]; then
   sync_shipped "$SELF/packaging/pagekite/pagekite.py" "$PK_DIR/pagekite.py" 755
@@ -366,15 +366,15 @@ else
     chmod 755 "$PK_DIR/pagekite.py"
     ok "downloaded $PK_DIR/pagekite.py"
   else
-    warn "could not download pagekite.py — /phish will fall back to cloudflared/ngrok"
+    warn "could not download pagekite.py â€” /phish will fall back to cloudflared/ngrok"
   fi
 fi
-if [[ ! -f "$ZIMZILLA_HOME/pagekite.name" ]]; then
-  warn "no kite name at $ZIMZILLA_HOME/pagekite.name"
+if [[ ! -f "$KURO_HOME/pagekite.name" ]]; then
+  warn "no kite name at $KURO_HOME/pagekite.name"
   warn "write your kite (e.g. zim.pagekite.me) there, or export PAGEKITE_NAME."
   warn "first-time signup:  $PK_DIR/pagekite.py --signup"
 else
-  ok "kite name: $(tr -d '[:space:]' < "$ZIMZILLA_HOME/pagekite.name")"
+  ok "kite name: $(tr -d '[:space:]' < "$KURO_HOME/pagekite.name")"
 fi
 
 # --- 4. litellm --------------------------------------------------------------
@@ -382,9 +382,9 @@ fi
 # The proxy gets its OWN venv. It cannot live in the harness's: litellm[proxy]
 # requires rich<14.0 and textual 8.x requires rich>=14.2, so an environment
 # holding both cannot resolve at all. start-litellm.sh already looks in
-# $ZIMZILLA_HOME/venv, so that is where this goes. A litellm that already
+# $KURO_HOME/venv, so that is where this goes. A litellm that already
 # exists anywhere is reused rather than duplicated.
-PROXY_VENV="$ZIMZILLA_HOME/venv"
+PROXY_VENV="$KURO_HOME/venv"
 PROXY_PY="$PROXY_VENV/bin/python"
 
 step "Checking the LiteLLM proxy"
@@ -401,15 +401,15 @@ else
   # Both floors are load-bearing, and they live here rather than in
   # requirements.txt because this is the environment that has to satisfy them.
   #
-  # litellm[proxy]>=1.100.1 — the harness talks to this proxy over Anthropic's
+  # litellm[proxy]>=1.100.1 â€” the harness talks to this proxy over Anthropic's
   # /v1/messages, and every Logfare model is registered as `openai/<name>`.
   # Older litellm only served /v1/messages for provider == anthropic, so an
   # openai/* model raised "Anthropic messages provider config not found for
-  # model: ..." — a 500 on the one route ZimZilla actually uses, while
+  # model: ..." â€” a 500 on the one route Kuro actually uses, while
   # /v1/chat/completions kept working and made the proxy look healthy.
   #
-  # uvloop>=0.22.1 — litellm hardcodes uvicorn's event loop to uvloop on Linux
-  # (litellm/proxy/proxy_cli.py::_get_loop_type — not configurable, no flag or
+  # uvloop>=0.22.1 â€” litellm hardcodes uvicorn's event loop to uvloop on Linux
+  # (litellm/proxy/proxy_cli.py::_get_loop_type â€” not configurable, no flag or
   # env var overrides it). uvloop <0.22 still imports
   # BaseDefaultEventLoopPolicy, which Python 3.14 removed, so the proxy dies at
   # startup with "cannot import name 'BaseDefaultEventLoopPolicy'" and never
@@ -424,19 +424,19 @@ fi
 
 if [[ -z "$KEY" ]]; then
   step "Skipping the proxy start"
-  warn "no key to send — start it later with $SERVICE start"
+  warn "no key to send â€” start it later with $SERVICE start"
 else
 step "Starting the proxy on :$PORT"
-# Reuse anything already healthy on the port — the user may already run a
+# Reuse anything already healthy on the port â€” the user may already run a
 # proxy (another tool, or an earlier install) and starting a second one would
 # only fail to bind.
 if curl -s -o /dev/null -w '%{http_code}' \
      "http://127.0.0.1:$PORT/health/liveliness" --max-time 2 | grep -q 200; then
-  ok "a proxy is already serving :$PORT — reusing it"
+  ok "a proxy is already serving :$PORT â€” reusing it"
 elif "$SERVICE" start; then
   ok "proxy healthy on :$PORT"
 else
-  warn "proxy did not start — see /tmp/litellm-zim.log"
+  warn "proxy did not start â€” see /tmp/litellm-zim.log"
   warn "continuing; the launcher will retry on next run."
 fi
 
@@ -463,7 +463,7 @@ probe() {
 }
 CODE="$(probe)"
 if [[ "$CODE" != "200" ]]; then
-  printf '  upstream busy (HTTP %s) — retrying once...\n' "$CODE"
+  printf '  upstream busy (HTTP %s) â€” retrying once...\n' "$CODE"
   sleep 3
   CODE="$(probe)"
 fi
@@ -474,7 +474,7 @@ else
   warn "either the key is wrong or Logfare's upstream is down right now:"
   # The probe file only exists if curl got far enough to write it. Under
   # `set -e` an unconditional `head` on a missing file would end the script
-  # here — after the profile is written and the proxy is installed — and exit
+  # here â€” after the profile is written and the proxy is installed â€” and exit
   # non-zero, making a completed setup look like a failed one.
   head -c 300 /tmp/zim-setup-probe.json 2>/dev/null || true
   printf '\n'
@@ -485,12 +485,13 @@ fi
 # --- done --------------------------------------------------------------------
 
 printf '\n'
-bold "╭──────────────────────────────────────────────╮"
-bold "│  setup complete.                             │"
-bold "╰──────────────────────────────────────────────╯"
+bold "â•­â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•®"
+bold "â”‚  setup complete.                             â”‚"
+bold "â•°â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•¯"
 printf '\n'
-printf '    \033[36mzimzilla\033[0m                 # launch (starts the proxy if needed)\n'
-printf '    \033[36mzimzilla -C ~/proj\033[0m       # run against another directory\n'
-printf '    \033[36mzimzilla --mode zim\033[0m      # full auto, follows AGENTS.md\n\n'
+printf '    \033[36mkuro\033[0m                 # launch (starts the proxy if needed)\n'
+printf '    \033[36mkuro -C ~/proj\033[0m       # run against another directory\n'
+printf '    \033[36mkuro --mode zim\033[0m      # full auto, follows AGENTS.md\n\n'
 printf '  Manage the proxy:\n'
 printf '    %s {status|stop|restart|logs}\n\n' "$SERVICE"
+

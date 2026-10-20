@@ -1,4 +1,4 @@
-"""Regression suite for the BeatAPI source.
+﻿"""Regression suite for the BeatAPI source.
 
 Run:  python tests/test_beatapi.py   (from an activated venv)
 
@@ -6,27 +6,27 @@ Protects what is particular about this provider:
 
 * **Two hosts, one base URL, and the SDK's missing ``/v1``.** Turns go to
   ``https://direct.beatapi.io`` and the catalog is fetched from
-  ``https://api.beatapi.io`` — a *different* host, not a sibling path. The
+  ``https://api.beatapi.io`` â€” a *different* host, not a sibling path. The
   Anthropic SDK appends ``/v1/messages`` to whatever base it is handed, so
   ``DEFAULT_BASE_URL`` must carry no ``/v1``. Asserting the constant can only
-  restate the bug — OpenRouter shipped a total outage behind a green suite that
-  way — so this builds the request through the real client and reads the URL
+  restate the bug â€” OpenRouter shipped a total outage behind a green suite that
+  way â€” so this builds the request through the real client and reads the URL
   back, and checks the catalog URL in the same breath. "Fixing" either by moving
   the base to ``/v1`` silently breaks the other.
 * **The nested catalog shape.** The live reply is
-  ``{"data": {"object": ..., "data": [...]}}`` — one level deeper than the usual
+  ``{"data": {"object": ..., "data": [...]}}`` â€” one level deeper than the usual
   OpenAI-style ``{"data": [...]}``. Both are accepted; a payload that is neither
   yields an empty catalog, not a traceback, because this runs inside a TUI.
-* **Free is the family, the suffix, or a read 0/0 price — and a *missing* price
+* **Free is the family, the suffix, or a read 0/0 price â€” and a *missing* price
   is none of them.** Free entries publish no price, so a missing price parsed as
   0/0 would mark every unpriced model free. ``priced`` records a successful read,
   and the test pins the consequence.
 * **``endpoints`` is not a filter.** Every free entry reports ``openai`` alone,
-  and filtering on ``anthropic`` would hide every free model — the exact
+  and filtering on ``anthropic`` would hide every free model â€” the exact
   opposite of the point. The gateway documents ``endpoints`` as a line's native
   formats, "not the full list of formats you can call".
 * **Capabilities are borrowed from the paid sibling, advisory only.** Free ids
-  publish no ``capabilities``; ``glm-5.3-free`` inherits ``工具``/``推理`` from
+  publish no ``capabilities``; ``glm-5.3-free`` inherits ``å·¥å…·``/``æŽ¨ç†`` from
   ``glm-5.3``, and a free id whose sibling publishes none inherits nothing. The
   flag orders the free list and never hides a model.
 * **The catalog needs no key.** ``GET /v1/text/models`` is public, so the free
@@ -63,32 +63,32 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 # prices and (sometimes) capabilities in either language.
 #
 # The entries cover every case the module has to get right:
-#   - free family, no price, endpoints ["openai"]      → free (the filter trap)
-#   - free family, sibling advertises tools            → free, tools borrowed
-#   - free family, sibling publishes no capabilities   → free, no tools claim
-#   - `-free` suffix but NOT in the free family        → free by suffix
-#   - paid, English capabilities                       → tools + reasoning
-#   - paid, Chinese capabilities (工具 / 推理)          → tools + reasoning
-#   - no price fields at all, no free marker           → neither (the trap)
-#   - malformed rows                                   → skipped, not fatal
+#   - free family, no price, endpoints ["openai"]      â†’ free (the filter trap)
+#   - free family, sibling advertises tools            â†’ free, tools borrowed
+#   - free family, sibling publishes no capabilities   â†’ free, no tools claim
+#   - `-free` suffix but NOT in the free family        â†’ free by suffix
+#   - paid, English capabilities                       â†’ tools + reasoning
+#   - paid, Chinese capabilities (å·¥å…· / æŽ¨ç†)          â†’ tools + reasoning
+#   - no price fields at all, no free marker           â†’ neither (the trap)
+#   - malformed rows                                   â†’ skipped, not fatal
 CATALOG = {
     "data": {
         "object": "list",
         "data": [
-            # Free family, native `openai` only — filtering on `anthropic`
+            # Free family, native `openai` only â€” filtering on `anthropic`
             # here would drop every one of them.
             {"id": "glm-5.3-free", "family": "free", "endpoints": ["openai"]},
             {"id": "deepseek-v4.1-flash-free", "family": "free",
              "endpoints": ["openai"]},
 
             # Paid siblings. The capabilities here are what the free ids above
-            # borrow — and why one of them reads as tool-capable and the other
+            # borrow â€” and why one of them reads as tool-capable and the other
             # does not.
-            {"id": "glm-5.3", "family": "glm", "family_label": "glm文本分组",
+            {"id": "glm-5.3", "family": "glm", "family_label": "glmæ–‡æœ¬åˆ†ç»„",
              "endpoints": ["anthropic", "openai"],
              "context_length": 1000000, "max_output_tokens": 128000,
              "input_usd_per_million": 0.98, "output_usd_per_million": 3.08,
-             "capabilities": ["推理", "工具", "视觉"]},
+             "capabilities": ["æŽ¨ç†", "å·¥å…·", "è§†è§‰"]},
             {"id": "deepseek-v4.1-flash", "family": "deepseek",
              "endpoints": ["anthropic", "openai"],
              "context_length": 1000000, "max_output_tokens": 64000,
@@ -183,8 +183,8 @@ def _clean_env():
 # ---------------------------------------------------------------------------
 
 def test_free_is_the_family_suffix_or_price() -> None:
-    """A free family, a ``-free`` suffix or a read 0/0 price — the suffix is a hint."""
-    from zimzilla import beatapi as bp
+    """A free family, a ``-free`` suffix or a read 0/0 price â€” the suffix is a hint."""
+    from kuro import beatapi as bp
 
     models = bp._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -211,7 +211,7 @@ def test_free_is_the_family_suffix_or_price() -> None:
 
 def test_priced_flag_records_a_read_not_a_block() -> None:
     """``priced`` tracks a successful *read*, so an absent price is not 0/0."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     models = bp._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -252,7 +252,7 @@ def test_endpoints_is_not_a_filter() -> None:
     a "correct-looking" filter would empty the very list this command exists to
     build, so the case is pinned by name.
     """
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     by_id = {m.id: m for m in bp._parse_models(CATALOG)}
     check("endpoints: a free entry's native list is openai only",
@@ -275,15 +275,15 @@ def test_endpoints_is_not_a_filter() -> None:
 
 def test_capabilities_borrowed_from_the_paid_sibling() -> None:
     """Free ids publish no capabilities; the sibling's are borrowed, as advice."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     by_id = {m.id: m for m in bp._parse_models(CATALOG)}
 
     check("caps: a paid entry's English caps read as tools",
           by_id["claude-opus-5"].tools)
     check("caps: and as reasoning", by_id["claude-opus-5"].reasoning)
-    check("caps: a paid entry's Chinese 工具 reads as tools", by_id["glm-5.3"].tools)
-    check("caps: and 推理 as reasoning", by_id["glm-5.3"].reasoning)
+    check("caps: a paid entry's Chinese å·¥å…· reads as tools", by_id["glm-5.3"].tools)
+    check("caps: and æŽ¨ç† as reasoning", by_id["glm-5.3"].reasoning)
 
     check("caps: the free id borrows its sibling's tools flag",
           by_id["glm-5.3-free"].tools)
@@ -307,7 +307,7 @@ def test_capabilities_borrowed_from_the_paid_sibling() -> None:
 
 def test_chat_is_always_true() -> None:
     """The catalog is the *text* catalog, so every entry can answer a turn."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     models = bp._parse_models(CATALOG)
     check("chat: every parsed model is chat-capable",
@@ -315,8 +315,8 @@ def test_chat_is_always_true() -> None:
 
 
 def test_catalog_needs_no_key() -> None:
-    """The catalog is public — a keyless fetch must succeed and send nothing."""
-    from zimzilla import beatapi as bp
+    """The catalog is public â€” a keyless fetch must succeed and send nothing."""
+    from kuro import beatapi as bp
 
     seen, opener = _capture()
     with _clean_env(), mock.patch("urllib.request.urlopen", opener):
@@ -351,7 +351,7 @@ def test_no_anthropic_version_header_on_the_catalog() -> None:
     *Anthropic* Models API shape instead of its own catalog. Asserted directly
     because it is invisible until the model list is silently wrong.
     """
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     seen, opener = _capture()
     with mock.patch("urllib.request.urlopen", opener):
@@ -366,8 +366,8 @@ def test_no_anthropic_version_header_on_the_catalog() -> None:
 
 
 def test_fetch_is_total() -> None:
-    """A network failure is returned, never raised — the caller is a TUI."""
-    from zimzilla import beatapi as bp
+    """A network failure is returned, never raised â€” the caller is a TUI."""
+    from kuro import beatapi as bp
 
     for name, exc, want in (
         ("http 500", urllib.error.HTTPError("u", 500, "boom", {}, None), "500"),
@@ -383,7 +383,7 @@ def test_fetch_is_total() -> None:
         check(f"total: {name} returns (None, message)",
               models is None and want in err, f"{models!r} {err!r}")
 
-    # A genuinely empty catalog is [] — distinguishable from a failure.
+    # A genuinely empty catalog is [] â€” distinguishable from a failure.
     with mock.patch("urllib.request.urlopen", _stub({"data": {"data": []}})):
         bp.clear_cache()
         models, err = bp.fetch_models(use_cache=False)
@@ -399,7 +399,7 @@ def test_fetch_is_total() -> None:
 
 def test_both_catalog_shapes_parse() -> None:
     """The live reply nests the list; a flat one is accepted too."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     nested = bp._parse_models({"data": {"object": "list", "data": [
         {"id": "a", "family": "free"}]}})
@@ -413,7 +413,7 @@ def test_both_catalog_shapes_parse() -> None:
 
 def test_cache_is_keyed_and_expires() -> None:
     """Keyed by token so a key change refetches; TTL'd so a stale list is not live."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     calls = {"n": 0}
 
@@ -449,7 +449,7 @@ def test_cache_is_keyed_and_expires() -> None:
 
 
 def test_the_composed_message_url_is_right() -> None:
-    """The URL the SDK actually builds — and the *other host* the catalog uses.
+    """The URL the SDK actually builds â€” and the *other host* the catalog uses.
 
     This is the test whose absence let a total outage ship behind a green suite
     on OpenRouter: every turn 404'd while the assertions, which checked the
@@ -457,7 +457,7 @@ def test_the_composed_message_url_is_right() -> None:
     handed, so asserting the constant can only restate the bug.
 
     BeatAPI makes the split sharper than any sibling: the two paths sit under
-    *different hosts* — messages at ``direct.beatapi.io/v1/messages`` (the SDK's
+    *different hosts* â€” messages at ``direct.beatapi.io/v1/messages`` (the SDK's
     doing) and models at ``api.beatapi.io/v1/text/models`` (built by hand). A fix
     that moved the base to ``/v1`` to please the messages path would still 404
     the catalog, and pointing the base at ``api.`` would move every turn onto the
@@ -466,9 +466,9 @@ def test_the_composed_message_url_is_right() -> None:
     import anthropic
     from anthropic._models import FinalRequestOptions
 
-    from zimzilla import beatapi as bp
-    from zimzilla.agent import Agent
-    from zimzilla.config import Config
+    from kuro import beatapi as bp
+    from kuro.agent import Agent
+    from kuro.config import Config
 
     cfg = Config(base_url=bp.DEFAULT_BASE_URL, auth_token="sk-x0000000000000000")
     agent = Agent(cfg)
@@ -497,7 +497,7 @@ def test_the_composed_message_url_is_right() -> None:
 
 def test_profile_roundtrip(tmp: Path) -> None:
     """The key is written mode 600 and read back byte-identical."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     path = bp.save_key("sk-test-key-abcdefghijklmnop", "glm-5.3-free")
     check("profile: written to the beatapi profile", path == bp.PROFILE, str(path))
@@ -522,7 +522,7 @@ def test_profile_roundtrip(tmp: Path) -> None:
 
 def test_read_exports_is_total(tmp: Path) -> None:
     """The profile parser handles quotes, junk and a missing file."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     p = tmp / "exports-test"
     p.write_text(
@@ -547,8 +547,8 @@ def test_read_exports_is_total(tmp: Path) -> None:
 
 
 def test_credential_precedence(tmp: Path) -> None:
-    """environment → own profile → ~/claude-source, first hit wins."""
-    from zimzilla import beatapi as bp
+    """environment â†’ own profile â†’ ~/claude-source, first hit wins."""
+    from kuro import beatapi as bp
 
     bp.PROFILE.unlink(missing_ok=True)
     with _clean_env():
@@ -570,13 +570,13 @@ def test_credential_precedence(tmp: Path) -> None:
         check("precedence: a profile for another host is skipped",
               creds and creds[0] != "sk-or-should-be-skipped")
 
-        # 2. ZimZilla's own profile beats it.
+        # 2. Kuro's own profile beats it.
         bp.save_key("sk-from-own-profile", "deepseek-v4.1-flash-free")
         creds = bp.load_credentials()
         check("precedence: the own profile beats claude-source",
               creds and creds[0] == "sk-from-own-profile", str(creds and creds[2]))
 
-        # 1. The environment beats everything — but only when the base matches.
+        # 1. The environment beats everything â€” but only when the base matches.
         os.environ["ANTHROPIC_BASE_URL"] = "https://openrouter.ai/api"
         os.environ["ANTHROPIC_AUTH_TOKEN"] = "sk-or-env-wrong-host"
         creds = bp.load_credentials()
@@ -601,7 +601,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 def test_no_key_is_echoed(tmp: Path) -> None:
     """Nothing a caller can reach returns or prints the key."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     secret = "sk-SUPERSECRETVALUE0123456789abcdef"
     bp.save_key(secret, "glm-5.3-free")
@@ -625,9 +625,9 @@ def test_no_key_is_echoed(tmp: Path) -> None:
 
 
 def test_looks_like_key() -> None:
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
-    # A synthetic key in the real shape — the operator's actual key is never
+    # A synthetic key in the real shape â€” the operator's actual key is never
     # written into a test.
     check("key: a real-shaped key passes",
           bp.looks_like_key("sk-" + "0123456789abcdef" * 3 + "012"))
@@ -645,9 +645,9 @@ def test_looks_like_key() -> None:
 
 
 def test_active_key_recognises_host() -> None:
-    """The gateway is identified by host — and BOTH text origins match."""
-    from zimzilla import beatapi as bp
-    from zimzilla import sources as s
+    """The gateway is identified by host â€” and BOTH text origins match."""
+    from kuro import beatapi as bp
+    from kuro import sources as s
 
     check("host: the direct origin matches",
           bp.is_beatapi("https://direct.beatapi.io"))
@@ -674,8 +674,8 @@ def test_active_key_recognises_host() -> None:
 
 def test_apply_and_guard(tmp: Path) -> None:
     """``apply_to`` aims the session; the guard refuses to hijack a deliberate host."""
-    from zimzilla import beatapi as bp
-    from zimzilla.config import Config
+    from kuro import beatapi as bp
+    from kuro.config import Config
 
     bp.PROFILE.unlink(missing_ok=True)
     empty_source = tmp / "no-claude-source"
@@ -703,7 +703,7 @@ def test_apply_and_guard(tmp: Path) -> None:
               cfg.model == "glm-5.3-free", cfg.model)
 
         # With no model saved, apply_to leaves the model alone AND returns the
-        # empty model — which is the signal the UI uses to fetch the free list
+        # empty model â€” which is the signal the UI uses to fetch the free list
         # on a worker thread, rather than a network read on the UI thread.
         bp.save_key("sk-apply-test-0123456789", "")
         cfg = Config(base_url="http://localhost:4001", auth_token="")
@@ -730,8 +730,8 @@ def test_apply_and_guard(tmp: Path) -> None:
 
 def test_selection_file_is_shared(tmp: Path) -> None:
     """The selection is written through sources, so two writers cannot disagree."""
-    from zimzilla import beatapi as bp
-    from zimzilla import sources as s
+    from kuro import beatapi as bp
+    from kuro import sources as s
 
     bp.set_current("beatapi")
     check("selection: written through sources", s.current_key() == "beatapi")
@@ -746,7 +746,7 @@ def test_selection_file_is_shared(tmp: Path) -> None:
 
 def test_free_and_id_helpers() -> None:
     """The three catalog views agree with each other."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     with mock.patch("urllib.request.urlopen", _stub()):
         bp.clear_cache()
@@ -787,7 +787,7 @@ def test_free_and_id_helpers() -> None:
 
 def test_blurb_says_what_matters() -> None:
     """The one line the picker renders, for each interesting shape."""
-    from zimzilla import beatapi as bp
+    from kuro import beatapi as bp
 
     by_id = {m.id: m for m in bp._parse_models(CATALOG)}
 
@@ -813,8 +813,8 @@ def test_blurb_says_what_matters() -> None:
 
 def test_sources_registry_dispatch(tmp: Path) -> None:
     """``sources`` routes beatapi through the catalog, not the declared list."""
-    from zimzilla import beatapi as bp
-    from zimzilla import sources as s
+    from kuro import beatapi as bp
+    from kuro import sources as s
 
     with mock.patch("urllib.request.urlopen", _stub()):
         bp.clear_cache()
@@ -842,9 +842,9 @@ def test_sources_registry_dispatch(tmp: Path) -> None:
 
 def test_tui_surfaces() -> None:
     """The commands, help rows and status row are wired, not just the module."""
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
-    comp_src = (ROOT / "zimzilla" / "ui" / "complete.py").read_text(encoding="utf-8")
-    main_src = (ROOT / "zimzilla" / "__main__.py").read_text(encoding="utf-8")
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text(encoding="utf-8")
+    comp_src = (ROOT / "kuro" / "ui" / "complete.py").read_text(encoding="utf-8")
+    main_src = (ROOT / "kuro" / "__main__.py").read_text(encoding="utf-8")
 
     for cmd in ("zim-beatapi", "beatapi-api-setup", "beatapi-models"):
         check(f"tui: /{cmd} is dispatched", f'"{cmd}":' in app_src)
@@ -871,9 +871,9 @@ def test_tui_surfaces() -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-bp-test-"))
     # Pin the module's paths to the temp tree before anything imports it.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     saved = {k: os.environ.get(k) for k in
@@ -913,7 +913,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -922,3 +922,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -1,10 +1,10 @@
-"""Regression suite for the native OpenAI-compatible transport.
+﻿"""Regression suite for the native OpenAI-compatible transport.
 
 Run:  python tests/test_openai_compat.py   (from an activated venv)
 
 The harness grew up on the Anthropic Messages protocol, with a local LiteLLM
 proxy translating every request to Chat Completions. That hop costs latency and
-loses tool-call fidelity, so ``zimzilla/openai_compat.py`` speaks Chat
+loses tool-call fidelity, so ``kuro/openai_compat.py`` speaks Chat
 Completions directly. This file protects what makes that safe:
 
 * **Protocol resolution is conservative.** An endpoint nobody recognises keeps
@@ -16,13 +16,13 @@ Completions directly. This file protects what makes that safe:
   per call, and thinking blocks dropped rather than echoed back at servers that
   reject them.
 * **Tool calls survive streaming.** Fragmented argument deltas are assembled by
-  ``index``, so two parallel calls stay two calls — the failure mode that reads
+  ``index``, so two parallel calls stay two calls â€” the failure mode that reads
   as "the model cannot use tools".
 * **Errors arrive as ``anthropic`` exceptions.** ``_friendly_error`` and the
   retry policy dispatch on ``isinstance``; a private exception type would turn a
   429 with a reset header into a traceback.
-* **The agent loop is unchanged.** A full turn — tool call, execution, result,
-  second reply — runs end to end over the new transport with the same events.
+* **The agent loop is unchanged.** A full turn â€” tool call, execution, result,
+  second reply â€” runs end to end over the new transport with the same events.
 
 No test here touches the network: every request is served by an
 ``httpx2.MockTransport``.
@@ -44,10 +44,10 @@ sys.path.insert(0, str(ROOT))
 import anthropic  # noqa: E402
 import httpx2  # noqa: E402
 
-from zimzilla import openai_compat as oc  # noqa: E402
-from zimzilla import sources as sources_mod  # noqa: E402
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
+from kuro import openai_compat as oc  # noqa: E402
+from kuro import sources as sources_mod  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import Config  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -90,7 +90,7 @@ async def _collect(client: oc.Client, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# 1 — protocol resolution
+# 1 â€” protocol resolution
 # ---------------------------------------------------------------------------
 
 
@@ -119,13 +119,13 @@ def test_protocol_resolution() -> None:
     for url, override, expected, why in cases:
         got = oc.resolve_protocol(url, override)
         check(f"protocol: {url} ({override or 'auto'}) -> {expected}", got == expected,
-              f"got {got} — {why}")
+              f"got {got} â€” {why}")
 
-    with mock.patch.dict(os.environ, {"ZIMZILLA_PROTOCOL": "openai"}):
+    with mock.patch.dict(os.environ, {"KURO_PROTOCOL": "openai"}):
         got = oc.resolve_protocol("https://unknown.example", "auto")
-        check("protocol: ZIMZILLA_PROTOCOL pins an unknown host", got == "openai", got)
+        check("protocol: KURO_PROTOCOL pins an unknown host", got == "openai", got)
     with mock.patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("ZIMZILLA_PROTOCOL", None)
+        os.environ.pop("KURO_PROTOCOL", None)
         got = oc.resolve_protocol("https://unknown.example", None)
         check("protocol: with no env, an unknown host is Anthropic",
               got == "anthropic", got)
@@ -166,7 +166,7 @@ def test_local_proxy() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2 — message translation
+# 2 â€” message translation
 # ---------------------------------------------------------------------------
 
 
@@ -285,8 +285,8 @@ def test_arguments() -> None:
           oc.parse_arguments('```json\n{"a": 1}\n```') == {"a": 1},
           str(oc.parse_arguments('```json\n{"a": 1}\n```')))
     check("args: prose around the object is tolerated",
-          oc.parse_arguments('here you go: {"a": 1} — done') == {"a": 1},
-          str(oc.parse_arguments('here you go: {"a": 1} — done')))
+          oc.parse_arguments('here you go: {"a": 1} â€” done') == {"a": 1},
+          str(oc.parse_arguments('here you go: {"a": 1} â€” done')))
     check("args: truncated JSON becomes empty rather than raising",
           oc.parse_arguments('{"a": ') == {}, str(oc.parse_arguments('{"a": ')))
     check("args: a JSON array is not a tool input",
@@ -295,7 +295,7 @@ def test_arguments() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3 — streaming, tool-call assembly and usage
+# 3 â€” streaming, tool-call assembly and usage
 # ---------------------------------------------------------------------------
 
 
@@ -308,7 +308,7 @@ def test_stream_assembly() -> None:
             _chunk({"reasoning_content": "thinking..."}),
             _chunk({"content": "Let me "}),
             _chunk({"content": "look."}),
-            # Two parallel calls, arguments fragmented across chunks — the
+            # Two parallel calls, arguments fragmented across chunks â€” the
             # shape a proxy most often mangles.
             _chunk({"tool_calls": [{"index": 0, "id": "call_a", "type": "function",
                                     "function": {"name": "read_file",
@@ -431,7 +431,7 @@ def test_create() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4 — errors and parameter negotiation
+# 4 â€” errors and parameter negotiation
 # ---------------------------------------------------------------------------
 
 
@@ -451,7 +451,7 @@ def test_errors() -> None:
         check("error: the retry-after header survives, so the window is detected",
               e.response.headers.get("retry-after") == "120",
               str(dict(e.response.headers)))
-        from zimzilla.agent import _rate_limit_is_a_window
+        from kuro.agent import _rate_limit_is_a_window
         check("error: the harness reads it as a window, not a burst",
               _rate_limit_is_a_window(e))
     except Exception as e:  # noqa: BLE001
@@ -560,7 +560,7 @@ def test_stream_fallback() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5 — the agent loop, end to end
+# 5 â€” the agent loop, end to end
 # ---------------------------------------------------------------------------
 
 
@@ -663,7 +663,7 @@ def test_connection_errors() -> None:
 
 def test_model_cache() -> None:
     """A probed endpoint's ids are what `/model` offers for it."""
-    from zimzilla import sources as sources_mod
+    from kuro import sources as sources_mod
 
     url = "https://direct.example/v1"
     check("cache: nothing is offered before a probe",
@@ -684,7 +684,7 @@ def test_model_cache() -> None:
 
 def test_pricing_case() -> None:
     """A provider's mixed-case id must not fall through to DEFAULT_PRICE."""
-    from zimzilla.config import DEFAULT_PRICE, price_for
+    from kuro.config import DEFAULT_PRICE, price_for
 
     check("price: the alias is priced", price_for("deepseek-v4.1-flash") == (0.28, 0.42),
           str(price_for("deepseek-v4.1-flash")))
@@ -706,11 +706,11 @@ def test_ui_commands(tmp: Path) -> None:
     test, and both of these touch widgets (status bar, header, completer) as
     well as the config. So they are driven through a mounted app.
     """
-    from zimzilla.ui.app import ZimZillaApp
+    from kuro.ui.app import KuroApp
 
     cfg = Config.from_env(workdir=tmp, api_key="sk-test",
                           base_url="http://localhost:4001")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async def go():
         async with app.run_test(size=(110, 34)) as pilot:
@@ -736,7 +736,7 @@ def test_ui_commands(tmp: Path) -> None:
             # The endpoint command is a @work worker; its body is what touches
             # the widgets, so it is awaited directly with the probe stubbed.
             with mock.patch.object(oc, "probe", return_value=(True, "2 models")):
-                await ZimZillaApp._cmd_openai_endpoint.__wrapped__(
+                await KuroApp._cmd_openai_endpoint.__wrapped__(
                     app, ["https://direct.example/v1", "alpha"])
             await pilot.pause()
             return pinned, other, kept, (cfg.base_url, cfg.protocol, cfg.model,
@@ -845,7 +845,7 @@ def test_active_key_direct(tmp: Path) -> None:
                                                              encoding="utf-8")
     (zhome / "iteracompute" / "source").write_text(
         'export ANTHROPIC_AUTH_TOKEN="sk-test"\n', encoding="utf-8")
-    with mock.patch.object(sources_mod, "ZIMZILLA_HOME", zhome), \
+    with mock.patch.object(sources_mod, "KURO_HOME", zhome), \
          mock.patch.object(sources_mod, "DEFAULT_HOME", tmp / "home"):
         found = sources_mod.discover()
         check("active: the source is discovered", "iteracompute" in found,
@@ -866,21 +866,21 @@ def test_active_key_direct(tmp: Path) -> None:
 
 def test_switch_direct(tmp: Path) -> None:
     """Switching a source goes direct: no proxy start, upstream URL, alias map."""
-    from zimzilla.ui.app import ZimZillaApp
+    from kuro.ui.app import KuroApp
 
     src = _fake_source(tmp, key="fake")
     route = sources_mod.direct_route(src)
     assert route is not None
     cfg = Config.from_env(workdir=tmp, api_key="k", base_url="http://localhost:4001",
                           model="alias-one")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     def no_proxy(*a, **k):
         raise AssertionError("the direct switch must not start a proxy")
 
     async def go():
         async with app.run_test(size=(110, 34)) as pilot:
-            with mock.patch.object(sources_mod, "ZIMZILLA_HOME", zhome), \
+            with mock.patch.object(sources_mod, "KURO_HOME", zhome), \
                  mock.patch.object(sources_mod, "start_proxy", no_proxy), \
                  mock.patch.object(oc, "probe", return_value=(True, "1 models")):
                 oc._MODEL_CACHE[oc._cache_key(route.base_url)] = ("upstream-one",)
@@ -912,7 +912,7 @@ def test_switch_direct(tmp: Path) -> None:
         cfg.protocol = "auto"
         async with app.run_test(size=(110, 34)) as pilot:
             with mock.patch.object(sources_mod, "discover", return_value={"fake": src}), \
-                 mock.patch.object(ZimZillaApp, "_switch_source") as switch:
+                 mock.patch.object(KuroApp, "_switch_source") as switch:
                 app._cmd_zim_source("fake", ["proxy"])
                 await pilot.pause()
                 with_proxy = switch.call_args
@@ -968,3 +968,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

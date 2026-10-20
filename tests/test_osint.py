@@ -1,12 +1,12 @@
-"""Regression suite for `/osint`.
+﻿"""Regression suite for `/osint`.
 
 Run:  python tests/test_osint.py   (from an activated venv)
 
-Two layers, matching the split in zimzilla/osint.py itself:
+Two layers, matching the split in kuro/osint.py itself:
 
-* the pure logic — registry shape, target validation, slugging, the case
-  directory, the playbook prompt — exercised directly and with no terminal;
-* the wiring — that the slash dispatch, the help table, the palette and the
+* the pure logic â€” registry shape, target validation, slugging, the case
+  directory, the playbook prompt â€” exercised directly and with no terminal;
+* the wiring â€” that the slash dispatch, the help table, the palette and the
   completion popup all actually expose the command, so a rename in one place
   cannot silently orphan it in another.
 """
@@ -21,10 +21,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import osint  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
-from zimzilla.ui.app import ZimZillaApp  # noqa: E402
-from zimzilla.ui.complete import SLASH_COMMANDS  # noqa: E402
+from kuro import osint  # noqa: E402
+from kuro.config import Config  # noqa: E402
+from kuro.ui.app import KuroApp  # noqa: E402
+from kuro.ui.complete import SLASH_COMMANDS  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -45,7 +45,7 @@ def _cfg(workdir: Path, **kw) -> Config:
 
 def test_registry() -> None:
     # Every kind the operator named is present, and the display order is the
-    # order they asked for — a missing entry here is a missing menu row.
+    # order they asked for â€” a missing entry here is a missing menu row.
     want = ["email", "phone", "facebook", "tiktok", "instagram", "discord", "github"]
     check("registry: all seven kinds exist", set(osint.OSINT_KINDS) == set(want),
           f"{sorted(osint.OSINT_KINDS)}")
@@ -53,14 +53,14 @@ def test_registry() -> None:
           osint.KIND_ORDER == want, f"{osint.KIND_ORDER}")
 
     # The built kinds, listed deliberately. If a third is flipped on later,
-    # this test should be updated on purpose rather than passing by accident —
+    # this test should be updated on purpose rather than passing by accident â€”
     # it is the reminder that a new playbook needs its own coverage.
     built = [n for n, k in osint.OSINT_KINDS.items() if k.built]
     check("registry: all but phone are the built kinds",
           sorted(built) == ["discord", "email", "facebook", "github",
                             "instagram", "tiktok"], f"{built}")
 
-    # The stubs must NOT carry a playbook — otherwise a stub would look
+    # The stubs must NOT carry a playbook â€” otherwise a stub would look
     # runnable to build_prompt and the "not built" guard would be the only
     # thing standing between the operator and an empty briefing.
     for name, kind in osint.OSINT_KINDS.items():
@@ -175,7 +175,7 @@ def test_validation() -> None:
     # usernames may be all digits (2-32 chars), and an id is 17-20 digits. So
     # a short number is accepted as a username, and a 17-20 digit one is
     # accepted as either. The distinction is the playbook's job, not
-    # validation's — refusing a digits-only username would refuse a real one.
+    # validation's â€” refusing a digits-only username would refuse a real one.
     ok, err = osint.validate(dc, "12345")
     check("validate: a digits-only username is accepted", ok, err)
     ok, err = osint.validate(dc, "80351110224678912")
@@ -193,7 +193,7 @@ def test_validation() -> None:
         check(f"validate: accepts facebook {value!r}", ok, err)
 
     # Every host Facebook serves the same profile from, and the two URL shapes
-    # that carry a name *and* an id — where the id is what must survive.
+    # that carry a name *and* an id â€” where the id is what must survive.
     for pasted in ["https://www.facebook.com/nasa",
                    "http://www.facebook.com/nasa",
                    "https://web.facebook.com/nasa",
@@ -278,7 +278,7 @@ def test_validation() -> None:
         ok, _ = osint.validate(ig, junk)
         check(f"validate: rejects instagram {junk!r}", not ok)
 
-    # Site furniture must not silently become a handle — `/p/...` is a post,
+    # Site furniture must not silently become a handle â€” `/p/...` is a post,
     # `/explore/...` is a feed, and neither is an account.
     for furniture in ["https://www.instagram.com/p/CxYzAbCdEf/",
                       "https://www.instagram.com/explore/tags/nasa/",
@@ -292,7 +292,7 @@ def test_validation() -> None:
 
 
 def test_normalise() -> None:
-    # Domain lowercased, local part's case preserved — the local part is
+    # Domain lowercased, local part's case preserved â€” the local part is
     # technically case-sensitive and lowercasing it would change the address.
     check("normalise: lowercases the domain only",
           osint.normalise_email("  Bob.Smith@GMail.COM ") == "Bob.Smith@gmail.com",
@@ -314,7 +314,7 @@ def test_normalise() -> None:
     check("normalise: strips a trailing slash and surrounding space",
           osint.normalise_github("  github.com/Torvalds/  ") == "Torvalds",
           osint.normalise_github("  github.com/Torvalds/  "))
-    # A URL with a path is a repo, and is deliberately NOT unwrapped — it must
+    # A URL with a path is a repo, and is deliberately NOT unwrapped â€” it must
     # then fail validation rather than silently recon the wrong thing.
     check("normalise: a repo URL is left to fail validation",
           osint.normalise_github("https://github.com/torvalds/linux")
@@ -339,7 +339,7 @@ def test_normalise() -> None:
           osint.normalise_discord("<@80351110224678912>") == "80351110224678912"
           and osint.normalise_discord("<@!80351110224678912>")
           == "80351110224678912")
-    # The legacy discriminator is part of the identity and is NOT stripped —
+    # The legacy discriminator is part of the identity and is NOT stripped â€”
     # it dates the account, which is a finding.
     check("normalise: keeps a legacy discriminator",
           osint.normalise_discord("  OldUser#1234  ") == "OldUser#1234",
@@ -452,7 +452,7 @@ def test_case_dir(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Finalising a case — archive the report, delete the rest
+# Finalising a case â€” archive the report, delete the rest
 # ---------------------------------------------------------------------------
 
 def test_finalise(tmp: Path) -> None:
@@ -462,7 +462,7 @@ def test_finalise(tmp: Path) -> None:
 
     # ---- a completed run: report archived, case dir gone -------------------
     case = osint.case_dir(cfg, email, "done@example.com")
-    (case / "report.md").write_text("# Email OSINT — done@example.com\n")
+    (case / "report.md").write_text("# Email OSINT â€” done@example.com\n")
     # Bulky evidence that must NOT survive the cleanup.
     (case / "clone").mkdir()
     (case / "clone" / "big.git").write_text("x" * 5000)
@@ -513,7 +513,7 @@ def test_finalise(tmp: Path) -> None:
     check("finalise: a stray .md leaves the case dir alone", case4.exists())
 
     # A report.md that belongs to a CLONED repo is not this run's report. The
-    # run's own report must win, and the clone's must not be archived as it —
+    # run's own report must win, and the clone's must not be archived as it â€”
     # mistaking them would archive the wrong file and delete the real evidence.
     case5 = osint.case_dir(cfg, email, "cloned@example.com")
     (case5 / "report.md").write_text("# the run's report\n")
@@ -554,7 +554,7 @@ def test_prompt(tmp: Path) -> None:
     check("prompt: carries the normalised target", "Bob@example.com" in p)
     check("prompt: carries the case dir", str(case) in p)
 
-    # The placeholders must be fully substituted — a stray brace would reach
+    # The placeholders must be fully substituted â€” a stray brace would reach
     # the model as literal text.
     check("prompt: no unsubstituted placeholders",
           "{target}" not in p and "{case_dir}" not in p)
@@ -603,10 +603,10 @@ def test_prompt_github(tmp: Path) -> None:
     # the report title both see a bare handle.
     p_url = osint.build_prompt(gh, "https://github.com/torvalds", case)
     check("github prompt: normalises a pasted profile URL",
-          "github — GitHub username: torvalds" in p_url
+          "github â€” GitHub username: torvalds" in p_url
           and "github.com/torvalds" not in p_url)
 
-    # The phases the operator asked for — email discovery above all, since
+    # The phases the operator asked for â€” email discovery above all, since
     # that is the stated purpose of the command.
     for needle in ("Account profiling", "Email discovery", "commit",
                    ".patch", ".mailmap", "GPG", "Repository inventory",
@@ -622,7 +622,7 @@ def test_prompt_github(tmp: Path) -> None:
     check("github prompt: says not to reproduce secrets",
           "without reproducing the secret" in p)
 
-    # Same shared report format as the email playbook — this is the assertion
+    # Same shared report format as the email playbook â€” this is the assertion
     # that keeps the two kinds' reports structurally identical.
     for needle in ("**What**", "**Where**", "**Confidence**", "**Means**",
                    "**Verify**", "| Phase | Ran? | Result |",
@@ -657,7 +657,7 @@ def test_prompt_discord(tmp: Path) -> None:
     check("discord prompt: defines the confidence levels",
           "CONFIRMED" in p and "PROBABLE" in p and "UNVERIFIED" in p)
 
-    # Same shared report format as the other two playbooks — this is the
+    # Same shared report format as the other two playbooks â€” this is the
     # assertion that keeps every kind's report structurally identical, and so
     # parseable by the same tree reader.
     for needle in ("**What**", "**Where**", "**Confidence**", "**Means**",
@@ -690,7 +690,7 @@ def test_prompt_discord(tmp: Path) -> None:
     check("discord prompt: says the profile page is a JS shell",
           "JavaScript shell" in p)
 
-    # The free, local, exact derivation — the anchor fact of the run.
+    # The free, local, exact derivation â€” the anchor fact of the run.
     check("discord prompt: gives the snowflake epoch arithmetic",
           "(id >> 22) + 1420070400000" in p)
     check("discord prompt: gives the default-avatar derivation",
@@ -706,7 +706,7 @@ def test_prompt_discord(tmp: Path) -> None:
           "without\n     reproducing the token itself" in p
           or "reproducing the token itself" in p)
 
-    # The token tier is offered honestly — used if the operator supplied one,
+    # The token tier is offered honestly â€” used if the operator supplied one,
     # never scraped, and reported as a gap when absent.
     check("discord prompt: mentions the token tier", "DISCORD_TOKEN" in p)
     check("discord prompt: forbids a scraped token",
@@ -766,7 +766,7 @@ def test_prompt_facebook(tmp: Path) -> None:
           "middle and last fields both return 400" in p
           and "not the page's own" in p)
 
-    # A leaked credential is described, never copied into the report — the
+    # A leaked credential is described, never copied into the report â€” the
     # same restraint every other kind's playbook carries.
     check("facebook prompt: says to describe not reproduce a secret",
           "never reproduce it" in p and "do not write\n     the value" in p)
@@ -895,7 +895,7 @@ def test_prompt_instagram(tmp: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wiring — the command must be reachable from every surface
+# Wiring â€” the command must be reachable from every surface
 # ---------------------------------------------------------------------------
 
 def test_wiring() -> None:
@@ -905,7 +905,7 @@ def test_wiring() -> None:
 
     # ...and the dispatch, help and palette tables reference it. Read from the
     # source rather than importing a copy, so a rename cannot drift past this.
-    app_src = (ROOT / "zimzilla" / "ui" / "app.py").read_text()
+    app_src = (ROOT / "kuro" / "ui" / "app.py").read_text()
     check("wiring: dispatch has an osint entry", '"osint": lambda a:' in app_src)
     check("wiring: _cmd_osint is defined", "def _cmd_osint(" in app_src)
     check("wiring: help table lists it", '("/osint [kind] <target>"' in app_src)
@@ -936,7 +936,7 @@ async def test_ui(wd: Path) -> None:
     flight rather than raced against an instant completion.
     """
     cfg = _cfg(wd, boot_rain=False)
-    # Point state_dir at the temp dir — the default is ~/.zimzilla, and this
+    # Point state_dir at the temp dir â€” the default is ~/.kuro, and this
     # test must not scatter case directories into the operator's home.
     #
     # A state_dir of its own, not the one test_case_dir uses: the case-dir
@@ -946,7 +946,7 @@ async def test_ui(wd: Path) -> None:
     # assertion here depend on how fast the suite runs.
     cfg.state_dir = wd / "ui-state"
 
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
         await pilot.pause()
@@ -975,7 +975,7 @@ async def test_ui(wd: Path) -> None:
         app._handle_command("/osint email not-an-address")
         await pilot.pause()
         check("ui: a bad email is refused", app.busy is False)
-        # No case dir for the *refused* target — checked by its own glob, not
+        # No case dir for the *refused* target â€” checked by its own glob, not
         # by the parent existing, which an earlier test in this file shares.
         check("ui: a refused run creates no case dir",
               not list((cfg.state_dir / "osint").glob("email-not-an-address-*")))
@@ -1001,7 +1001,7 @@ async def test_ui(wd: Path) -> None:
             await pilot.pause()
         check("ui: the turn completes and the harness idles", app.busy is False)
 
-        # The stub produced no report, so the case dir must be KEPT — a run
+        # The stub produced no report, so the case dir must be KEPT â€” a run
         # that did not finish writing is never tidied away.
         check("ui: a run with no report keeps its case dir",
               len(made) == 1 and made[0].is_dir(),
@@ -1022,7 +1022,7 @@ async def test_ui(wd: Path) -> None:
             await gate.wait()
             # The case dir is the only one under osint/ for this state_dir.
             case = next((cfg.state_dir / "osint").glob("github-torvalds-*"))
-            (case / "report.md").write_text("# GitHub OSINT — torvalds\n")
+            (case / "report.md").write_text("# GitHub OSINT â€” torvalds\n")
             (case / "clone").mkdir(exist_ok=True)
             yield (None, _Msg([_Blk(type="text", text="done")]))
 
@@ -1073,3 +1073,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

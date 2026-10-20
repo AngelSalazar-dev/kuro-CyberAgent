@@ -1,7 +1,7 @@
-"""`@`-mention completion: selection, ranking, and what accepting one does.
+﻿"""`@`-mention completion: selection, ranking, and what accepting one does.
 
 Offline and app-free. The selection logic lives at module level precisely so it
-can be exercised here — a popup that needs a terminal to say what it would have
+can be exercised here â€” a popup that needs a terminal to say what it would have
 offered is a popup whose ordering never gets tested, and ordering is the whole
 feature.
 
@@ -18,8 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla.theme import get_palette  # noqa: E402
-from zimzilla.ui.complete import (  # noqa: E402
+from kuro.theme import get_palette  # noqa: E402
+from kuro.ui.complete import (  # noqa: E402
     MAX_FILES,
     CompletionPopup,
     _at_token,
@@ -50,10 +50,10 @@ def _tree(root: Path) -> None:
         "alpha.py",
         "app.py",
         "README.md",
-        "zimzilla/config.py",
-        "zimzilla/ui/app.py",
-        "zimzilla/ui/complete.py",
-        "zimzilla/ui/rain.py",
+        "kuro/config.py",
+        "kuro/ui/app.py",
+        "kuro/ui/complete.py",
+        "kuro/ui/rain.py",
         "docs/guide.md",
         "docs/gen_graphics.py",
         ".git/objects/ab/cdef",
@@ -70,7 +70,7 @@ def _tree(root: Path) -> None:
 def test_walk(root: Path) -> None:
     pool = _iter_files(root)
     check("walk: relative paths, directories flagged with a slash",
-          "zimzilla/ui/complete.py" in pool and "zimzilla/" in pool)
+          "kuro/ui/complete.py" in pool and "kuro/" in pool)
     check("walk: skipped directories never appear",
           not any(p.startswith((".git", "node_modules", ".venv")) for p in pool),
           f"{[p for p in pool if p.startswith('.')]}")
@@ -78,16 +78,16 @@ def test_walk(root: Path) -> None:
     bounded = _iter_files(root, limit=3)
     check("walk: limit is honoured", len(bounded) == 3, f"{bounded}")
     check("walk: an empty directory is an empty list, not an error",
-          _iter_files(root / "zimzilla" / "ui" / "rain.py") == [])
+          _iter_files(root / "kuro" / "ui" / "rain.py") == [])
 
 
 # ---- descent --------------------------------------------------------------
 def test_descent(root: Path) -> None:
-    sub = _iter_under(root, "zimzilla/ui")
+    sub = _iter_under(root, "kuro/ui")
     check("descent: paths stay relative to the root, not the subtree",
-          "zimzilla/ui/app.py" in sub, f"{sub[:3]}")
+          "kuro/ui/app.py" in sub, f"{sub[:3]}")
     check("descent: bounded by the same limit",
-          len(_iter_under(root, "zimzilla", limit=2)) == 2)
+          len(_iter_under(root, "kuro", limit=2)) == 2)
     check("descent: a file is not a directory",
           _iter_under(root, "README.md") == [])
     check("descent: the root itself is not a prefix", _iter_under(root, "") == [])
@@ -128,11 +128,11 @@ def test_matching() -> None:
           not _is_subsequence("cmpz", "complete.py"))
     check("subsequence: empty needle matches anything", _is_subsequence("", "x"))
 
-    name_start = _match_rank("zimzilla/ui/complete.py", "comp")
-    name_inside = _match_rank("zimzilla/ui/incomplete.py", "comp")
+    name_start = _match_rank("kuro/ui/complete.py", "comp")
+    name_inside = _match_rank("kuro/ui/incomplete.py", "comp")
     path_only = _match_rank("a/comp/x.py", "comp")
     anywhere = _match_rank("a/xcompy.py", "comp")
-    fuzzy = _match_rank("zimzilla/ui/complete.py", "zc")
+    fuzzy = _match_rank("kuro/ui/complete.py", "zc")
     check("rank: a name starting with the query outranks one containing it",
           name_start < name_inside, f"{name_start} < {name_inside}")
     check("rank: a name match outranks a directory-only match",
@@ -142,12 +142,12 @@ def test_matching() -> None:
     check("rank: a subsequence still matches, last", fuzzy is not None and fuzzy[0] == 4,
           f"{fuzzy}")
     check("rank: a query that is not there at all does not match",
-          _match_rank("zimzilla/ui/complete.py", "qqqq") is None,
-          f"{_match_rank('zimzilla/ui/complete.py', 'qqqq')}")
+          _match_rank("kuro/ui/complete.py", "qqqq") is None,
+          f"{_match_rank('kuro/ui/complete.py', 'qqqq')}")
     check("rank: ties go to the shallower path",
-          _match_rank("app.py", "app") < _match_rank("zimzilla/ui/app.py", "app"))
+          _match_rank("app.py", "app") < _match_rank("kuro/ui/app.py", "app"))
     check("rank: a directory is matched on its name, not its slash",
-          _match_rank("zimzilla/ui/", "ui")[0] == 0, f"{_match_rank('zimzilla/ui/', 'ui')}")
+          _match_rank("kuro/ui/", "ui")[0] == 0, f"{_match_rank('kuro/ui/', 'ui')}")
 
 
 def test_at_token() -> None:
@@ -169,13 +169,13 @@ def test_candidates(root: Path) -> None:
     pool = _iter_files(root)
     cands, subject = file_candidates(pool, root, "app")
     check("candidates: a plain query scores the whole flat pool",
-          subject == "app" and any(v == "zimzilla/ui/app.py" for v, _ in cands))
+          subject == "app" and any(v == "kuro/ui/app.py" for v, _ in cands))
 
-    cands, subject = file_candidates(pool, root, "zimzilla/ui/comp")
+    cands, subject = file_candidates(pool, root, "kuro/ui/comp")
     check("candidates: a real directory descends and scores only the rest",
           subject == "comp"
           and [v for v, _ in CompletionPopup._rank(cands, subject)]
-          == ["zimzilla/ui/complete.py"],
+          == ["kuro/ui/complete.py"],
           f"{subject} {[v for v, _ in cands]}")
     check("candidates: the subject is relative to the typed directory",
           all("/" not in s for _, s in cands))
@@ -188,35 +188,35 @@ def test_candidates(root: Path) -> None:
           subject == "ui/comp" and any(v.endswith("ui/complete.py") for v, _ in cands),
           f"{subject}")
 
-    cands, subject = file_candidates(pool, root, "zimzilla/")
+    cands, subject = file_candidates(pool, root, "kuro/")
     check("candidates: a trailing slash lists the directory",
-          subject == "" and "zimzilla/config.py" in [v for v, _ in cands]
-          and "zimzilla/ui/" in [v for v, _ in cands])
+          subject == "" and "kuro/config.py" in [v for v, _ in cands]
+          and "kuro/ui/" in [v for v, _ in cands])
 
 
 def test_rank() -> None:
-    pool = ["docs/", "docs/gen_graphics.py", "zimzilla/", "zimzilla/ui/complete.py"]
+    pool = ["docs/", "docs/gen_graphics.py", "kuro/", "kuro/ui/complete.py"]
     cands = [(v, v) for v in pool]
     check("rank: a bare @ keeps the tree's own order",
           [v for v, _ in CompletionPopup._rank(cands, "")] == pool)
     ranked = CompletionPopup._rank([(v, v) for v in pool], "comp")
     check("rank: only matches survive",
-          [v for v, _ in ranked] == ["zimzilla/ui/complete.py"], f"{ranked}")
+          [v for v, _ in ranked] == ["kuro/ui/complete.py"], f"{ranked}")
     ranked = CompletionPopup._rank([(v, v) for v in pool], "docs")
     check("rank: the directory is offered as well as its children",
           ranked[0][0] == "docs/", f"{ranked}")
     check("rank: the row carries the parent directory for display",
           ranked[0] == ("docs/", "") and
-          CompletionPopup._rank([("zimzilla/ui/complete.py",
-                                 "zimzilla/ui/complete.py")], "complete")[0]
-          == ("zimzilla/ui/complete.py", "zimzilla/ui/"))
+          CompletionPopup._rank([("kuro/ui/complete.py",
+                                 "kuro/ui/complete.py")], "complete")[0]
+          == ("kuro/ui/complete.py", "kuro/ui/"))
 
 
 def test_split() -> None:
-    check("split: nested file", _split("zimzilla/ui/complete.py")
-          == ("complete.py", "zimzilla/ui/"))
+    check("split: nested file", _split("kuro/ui/complete.py")
+          == ("complete.py", "kuro/ui/"))
     check("split: directory keeps its slash",
-          _split("zimzilla/ui/") == ("ui/", "zimzilla/"))
+          _split("kuro/ui/") == ("ui/", "kuro/"))
     check("split: top-level directory has no parent", _split("docs/") == ("docs/", ""))
     check("split: top-level file has no parent",
           _split(".gitignore") == (".gitignore", ""))
@@ -224,7 +224,7 @@ def test_split() -> None:
 
 # ---- accepting ------------------------------------------------------------
 def _popup(items: list[tuple[str, str]], kind: str = "file") -> CompletionPopup:
-    """A popup holding *items*, with no app — `accept` only reads its own state."""
+    """A popup holding *items*, with no app â€” `accept` only reads its own state."""
     pop = CompletionPopup(get_palette("green"))
     pop.items = items
     pop.kind = kind
@@ -233,18 +233,18 @@ def _popup(items: list[tuple[str, str]], kind: str = "file") -> CompletionPopup:
 
 
 def test_accept() -> None:
-    pop = _popup([("zimzilla/ui/app.py", "")])
+    pop = _popup([("kuro/ui/app.py", "")])
     check("accept: a file replaces the mention and ends it",
-          pop.accept("@app") == "@zimzilla/ui/app.py ",
+          pop.accept("@app") == "@kuro/ui/app.py ",
           repr(pop.accept("@app")))
 
-    pop = _popup([("zimzilla/ui/", "")])
+    pop = _popup([("kuro/ui/", "")])
     check("accept: a directory is left open, so the picker can descend",
-          pop.accept("@ui") == "@zimzilla/ui/", repr(pop.accept("@ui")))
+          pop.accept("@ui") == "@kuro/ui/", repr(pop.accept("@ui")))
 
-    pop = _popup([("zimzilla/ui/app.py", "")])
+    pop = _popup([("kuro/ui/app.py", "")])
     check("accept: the rest of the line survives, with no doubled space",
-          pop.accept("read @app and fix it", 9) == "read @zimzilla/ui/app.py and fix it",
+          pop.accept("read @app and fix it", 9) == "read @kuro/ui/app.py and fix it",
           repr(pop.accept("read @app and fix it", 9)))
 
     pop = _popup([("alpha.py", "")])
@@ -282,3 +282,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

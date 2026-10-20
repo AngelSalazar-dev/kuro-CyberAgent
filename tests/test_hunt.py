@@ -1,16 +1,16 @@
-"""`/bug-hunt` regression suite: findings parsing, the wave loop, stop, reports.
+﻿"""`/bug-hunt` regression suite: findings parsing, the wave loop, stop, reports.
 
 Run:  python tests/test_hunt.py   (from an activated venv)
 
 Everything here is offline. The campaign's model calls go through a stubbed
-``agent_factory`` — the same seam team.py exposes and tests/test_phase4.py
-uses — so the loop, the planner feedback edge and the stop signal are all
+``agent_factory`` â€” the same seam team.py exposes and tests/test_phase4.py
+uses â€” so the loop, the planner feedback edge and the stop signal are all
 exercised without a terminal or a network.
 
 Two invariants this file is built around:
 
 * **The stop is set from inside ``on_event``.** ``run_hunt`` awaits every event
-  it emits, so setting the flag there is deterministic — the loop's
+  it emits, so setting the flag there is deterministic â€” the loop's
   ``while not stop.is_set()`` sees it before it can start another wave. A
   separate watcher task would make "how many waves ran" a scheduling race.
 * **Agents never touch the network.** The one tool call a stub agent makes is
@@ -32,23 +32,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# A throwaway ZIMZILLA_HOME for the whole suite. The package resolves it at
+# A throwaway KURO_HOME for the whole suite. The package resolves it at
 # import time, so it must be set before the imports below. Several checks build
-# a Config without overriding ``state_dir``, and the default is ~/.zimzilla —
+# a Config without overriding ``state_dir``, and the default is ~/.kuro â€”
 # without this they wrote real campaign directories into the operator's live
 # install, which the app then showed as genuine hunts.
 _TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
-os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+os.environ["KURO_HOME"] = str(_TEST_HOME)
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
-from zimzilla import hunt as hunt_mod  # noqa: E402
-from zimzilla import team as team_mod  # noqa: E402
-from zimzilla import tools as tools_mod  # noqa: E402
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
-from zimzilla.theme import get_palette  # noqa: E402
-from zimzilla.ui.app import ReconOverlay, ZimZillaApp  # noqa: E402
-from zimzilla.ui.widgets import ChatPane, ZimPane  # noqa: E402
+from kuro import hunt as hunt_mod  # noqa: E402
+from kuro import team as team_mod  # noqa: E402
+from kuro import tools as tools_mod  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import Config  # noqa: E402
+from kuro.theme import get_palette  # noqa: E402
+from kuro.ui.app import ReconOverlay, KuroApp  # noqa: E402
+from kuro.ui.widgets import ChatPane, ZimPane  # noqa: E402
 from rich.text import Text  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
@@ -70,14 +70,14 @@ def _dispatch_names_from_source() -> set[str]:
     Parsed from the source because the dict is a local inside
     ``_handle_command`` and cannot be imported. ``ast`` rather than a regex, so
     a key written as a variable or a dict spread is a parse error here rather
-    than a silently-missing name — and the caller asserts the parse found
+    than a silently-missing name â€” and the caller asserts the parse found
     something, so a refactor that renames the dict fails loudly instead of
     quietly emptying this set.
     """
     import ast
 
     src = (Path(__file__).resolve().parent.parent
-           / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
+           / "kuro" / "ui" / "app.py").read_text(encoding="utf-8")
     for node in ast.walk(ast.parse(src)):
         if not isinstance(node, ast.Assign):
             continue
@@ -95,7 +95,7 @@ def _state(wd: Path, name: str) -> Path:
     """A private ``state_dir`` for one test, under the shared workdir.
 
     Every test used to share ``wd/"state"``, which was harmless while a campaign
-    was purely in-memory — but the store is persistent by design now: a repeat
+    was purely in-memory â€” but the store is persistent by design now: a repeat
     ``/bug-hunt`` on a scope reuses the recon and findings already on disk. With
     one shared store, the second test to hunt ``x.test`` inherited the first's
     recon and skipped its own, so tests were measuring each other.
@@ -111,7 +111,7 @@ class _Blk:
         self.__dict__.update(k)
 
     def model_dump(self, exclude_none: bool = False) -> dict:
-        """Match the real SDK block's interface — see tests/test_phase4.py."""
+        """Match the real SDK block's interface â€” see tests/test_phase4.py."""
         return {k: v for k, v in self.__dict__.items()
                 if not (exclude_none and v is None)}
 
@@ -212,7 +212,7 @@ def test_campaign_kind(wd: Path) -> None:
     """The doctrine seam: `/ad` is data, not a fork of the engine.
 
     Two things have to hold or the seam is a lie. First, ``HUNT_KIND`` must be
-    *exactly* today's constants — a default that differs in any byte is a
+    *exactly* today's constants â€” a default that differs in any byte is a
     behaviour change smuggled in under a refactor, and the 552 tests around this
     one would be measuring a different program. Second, a kind's own fields must
     actually reach the places the engine uses them: the directory, the plan's
@@ -279,7 +279,7 @@ def test_campaign_kind(wd: Path) -> None:
 
     # The hook combinator is what lets an interlock ride alongside the write
     # lock. With nothing to chain it must vanish entirely, not become a no-op
-    # wrapper — that is what makes `interlock=None` provably free.
+    # wrapper â€” that is what makes `interlock=None` provably free.
     check("kind: chaining nothing yields nothing",
           hunt_mod._chain_hooks(None, None) is None)
     check("kind: chaining one hook yields that hook",
@@ -330,7 +330,7 @@ def test_reports(wd: Path) -> None:
           and "## Remediation" in body)
     check("report: the evidence is preserved", "' OR 1=1--" in body)
 
-    # A low finding earns a file too — it used to be dropped, which meant the
+    # A low finding earns a file too â€” it used to be dropped, which meant the
     # evidence died with the process and the evidence report could not cite it.
     low = hunt_mod.Finding(wave=2, agent="x", title="nitpick", severity="low")
     low_path = hunt_mod._save(run, low)
@@ -339,7 +339,7 @@ def test_reports(wd: Path) -> None:
           Path(low_path).name == "low-nitpick.md", Path(low_path).name)
 
     # Round-trip: a campaign can be reloaded from disk. Both files are read
-    # back — the low finding was written above and is recovered too, which is
+    # back â€” the low finding was written above and is recovered too, which is
     # the point of saving every severity.
     loaded = hunt_mod.load_run(run.directory)
     check("reload: a campaign reads back off disk", loaded is not None)
@@ -382,9 +382,9 @@ def test_reports(wd: Path) -> None:
     check("summary: the archive carries the run's shape",
           "findings: 1" in dest.read_text())
     # The frontmatter's wave count and the evidence report's `**Waves:**` line
-    # are the same number, from the same helper. They used to disagree — the
+    # are the same number, from the same helper. They used to disagree â€” the
     # frontmatter took the highest wave *number*, the body counted `## `
-    # sections — so one file carried two answers.
+    # sections â€” so one file carried two answers.
     summary_waves = re.search(r"^waves: (\d+)$", dest.read_text(),
                               flags=re.M).group(1)
     body_waves = re.search(r"\*\*Waves:\*\* (\d+)",
@@ -418,7 +418,7 @@ def test_wave_layout(wd: Path) -> None:
     to exercise them: ``wave-10`` must sort after ``wave-9`` (a lexicographic
     sort puts it between 1 and 2), a fresh campaign must number from 1 and not 0,
     and ``is_scope_shaped`` must recognise *both* the current layout and the flat
-    one — the old ``_SCOPE_MARKER = "plans"`` would have called every
+    one â€” the old ``_SCOPE_MARKER = "plans"`` would have called every
     reorganised campaign legacy and migrated it a second time.
     """
     cfg = _cfg(wd)
@@ -461,7 +461,7 @@ def test_wave_layout(wd: Path) -> None:
           [n for n, _ in hunt_mod.wave_dirs(d)] == [1, 2, 3, 10],
           str([n for n, _ in hunt_mod.wave_dirs(d)]))
 
-    # The flat layout is scope-shaped too — it is what every campaign written
+    # The flat layout is scope-shaped too â€” it is what every campaign written
     # before the wave directories has, and what migrate_hunts itself creates.
     flat = d / "flat.test"
     (flat / "plans").mkdir(parents=True)
@@ -508,7 +508,7 @@ def test_readers_span_both_layouts(wd: Path) -> None:
     check("readers: plans come from both layouts",
           plans == ["plan.md", "wave-3-20261010-000000.md"], str(plans))
 
-    # And the tool reads the same set — it duplicates the globbing rather than
+    # And the tool reads the same set â€” it duplicates the globbing rather than
     # importing it, so the two can silently drift apart.
     tool_names = [p.name for p in tools_mod._finding_files(d)]
     check("readers: the tool's copy agrees with hunt's",
@@ -544,13 +544,13 @@ def test_reorganise_waves(wd: Path) -> None:
     finding("low-d.md", 2)
     (d / "plans" / "wave-1-20261010-010101.md").write_text(
         "---\nwave: 1\nagents: 10\nfell_back: false\n"
-        "timestamp: 2026-10-10T01:01:01Z\n---\n\n# Wave 1 — 10 agents\n\nauth\n")
+        "timestamp: 2026-10-10T01:01:01Z\n---\n\n# Wave 1 â€” 10 agents\n\nauth\n")
     (d / "plans" / "wave-2-20261010-020202.md").write_text(
         "---\nwave: 2\nagents: 10\nfell_back: true\n"
-        "timestamp: 2026-10-10T02:02:02Z\n---\n\n# Wave 2 — 10 agents\n\nmore auth\n")
+        "timestamp: 2026-10-10T02:02:02Z\n---\n\n# Wave 2 â€” 10 agents\n\nmore auth\n")
 
     # A finding whose frontmatter names no wave: it must be left exactly where it
-    # is. A wrong wave is worse than a flat one — the flat one is obvious.
+    # is. A wrong wave is worse than a flat one â€” the flat one is obvious.
     (d / "findings" / "nowave.md").write_text("---\ntarget: flat.test\n---\n\n# ?\n")
 
     moved = hunt_mod.reorganise_waves(cfg)
@@ -570,7 +570,7 @@ def test_reorganise_waves(wd: Path) -> None:
           and (d / "wave-2" / "plan.md").is_file())
     check("reorganise: the emptied plans directory is removed",
           not (d / "plans").exists())
-    # `findings/` survives holding the one file that could not be filed — a
+    # `findings/` survives holding the one file that could not be filed â€” a
     # directory is only removed once it is empty, so the operator can see what
     # was left behind rather than having it deleted on a guess.
     check("reorganise: the undated finding is left where it is",
@@ -607,7 +607,7 @@ def test_reorganise_waves(wd: Path) -> None:
     check("reorganise: and disturbs nothing",
           sorted(str(p) for p in d.rglob("*")) == before)
 
-    # A campaign already in the wave layout is left alone — no wave-0/plans
+    # A campaign already in the wave layout is left alone â€” no wave-0/plans
     # resurrection, which is what the old marker check would have caused.
     settled = root / "settled.test"
     hunt_mod.wave_findings_dir(settled, 1).joinpath("critical-x.md").write_text(
@@ -641,7 +641,7 @@ def test_evidence_report(wd: Path) -> None:
 
     The two things this must get right are the ones a paraphrase would ruin:
     the evidence has to be reproduced *unaltered*, and remediation has to be
-    absent — it is the fix, not the finding, and `/summary-hunt` is where it
+    absent â€” it is the fix, not the finding, and `/summary-hunt` is where it
     lives. So the assertions below quote the exact recorded strings and check
     the remediation text is nowhere in the document.
     """
@@ -675,7 +675,7 @@ def test_evidence_report(wd: Path) -> None:
 
     body = hunt_mod.build_evidence_report(run)
 
-    check("evidence report: it names the target", "# Bug hunt — report.test" in body)
+    check("evidence report: it names the target", "# Bug hunt â€” report.test" in body)
     check("evidence report: it states the wave count", "**Waves:** 3" in body,
           body[:300])
     check("evidence report: it tallies the severities",
@@ -693,9 +693,9 @@ def test_evidence_report(wd: Path) -> None:
     check("evidence report: a fallback wave is marked as one",
           "(fixed vector fallback)" in body)
     check("evidence report: findings are headed by severity and title",
-          "### CRITICAL — SQLi in ?q" in body
-          and "### HIGH — IDOR /api/users" in body
-          and "### MEDIUM — mariadb exposed" in body)
+          "### CRITICAL â€” SQLi in ?q" in body
+          and "### HIGH â€” IDOR /api/users" in body
+          and "### MEDIUM â€” mariadb exposed" in body)
     check("evidence report: a finding names its asset",
           "- **Asset:** report.test/search" in body)
     check("evidence report: a finding names who found it",
@@ -732,7 +732,7 @@ def test_evidence_report(wd: Path) -> None:
           hunt_mod.write_evidence_report(cfg, bare) is None)
 
     # A finding whose wave has no plan still gets its section, built from the
-    # findings alone — a campaign reorganised from the flat layout may have lost
+    # findings alone â€” a campaign reorganised from the flat layout may have lost
     # its plans, and dropping the findings for want of a plan would be worse.
     orphan = hunt_mod.HuntRun(target="orphan.test",
                               directory=hunt_mod.case_dir(cfg, "orphan.test"))
@@ -750,8 +750,8 @@ def test_evidence_report(wd: Path) -> None:
 def test_rerun_wave_is_one_wave(wd: Path) -> None:
     """A deliberately re-run wave is still *one* wave.
 
-    Every plan is kept — that is the operator's record of what each run aimed
-    at — but counting plans made a report claim "16 waves" over an 11-wave
+    Every plan is kept â€” that is the operator's record of what each run aimed
+    at â€” but counting plans made a report claim "16 waves" over an 11-wave
     campaign, and repeated "wave 1" three times in the digest. Found against the
     real ``lerevecraze.com`` campaign, whose wave 1 was run three times.
     """
@@ -763,7 +763,7 @@ def test_rerun_wave_is_one_wave(wd: Path) -> None:
     # down: ``plan.md`` first, then ``plan-2.md``, then ``plan-3.md``. No sleep
     # between them, deliberately: three runs inside one second share a
     # frontmatter timestamp, so the file order is the only thing that can break
-    # the tie — and filename order alone gets it backwards, since ``plan-2.md``
+    # the tie â€” and filename order alone gets it backwards, since ``plan-2.md``
     # sorts before ``plan.md``. This is the case that made the real campaign
     # report the *first* run of wave 1 as its history.
     run = hunt_mod.HuntRun(target="rerun.test", directory=d)
@@ -806,7 +806,7 @@ async def test_one_wave_is_the_default(wd: Path) -> None:
 
     The complaint this exists for: after wave 1 found a critical, the loop
     planned wave 2 anyway. One wave per invocation makes the operator's next
-    decision theirs — and ``--wave N`` runs N without the ones before it.
+    decision theirs â€” and ``--wave N`` runs N without the ones before it.
     """
     roster = ('{"summary": "s", "workers": ['
               '{"name": "w1", "brief": "first", "owns": ["a"]}]}')
@@ -817,7 +817,7 @@ async def test_one_wave_is_the_default(wd: Path) -> None:
         # A distinct title per hunt on purpose: the tracker deduplicates on
         # title+asset and the run is seeded with what is already on disk, so a
         # repeated marker would be dropped as a duplicate and the wave would
-        # legitimately write nothing — measuring the dedup, not the numbering.
+        # legitimately write nothing â€” measuring the dedup, not the numbering.
         return _hunt_factory({
             "rosters": [roster], "planner_calls": 0, "prompts": [],
             "recon_final": "recon: one host",
@@ -867,7 +867,7 @@ async def test_one_wave_is_the_default(wd: Path) -> None:
     # ---- --wave 9 with only three waves behind it: refused, not run.
     #
     # A wave is planned against the one before it, so wave 9 here is not wave 9
-    # — it is wave 4 wearing a misleading name, with a planner briefed to follow
+    # â€” it is wave 4 wearing a misleading name, with a planner briefed to follow
     # up on findings that do not exist. The refusal must happen *before* recon
     # and before a single brief, and must name the wave that would actually work.
     events_ref: list[dict] = []
@@ -892,7 +892,7 @@ async def test_one_wave_is_the_default(wd: Path) -> None:
           not [e for e in events_ref if e["type"] == "hunt_wave_start"])
 
     # On a scope that has never run a wave the advice is the plain command, not
-    # "run wave 1 first" — there is no earlier wave to point at.
+    # "run wave 1 first" â€” there is no earlier wave to point at.
     virgin = _state(wd, "test_one_wave_is_the_default_fresh") / "hunts"
     cfg2 = _cfg(wd, mode="zim")
     cfg2.state_dir = virgin.parent
@@ -908,7 +908,7 @@ async def test_one_wave_is_the_default(wd: Path) -> None:
           refused_v[0]["message"] if refused_v else "(no refusal)")
 
     # The carried findings are labelled as an earlier wave's, not this
-    # campaign's — the campaign is the scope's whole history now.
+    # campaign's â€” the campaign is the scope's whole history now.
     script = {"rosters": [roster], "planner_calls": 0, "prompts": [],
               "recon_final": "r", "final": _finding_json("bug-d")}
     events4: list[dict] = []
@@ -950,7 +950,7 @@ def _hunt_factory(script):
     ``script["hold"]`` is an ``asyncio.Event`` that parks every *worker* before
     its first turn. It exists because a campaign is one wave now, so a stub that
     runs to completion finishes the whole hunt inside the ``pause()`` a test
-    takes to look at the screen — leaving no wave view up to inspect. Recon is
+    takes to look at the screen â€” leaving no wave view up to inspect. Recon is
     deliberately not held: it runs before any wave, so parking it would mean the
     wave never starts.
     """
@@ -960,7 +960,7 @@ def _hunt_factory(script):
         # can_report is forwarded, not dropped: run_hunt arms it on every hunt
         # agent so report_finding is advertised, and a stub that silently lost
         # it would make a live-reporting agent look like one that never calls
-        # the tool — hiding the very path these tests exist to cover.
+        # the tool â€” hiding the very path these tests exist to cover.
         agent = Agent(cfg, permission_handler=kw.get("permission_handler"),
                       tool_hook=kw.get("tool_hook"),
                       can_report=kw.get("can_report", False))
@@ -994,8 +994,8 @@ def _hunt_factory(script):
 
             if state["n"] == 1:
                 # First worker turn: one tool call, so the tool-call path is
-                # exercised. Defaults to an ungated local listing — a bash stub
-                # here would really run — and a test that needs a longer or
+                # exercised. Defaults to an ungated local listing â€” a bash stub
+                # here would really run â€” and a test that needs a longer or
                 # differently-shaped command overrides it through
                 # ``script["first_tool"]``.
                 script.setdefault("worker_prompts", []).append(prompt)
@@ -1046,7 +1046,7 @@ def _next_final(script):
 
     ``script["final"]`` is a single string for the common case. It may also be a
     list, consumed one entry per worker, so a test with several workers can give
-    each a *distinct* finding — which the tracker, now that it deduplicates,
+    each a *distinct* finding â€” which the tracker, now that it deduplicates,
     needs in order to see more than one. The last entry is reused once the list
     runs out.
     """
@@ -1183,7 +1183,7 @@ async def test_campaign_notes(wd: Path) -> None:
     """Recon and each wave's plan land on disk, so a campaign accumulates notes.
 
     Recon used to exist only on the run object and each plan only as a UI event,
-    so stopping a campaign lost both — the operator's "save the findings" had
+    so stopping a campaign lost both â€” the operator's "save the findings" had
     nothing to resolve against, and `/summary-hunt` after a restart said "recon
     produced nothing" about a recon that was the most informative part of the run.
     """
@@ -1278,7 +1278,7 @@ async def test_campaign_notes(wd: Path) -> None:
           recovered is not None and recovered.wave == 1,
           str(recovered.wave if recovered else None))
 
-    # A campaign with recon but no findings is still summarisable — that is the
+    # A campaign with recon but no findings is still summarisable â€” that is the
     # exact case the operator hit: stopped mid-campaign, nothing confirmed, but
     # recon full of information.
     empty = run.directory.parent / "recon-only.test"
@@ -1302,7 +1302,7 @@ async def test_repeat_hunt_reuses_recon(wd: Path) -> None:
     Remapping a target that has not moved costs minutes of wall-clock and a
     wave's worth of tokens before the first brief is written. The campaign
     directory is the scope's and is reused, so a repeat run finds the earlier
-    notes sitting there — and must skip the recon phase, carry the earlier
+    notes sitting there â€” and must skip the recon phase, carry the earlier
     findings into the tracker, and tell the planner its map is second-hand.
     """
     roster = ('{"summary": "s", "workers": ['
@@ -1331,7 +1331,7 @@ async def test_repeat_hunt_reuses_recon(wd: Path) -> None:
     second_script = {
         "rosters": [roster], "planner_calls": 0, "prompts": [],
         # A distinct recon text, so if recon *did* run this is what the run
-        # would carry — the assertion below can then tell reuse from a remap.
+        # would carry â€” the assertion below can then tell reuse from a remap.
         "recon_final": "REMAP HAPPENED",
         "final": _finding_json("xss in search", asset="dev.x.test"),
     }
@@ -1348,7 +1348,7 @@ async def test_repeat_hunt_reuses_recon(wd: Path) -> None:
           str(kinds[:4]))
     # The planner is a zim-mode agent too, so the count is of *non-planner*
     # agents: without recon that is the one worker and nothing else.
-    check("repeat: no recon agent was built — one worker, no mapper",
+    check("repeat: no recon agent was built â€” one worker, no mapper",
           sum(1 for a in second.built if a.cfg.mode != "plan") == 1,
           str([a.cfg.mode for a in second.built]))
     check("repeat: the inherited recon is the earlier one, not a remap",
@@ -1416,7 +1416,7 @@ async def test_repeat_hunt_reuses_recon(wd: Path) -> None:
           str([a.cfg.mode for a in third.built]))
     check("repeat: --fresh takes the new recon",
           "REMAP HAPPENED" in run3.recon, run3.recon[:60])
-    # --fresh draws its own map — that is what fresh means — but the bugs
+    # --fresh draws its own map â€” that is what fresh means â€” but the bugs
     # earlier campaigns confirmed are still open, so the tracker is seeded with
     # them and they stay marked carried: this campaign found "y", not those.
     check("repeat: --fresh reuses no map",
@@ -1436,8 +1436,8 @@ def test_find_recon_reads_the_newest(wd: Path) -> None:
     """``find_recon`` picks the newest notes, and ignores an empty one.
 
     Newest by filename, not mtime: ``recon-<stamp>.md`` sorts by the timestamp
-    it carries. An empty recon is not something to plan against — re-running is
-    the honest answer — so it must not be picked up as if it were a map.
+    it carries. An empty recon is not something to plan against â€” re-running is
+    the honest answer â€” so it must not be picked up as if it were a map.
     """
     d = wd / "recon-probe"
     d.mkdir(parents=True, exist_ok=True)
@@ -1482,7 +1482,7 @@ async def test_plan_records_a_fallback(wd: Path) -> None:
 
     The fixed matrix runs in its place, and the raw reply is the only way to
     tell a malformed object from an empty turn from a prompt that needs
-    rewriting — so it has to outlive the event that announced it.
+    rewriting â€” so it has to outlive the event that announced it.
     """
     script = {
         "rosters": ["I'll send ten agents to look at the login page."],
@@ -1532,7 +1532,7 @@ def test_migrate_hunts(wd: Path) -> None:
 
     The old layout made a new ``<slug>-<stamp>`` sibling for every `/bug-hunt`,
     so one engagement scattered across a dozen directories. The scope comes from
-    the findings' own ``target`` where there is one — the directory *name* is
+    the findings' own ``target`` where there is one â€” the directory *name* is
     what was wrong, since a prose target became a name.
     """
     cfg = _cfg(wd, mode="zim")
@@ -1552,7 +1552,7 @@ def test_migrate_hunts(wd: Path) -> None:
     _legacy_campaign(root, "bdgroup.com-the-recons-are-in-here-20261008-162136",
                      target="bdgroup.com the recons are in here", finding="c.md")
 
-    # A campaign with no findings at all — nothing to derive a scope from.
+    # A campaign with no findings at all â€” nothing to derive a scope from.
     _legacy_campaign(root, "empty.test-20261009-000814", finding="")
 
     # Already scope-shaped: has plans/, so it is left strictly alone.
@@ -1578,7 +1578,7 @@ def test_migrate_hunts(wd: Path) -> None:
           (root / "lerevecraze.com" / "plans").is_dir())
 
     # Prose: the finding recorded prose, so the scope falls back to the name
-    # with its stamp stripped — not to the whole sentence.
+    # with its stamp stripped â€” not to the whole sentence.
     check("migrate: a prose-named campaign sheds its stamp",
           dests.get("bdgroup.com-the-recons-are-in-here-20261008-162136")
           == "bdgroup.com-the-recons-are-in-here", str(dests))
@@ -1620,8 +1620,8 @@ def test_migrate_hunts(wd: Path) -> None:
 async def test_hunt_replans_from_findings(wd: Path) -> None:
     """Wave 2's planner must be handed wave 1's findings.
 
-    Two waves through one call, which the UI never does — it runs one wave per
-    invocation — but this is the seam that proves the replanning edge still
+    Two waves through one call, which the UI never does â€” it runs one wave per
+    invocation â€” but this is the seam that proves the replanning edge still
     works, and it is why ``max_waves`` is a parameter rather than a bare break.
     """
     roster = ('{"summary": "s", "workers": ['
@@ -1829,7 +1829,7 @@ async def test_planner_fallback_shows_raw(wd: Path) -> None:
 
 async def test_hunt_result_event_carries_args(wd: Path) -> None:
     """The result event must carry the command and meta, or the transcript
-    cannot render a full panel — it can only print a truncated label."""
+    cannot render a full panel â€” it can only print a truncated label."""
     roster = ('{"summary": "s", "workers": ['
               '{"name": "a", "brief": "test a", "owns": ["a"]}]}')
     script = {
@@ -2047,7 +2047,7 @@ def test_pane() -> None:
 
 async def test_recon_overlay(wd: Path) -> None:
     """The window opens on recon, narrates live, and closes on its own."""
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
 
     from textual.widgets import Input as _Input
 
@@ -2060,7 +2060,7 @@ async def test_recon_overlay(wd: Path) -> None:
         await pilot.pause()
 
         check("overlay: it is the active screen", app.screen is overlay)
-        # "Does not take focus itself" — not "leaves the prompt usable". The
+        # "Does not take focus itself" â€” not "leaves the prompt usable". The
         # prompt is unreachable behind any of these overlays; see
         # test_wave_overlay_can_still_be_escaped for the pinned behaviour.
         check("overlay: it does not take focus itself",
@@ -2095,9 +2095,9 @@ async def test_recon_overlay(wd: Path) -> None:
         await pilot.pause()
         check("overlay: a blocked call still counts", overlay.calls == 3)
         check("overlay: a blocked call is marked",
-              "✗" in str(overlay.query_one("#recon-lines").render()))
+              "âœ—" in str(overlay.query_one("#recon-lines").render()))
 
-        # The operator can still type while it is up — that is the whole reason
+        # The operator can still type while it is up â€” that is the whole reason
         # can_focus is False.
         inp = app.query_one("#input", _Input)
         inp.focus()
@@ -2126,7 +2126,7 @@ async def test_boot_migrates_hunts(wd: Path) -> None:
     """The app folds legacy campaigns at boot, before any command can read them.
 
     Migration at boot rather than on first use is what makes `/findings` and
-    `/summary-hunt` see the merged layout from the first command — otherwise the
+    `/summary-hunt` see the merged layout from the first command â€” otherwise the
     first lookup after an upgrade reads a half-migrated store.
     """
     cfg = _cfg(wd, boot_rain=False)
@@ -2134,17 +2134,17 @@ async def test_boot_migrates_hunts(wd: Path) -> None:
     _legacy_campaign(cfg.state_dir / "hunts", "legacy.test-20261009-010101",
                      target="legacy.test", finding="a.md")
 
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
     async with app.run_test(size=(110, 40)) as pilot:
-        # Dismiss the splash the way the operator does, so `_boot_done` — which
-        # is what runs the migration — actually runs. Popping the screen
+        # Dismiss the splash the way the operator does, so `_boot_done` â€” which
+        # is what runs the migration â€” actually runs. Popping the screen
         # directly would skip it and the test would be checking nothing.
         app._boot_done()
         await pilot.pause()
 
         # Folded into its scope *and* filed into the wave its frontmatter names,
         # in one boot: the fixture's finding is `wave: 0`, so it lands in
-        # wave-0/findings/ — the flat findings/ the merge left behind is gone.
+        # wave-0/findings/ â€” the flat findings/ the merge left behind is gone.
         check("boot: the legacy campaign is folded into its scope",
               (cfg.state_dir / "hunts" / "legacy.test" / "wave-0" / "findings"
                / "a.md").is_file(),
@@ -2156,7 +2156,7 @@ async def test_boot_migrates_hunts(wd: Path) -> None:
         check("boot: the main agent is offered the read tool",
               "hunt_findings" in {t["name"] for t in app.agent.tool_schemas()})
 
-        # The merge is said in the transcript, where the operator sees it —
+        # The merge is said in the transcript, where the operator sees it â€”
         # not in the agent's context, which is for the agent's own work. Read
         # the transcript's blocks, not the pane's render: the pane renders to
         # Blank when it has no scrollable content yet.
@@ -2171,13 +2171,13 @@ async def test_campaign_reaches_the_main_agent(wd: Path) -> None:
 
     A hunt runs on its own Agent instances and the main agent sees none of it,
     so an operator who stopped a wave and said "save the findings" was answered
-    "nothing found" over a directory full of evidence. The fix has two halves —
-    a read tool, and this notice — and this is the one that does not depend on
+    "nothing found" over a directory full of evidence. The fix has two halves â€”
+    a read tool, and this notice â€” and this is the one that does not depend on
     the model choosing to call anything.
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = _state(wd, "test_campaign_reaches_the_main_agent")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()  # the boot splash
@@ -2233,7 +2233,7 @@ async def test_campaign_reaches_the_main_agent(wd: Path) -> None:
         check("notice: a second turn does not repeat it",
               app.agent._drain_notices() == "")
 
-        # A hunt event with no directory must not buffer a dangling note —
+        # A hunt event with no directory must not buffer a dangling note â€”
         # there would be nothing for the agent to act on.
         app._register_hunt({"type": "hunt_end", "wave": 0, "findings": 0})
         await pilot.pause()
@@ -2308,7 +2308,7 @@ def _transcript_text(app) -> str:
     Read from the RainRichLog's own record of the renderables it was handed
     rather than from its rendered strips, which depend on a laid-out width.
 
-    A ``Text`` stringifies to itself, but a ``Panel`` or a ``Syntax`` does not —
+    A ``Text`` stringifies to itself, but a ``Panel`` or a ``Syntax`` does not â€”
     ``str()`` on either is an object repr. Those are rendered through a
     throwaway ``Console`` at a width wide enough that nothing wraps, so the
     assertion is against what the operator would actually read. That matters
@@ -2341,15 +2341,15 @@ async def test_stop_hunt_reaches_the_loop(wd: Path) -> None:
 
     It could not: the app published ``self._hunt_run`` only after ``run_hunt``
     returned, so for the entire campaign the command read ``None`` and quietly
-    refused — "no hunt is running" — while a hunt was very much running. The
+    refused â€” "no hunt is running" â€” while a hunt was very much running. The
     only way out was Ctrl+C. The run is now published before the first wave.
     """
     roster = ('{"summary": "s", "workers": ['
               '{"name": "p", "brief": "b", "owns": ["p"]}]}')
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     # Held open: the point of this test is a campaign that is *still running*
     # when the command is typed, and one wave per invocation means an unheld
-    # stub would be finished before the assertions ran — every one of them
+    # stub would be finished before the assertions ran â€” every one of them
     # asserting on a hunt that had already ended.
     hold = asyncio.Event()
     app._team_agent_factory = _hunt_factory(
@@ -2394,20 +2394,20 @@ async def test_recon_overlay_fast_target(wd: Path) -> None:
     The window is pushed on ``hunt_recon_start`` and popped on
     ``hunt_recon_done``. Against a target that answers instantly both land in
     one tick, so the pop tore the widget tree down before the queued Mount
-    message arrived and ``on_mount`` raised out of a message handler — which
+    message arrived and ``on_mount`` raised out of a message handler â€” which
     Textual treats as an app crash. This drives that exact sequence.
     """
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()  # the boot splash
         await pilot.pause()
 
-        from zimzilla.ui.app import ReconOverlay as _RO
+        from kuro.ui.app import ReconOverlay as _RO
 
         overlay = _RO("x.test", app.palette, app.cfg)
         app.push_screen(overlay)
-        # No pause: this is the fast target — recon is already done.
+        # No pause: this is the fast target â€” recon is already done.
         app._close_recon({"screen": overlay})
         for _ in range(10):
             await pilot.pause()
@@ -2425,16 +2425,16 @@ async def test_overlays_do_not_stack(wd: Path) -> None:
     ``_close_recon`` used to defer its pop a tick when the screen had not
     mounted, and the deferred half re-checked ``self.screen is screen`` before
     popping. By the time it ran, ``hunt_wave_start`` had pushed the wave web on
-    top, so the check failed and recon stayed on the stack — under the web, for
+    top, so the check failed and recon stayed on the stack â€” under the web, for
     the whole campaign, with a fresh web stacked above it every wave. The
     operator saw the first wave's screen and then nothing that repainted.
 
     The order here is the real one: recon's done event, then the wave start.
     """
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
 
-    from zimzilla.ui.app import ReconOverlay as _RO
-    from zimzilla.ui.app import WaveOverlay as _WO
+    from kuro.ui.app import ReconOverlay as _RO
+    from kuro.ui.app import WaveOverlay as _WO
 
     async with app.run_test(size=(140, 40)) as pilot:
         app.pop_screen()  # the boot splash
@@ -2443,7 +2443,7 @@ async def test_overlays_do_not_stack(wd: Path) -> None:
         recon = _RO("x.test", app.palette, app.cfg)
         app.push_screen(recon)
         # Recon finishes in the same tick it went up, and the wave web follows
-        # immediately — the exact sequence that stranded recon.
+        # immediately â€” the exact sequence that stranded recon.
         app._close_recon({"screen": recon})
         web = _WO("x.test", app.palette, wave=1, size=10)
         app.push_screen(web)
@@ -2482,7 +2482,7 @@ async def test_overlays_do_not_stack(wd: Path) -> None:
 def test_hunt_tool_panel_renders_bash() -> None:
     """The bash panel: whole command, whole response, attributed.
 
-    Rendered straight, without an app and without running anything — the point
+    Rendered straight, without an app and without running anything â€” the point
     is what the panel does with a real-shaped command, and a command long
     enough that the old 70-character label would have cut the payload off the
     end, which is where a real probe keeps it.
@@ -2491,7 +2491,7 @@ def test_hunt_tool_panel_renders_bash() -> None:
 
     from rich.console import Console
 
-    from zimzilla.ui import renderers as R
+    from kuro.ui import renderers as R
 
     p = get_palette("zim")
     command = ("for p in /admin /login /api/v1/users /debug /backup; do "
@@ -2510,7 +2510,7 @@ def test_hunt_tool_panel_renders_bash() -> None:
     check("panel: the whole command is rendered", command in text, text[:300])
     check("panel: the tail of the command survives",
           'https://x.test$p"; done' in text)
-    check("panel: nothing is ellipsised", "…" not in text)
+    check("panel: nothing is ellipsised", "â€¦" not in text)
     check("panel: the response is rendered", "401 /api/v1/users" in text)
     check("panel: the exit status is rendered", "EXIT 0" in text)
     check("panel: the agent is named", "paths" in text, text[:200])
@@ -2535,7 +2535,7 @@ async def test_transcript_shows_full_command(wd: Path) -> None:
     """The whole point: the operator sees the real call and the real response.
 
     Before this, a hunt call rendered as one line truncated at 70 characters and
-    the tool's response was dropped on the floor entirely — ``hunt_agent_result``
+    the tool's response was dropped on the floor entirely â€” ``hunt_agent_result``
     had no consumer at all. This drives a real campaign through the app and
     reads back the renderables it handed the transcript.
 
@@ -2559,7 +2559,7 @@ async def test_transcript_shows_full_command(wd: Path) -> None:
     }
     factory = _hunt_factory(script)
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     app._team_agent_factory = factory
 
     async with app.run_test(size=(140, 40)) as pilot:
@@ -2567,14 +2567,14 @@ async def test_transcript_shows_full_command(wd: Path) -> None:
         await pilot.pause()
 
         # Stop the campaign from inside the event stream, exactly the way the
-        # operator does — `/stop-hunt` sets the run's stop flag and the loop
+        # operator does â€” `/stop-hunt` sets the run's stop flag and the loop
         # notices it at the next wave boundary. Driving it from the test loop
         # instead would race: the stub agent completes a whole wave per
         # scheduler slice, so dozens can pass between two `pilot.pause()`es and
         # the command lands after the campaign has already ended on its own.
         #
         # The stop is issued at the start of the *second* turn, which is after
-        # the tool call and its result have been through the transcript — that
+        # the tool call and its result have been through the transcript â€” that
         # ordering is the whole point of this test.
         real_factory = app._team_agent_factory
 
@@ -2623,18 +2623,18 @@ async def test_transcript_shows_full_command(wd: Path) -> None:
 
 
 async def test_loop_rail_shows_hack_during_hunt(wd: Path) -> None:
-    """The rail must read HACK — not IDLE — for the length of a campaign.
+    """The rail must read HACK â€” not IDLE â€” for the length of a campaign.
 
     A hunt is not a turn, so nothing in the turn runner sets a stage for it:
     the rail sat on IDLE from recon to the closing report, which reads as an
     idle harness while ten agents are attacking the target.
 
     The samples are taken from inside ``on_event``. ``run_hunt`` awaits every
-    event it emits, so a reading taken there is deterministic — driving it from
+    event it emits, so a reading taken there is deterministic â€” driving it from
     the test loop instead would race, because the stub agent finishes a whole
     wave per scheduler slice and the campaign can end between two pauses.
     """
-    from zimzilla.ui.rails import LoopRail
+    from kuro.ui.rails import LoopRail
 
     roster = ('{"summary": "s", "workers": ['
               '{"name": "paths", "brief": "test paths", "owns": ["paths"]}]}')
@@ -2647,7 +2647,7 @@ async def test_loop_rail_shows_hack_during_hunt(wd: Path) -> None:
     }
     factory = _hunt_factory(script)
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     app._team_agent_factory = factory
 
     #: (event, stage, hunt-counters) captured while the campaign runs.
@@ -2714,7 +2714,7 @@ async def test_loop_rail_shows_hack_during_hunt(wd: Path) -> None:
               not [e for e, s, _ in seen if s == "idle" and e != "hunt_end"],
               str([e for e, s, _ in seen if s == "idle"]))
         # It must be lit *before* the first agent starts, not only once one is
-        # running — recon is part of the campaign.
+        # running â€” recon is part of the campaign.
         check("rail: HACK is lit from the first event",
               seen[0][1] == "hacking", f"{seen[0][0]} -> {seen[0][1]}")
 
@@ -2726,7 +2726,7 @@ async def test_loop_rail_shows_hack_during_hunt(wd: Path) -> None:
               all("wave" in h for h in during) and any(h["wave"] >= 1
                                                        for h in during),
               str(during[:3]))
-        # The roster has one worker, and the rail must say one — not the ten
+        # The roster has one worker, and the rail must say one â€” not the ten
         # the planner was *asked* for, which is what `hunt_wave_start`'s `size`
         # carries and what the rail showed before this. And `done` must reach
         # exactly that, so a double-count shows up as 2/1.
@@ -2749,7 +2749,7 @@ async def test_loop_rail_shows_hack_during_hunt(wd: Path) -> None:
 async def test_loop_rail_hunt_render() -> None:
     """The rail's own render: the HACK node lights, and only it.
 
-    Pure — no app — because this is about the glyph and the label, which is
+    Pure â€” no app â€” because this is about the glyph and the label, which is
     where an added stage goes wrong: ``render_rail`` lights the node whose key
     equals ``self.stage``, so a mistyped key silently lights nothing.
     """
@@ -2757,7 +2757,7 @@ async def test_loop_rail_hunt_render() -> None:
 
     from rich.console import Console
 
-    from zimzilla.ui.rails import STAGES, STAGE_LABEL, LoopRail
+    from kuro.ui.rails import STAGES, STAGE_LABEL, LoopRail
 
     def draw(rail: LoopRail) -> str:
         buf = io.StringIO()
@@ -2793,7 +2793,7 @@ async def test_loop_rail_hunt_render() -> None:
 
 async def test_busy_gate(wd: Path) -> None:
     """Some commands must answer mid-run; the launchers must not."""
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
 
     # BUSY_OK is the contract: it must contain the hunt controls and must not
     # contain any command that drives a turn on the shared agent.
@@ -2813,7 +2813,7 @@ async def test_busy_gate(wd: Path) -> None:
     #
     # Read out of the real `dispatch` dict in app.py rather than kept as a
     # hand-written copy. The copy was correct until a command was added and the
-    # list was not, at which point this check fails for the wrong reason — it
+    # list was not, at which point this check fails for the wrong reason â€” it
     # accuses the new command of being undispatched when it is the inventory
     # that is stale. Parsing the source means the check tracks the code.
     dispatch_names = _dispatch_names_from_source()
@@ -2838,7 +2838,7 @@ async def test_busy_gate(wd: Path) -> None:
         await pilot.press("enter")
         await pilot.pause()
         text = _transcript_text(app)
-        # No hunt is running, so the honest answer is "no hunt is running" —
+        # No hunt is running, so the honest answer is "no hunt is running" â€”
         # and crucially NOT "harness is busy".
         check("gate: a busy-permitted command is not refused when busy",
               "harness is busy" not in text and "no hunt is running" in text,
@@ -2869,8 +2869,8 @@ def test_contract_reaches_the_worker() -> None:
     """The regression that made the tracker necessary.
 
     ``FINDING_CONTRACT`` used to be formatted into the recon and planner prompts
-    only. The wave agents — the only ones that run a test and therefore the only
-    ones that can report what it found — never saw it, so they narrated a
+    only. The wave agents â€” the only ones that run a test and therefore the only
+    ones that can report what it found â€” never saw it, so they narrated a
     methodology, ``parse_findings`` read no JSON, and every campaign reported
     nothing no matter what it discovered. This pins the contract to the prompt
     the worker is actually handed.
@@ -2939,7 +2939,7 @@ def test_report_finding_tool() -> None:
     after a wave ends, which is exactly the behaviour the operator asked to
     change.
     """
-    from zimzilla import tools as tools_mod
+    from kuro import tools as tools_mod
 
     schema = next((t for t in tools_mod.TOOL_SCHEMAS
                    if t["name"] == "report_finding"), None)
@@ -2951,14 +2951,14 @@ def test_report_finding_tool() -> None:
               {"title", "severity", "evidence"} <= set(props), str(sorted(props)))
         # The severity enum is a literal in the schema rather than an import of
         # hunt.VALID_SEVERITIES, because hunt imports agent which imports tools
-        # — reaching back would close the cycle. A literal that drifts from the
+        # â€” reaching back would close the cycle. A literal that drifts from the
         # real set would let the model emit a severity the tracker cannot place,
         # so the two are pinned together here.
         check("tool: the severity enum matches the tracker's severities",
               tuple(props["severity"]["enum"]) == hunt_mod.VALID_SEVERITIES,
               str(props["severity"].get("enum")))
 
-    # It writes nothing, so it must not need permission — a prompt in the middle
+    # It writes nothing, so it must not need permission â€” a prompt in the middle
     # of a wave would stall ten agents behind one operator keystroke.
     check("tool: report_finding is not gated",
           tools_mod.needs_permission("report_finding") is False)
@@ -2978,7 +2978,7 @@ def test_report_finding_tool() -> None:
     check("tool: the evidence is carried",
           "500" in str(f.get("evidence", "")))
 
-    # Missing pieces are refused, not silently recorded — a finding with no
+    # Missing pieces are refused, not silently recorded â€” a finding with no
     # evidence is worse than no finding.
     bad = tools_mod.execute("report_finding", {"title": "x", "severity": "high"},
                             _cfg(Path(tempfile.mkdtemp())))
@@ -3016,7 +3016,7 @@ def test_hunt_findings_tool(wd: Path) -> None:
 
     A hunt runs on its own Agent instances, so the main agent sees none of it.
     When the operator stopped a wave and said "save the findings", it had no
-    path to the campaign directory and said nothing was found — over a directory
+    path to the campaign directory and said nothing was found â€” over a directory
     that already held a high-severity finding. This tool is that path.
     """
     cfg = _cfg(wd, mode="zim")
@@ -3067,7 +3067,7 @@ def test_hunt_findings_tool(wd: Path) -> None:
     check("hunt_findings: it does not error", res.is_error is False)
 
     # Worst first. On disk the files sort by wave then name, which buries a
-    # campaign's one critical in the middle of the list — against the real
+    # campaign's one critical in the middle of the list â€” against the real
     # 43-finding campaign it sat at position 20. A reader skimming must meet the
     # critical first, the same order `/findings` and the summary use.
     hunt_mod.write_report(run, hunt_mod.Finding(
@@ -3086,7 +3086,7 @@ def test_hunt_findings_tool(wd: Path) -> None:
 
     # The severity table is duplicated from hunt.VALID_SEVERITIES to avoid the
     # import cycle (hunt -> agent -> tools), so pin the two together. A severity
-    # added on one side and not the other would silently sort as unknown — last,
+    # added on one side and not the other would silently sort as unknown â€” last,
     # below "info", which is the one place it must never land.
     check("hunt_findings: the severity table matches hunt's",
           tools_mod._SEVERITY_ORDER == hunt_mod.SEVERITY_ORDER,
@@ -3172,7 +3172,7 @@ def test_hunt_findings_tool(wd: Path) -> None:
           "report_finding" in hunter_tools and "report_finding" not in main_tools)
 
     # The tool name and the store path are pinned here because tools.py cannot
-    # import hunt (hunt imports agent imports tools) — see tools._HUNTS_DIR.
+    # import hunt (hunt imports agent imports tools) â€” see tools._HUNTS_DIR.
     check("hunt_findings: the store path matches hunt.case_dir",
           hunt_mod.case_dir(cfg, "target.test").parent.name == tools_mod._HUNTS_DIR,
           tools_mod._HUNTS_DIR)
@@ -3209,7 +3209,7 @@ async def test_live_reporting_mid_wave(wd: Path) -> None:
 
     This is the operator's actual request: agent-3 finds something and it shows
     in the tracker *then*, not when the hunt finishes. The assertion that makes
-    it real is ordering — a ``hunt_finding`` must appear in the event stream
+    it real is ordering â€” a ``hunt_finding`` must appear in the event stream
     before the ``hunt_wave_end`` for the wave it was found in.
     """
     roster = ('{"summary": "s", "workers": ['
@@ -3278,7 +3278,7 @@ async def test_live_reporting_is_per_agent(wd: Path) -> None:
     """Two agents reporting the same bug publish it once, from the first.
 
     The tracker is shared across a wave, so the second agent to rediscover a bug
-    must not publish it again — otherwise the operator's feed shows the same
+    must not publish it again â€” otherwise the operator's feed shows the same
     finding twice and the wave's count is wrong.
     """
     roster = ('{"summary": "s", "workers": ['
@@ -3316,7 +3316,7 @@ async def test_live_reporting_is_per_agent(wd: Path) -> None:
     check("live: the tracker holds one finding", len(run.findings) == 1,
           str(len(run.findings)))
     if published:
-        # Which agent wins is a scheduling race — both report it — so the
+        # Which agent wins is a scheduling race â€” both report it â€” so the
         # assertion is that the winner is one of the two, not which one.
         check("live: the published finding names the agent that reported it",
               published[0]["agent"] in ("auth", "api"), published[0]["agent"])
@@ -3373,14 +3373,14 @@ def test_tracker_model() -> None:
 
 def test_findings_panel() -> None:
     """The panel renders worst-first, and never steals the prompt."""
-    from zimzilla.ui.app import FindingsPanel
+    from kuro.ui.app import FindingsPanel
 
     p = get_palette("green", None)
     panel = FindingsPanel(p, target="x.test", live=True)
     panel.query_one = lambda *a, **k: _Stub()
     panel.update = lambda *a, **k: None
 
-    # Not focusable, so it never takes the keyboard — but that is not the same
+    # Not focusable, so it never takes the keyboard â€” but that is not the same
     # as /stop-hunt staying typeable, which it does not while this panel is up.
     check("panel: it is not focusable", panel.can_focus is False)
 
@@ -3399,7 +3399,7 @@ def test_findings_panel() -> None:
     check("panel: the asset is shown", "api.x.test" in body)
     check("panel: the count is in the title", "2" in str(panel._title()))
 
-    # set_findings does not reorder — the caller ranks — so hand it a ranked
+    # set_findings does not reorder â€” the caller ranks â€” so hand it a ranked
     # list and confirm the panel preserves that order top to bottom.
     run = hunt_mod.HuntRun(target="x.test", directory=Path("/tmp/x"))
     run.add_finding(hunt_mod.Finding(wave=1, agent="a", title="low bug",
@@ -3427,7 +3427,7 @@ async def test_findings_command(wd: Path) -> None:
     # here would mean /findings finds one of those and the "nothing to show"
     # branch could never run.
     cfg.state_dir = wd / "findings-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()  # the boot splash
@@ -3490,7 +3490,7 @@ async def test_summary_reads_this_sessions_campaign(wd: Path) -> None:
     """/summary-hunt reports on the campaign the operator just ran.
 
     The bug this pins: run a wave against one target, ask for the report, and
-    get a report about a *different* target — because with the run object
+    get a report about a *different* target â€” because with the run object
     cleared at the end of the wave, the command fell back to "newest campaign
     directory", which is a guess and a wrong one whenever more than one campaign
     exists. Here a decoy campaign is made deliberately newer on disk than the
@@ -3498,7 +3498,7 @@ async def test_summary_reads_this_sessions_campaign(wd: Path) -> None:
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "summary-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()  # the boot splash
@@ -3511,7 +3511,7 @@ async def test_summary_reads_this_sessions_campaign(wd: Path) -> None:
             wave=1, agent="injection", title="SQLi in ?id", severity="critical",
             asset="mine.test", evidence="5 rows returned"))
 
-        # A decoy, written afterwards so it is strictly newer on disk — which is
+        # A decoy, written afterwards so it is strictly newer on disk â€” which is
         # exactly the position the runaway campaign's directory was left in.
         decoy = hunt_mod.case_dir(cfg, "decoy.test")
         hunt_mod.write_report(hunt_mod.HuntRun(target="decoy.test",
@@ -3544,7 +3544,7 @@ async def test_summary_reads_this_sessions_campaign(wd: Path) -> None:
               "mine.test" in text and "DECOY" not in text, text[-200:])
 
         # A session campaign whose directory has since gone is not a stale
-        # reference — the fallback takes over rather than failing. Asserted
+        # reference â€” the fallback takes over rather than failing. Asserted
         # against whatever the fallback itself considers newest, not against the
         # decoy: the `/summary-hunt` above wrote a report into `mine.test`, so by
         # now *that* is the newest on disk. Pinning the decoy here would be
@@ -3566,7 +3566,7 @@ async def test_summary_never_archives_an_empty_body(wd: Path) -> None:
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = wd / "summary-empty-state"
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(110, 40)) as pilot:
         app.pop_screen()
@@ -3582,7 +3582,7 @@ async def test_summary_never_archives_an_empty_body(wd: Path) -> None:
             wave=1, agent="injection", title="SQLi in ?id", severity="critical",
             asset="silent.test", evidence="5 rows returned"))
 
-        # A model that yields no text at all — the shape the live misfire had.
+        # A model that yields no text at all â€” the shape the live misfire had.
         async def silent_turn(_prompt):
             if False:  # pragma: no cover - an async generator needs a yield
                 yield {}
@@ -3614,8 +3614,8 @@ async def test_summary_never_archives_an_empty_body(wd: Path) -> None:
 async def test_bug_hunt_reuses_recon_from_the_ui(wd: Path) -> None:
     """`/bug-hunt` on a mapped scope says so up front and skips the remap.
 
-    The operator should learn that the campaign is reusing notes — and how old
-    they are — *before* the first brief is written, not by noticing the recon
+    The operator should learn that the campaign is reusing notes â€” and how old
+    they are â€” *before* the first brief is written, not by noticing the recon
     window never appeared. `--fresh` is the escape hatch and must be readable
     from either side of the target.
     """
@@ -3632,17 +3632,17 @@ async def test_bug_hunt_reuses_recon_from_the_ui(wd: Path) -> None:
     roster = ('{"summary": "s", "workers": ['
               '{"name": "p", "brief": "b", "owns": ["p"]}]}')
 
-    def build_app() -> ZimZillaApp:
+    def build_app() -> KuroApp:
         """An app whose campaign stops itself after its first wave.
 
         A campaign is a loop that runs until stopped, so a test that just
-        starts one leaves it running — and a free-running hunt writes findings
+        starts one leaves it running â€” and a free-running hunt writes findings
         and plans into the shared scope directory, which the *next* app in this
         test then reads as prior state. Stopping from inside the event stream is
         the same idiom the transcript tests use: `/stop-hunt` sets the flag and
         the loop notices at the next wave boundary.
         """
-        a = ZimZillaApp(_cfg(wd, boot_rain=False))
+        a = KuroApp(_cfg(wd, boot_rain=False))
         a.cfg.state_dir = cfg.state_dir
         real = _hunt_factory(
             {"rosters": [roster], "planner_calls": 0, "prompts": [],
@@ -3737,13 +3737,13 @@ async def test_bug_hunt_wave_flag(wd: Path) -> None:
 
     The flag has a value, so it cannot be filtered the way ``--fresh`` is: the
     number after it has to be consumed too, or it lands in the target and becomes
-    part of the scope directory's name. And a wave the operator cannot run —
-    wave 0 is recon, which has no briefs — must be refused *before* a campaign
+    part of the scope directory's name. And a wave the operator cannot run â€”
+    wave 0 is recon, which has no briefs â€” must be refused *before* a campaign
     is started, not by starting one and running nothing.
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = _state(wd, "test_bug_hunt_wave_flag")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(120, 40)) as pilot:
         app.pop_screen()  # the boot splash
@@ -3829,7 +3829,7 @@ async def test_bug_hunt_wave_flag(wd: Path) -> None:
 async def test_refused_wave_reaches_the_transcript(wd: Path) -> None:
     """A refused `--wave` says so in the transcript, and stops cleanly.
 
-    ``run_hunt`` decides the refusal — a wave is planned against the one before
+    ``run_hunt`` decides the refusal â€” a wave is planned against the one before
     it, so wave 4 on a scope that has run nothing is wave 1 with a misleading
     name. But the decision is useless if the UI drops the event: the operator
     would watch the harness go busy and then idle with nothing said, and would
@@ -3840,7 +3840,7 @@ async def test_refused_wave_reaches_the_transcript(wd: Path) -> None:
               '{"name": "w1", "brief": "first", "owns": ["a"]}]}')
     cfg = _cfg(wd, mode="zim", boot_rain=False)
     cfg.state_dir = _state(wd, "test_refused_wave_reaches_the_transcript")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(120, 44)) as pilot:
         app.pop_screen()  # the boot splash
@@ -3878,12 +3878,12 @@ async def test_report_bug_hunt_command(wd: Path) -> None:
     """``/report-bug-hunt`` writes the evidence report for the archived campaign.
 
     It reads the campaign off disk rather than a live run, because a report
-    built from half a wave under-counts — and it refuses outright while a hunt
+    built from half a wave under-counts â€” and it refuses outright while a hunt
     is running rather than interleaving transcript writes into a streaming wave.
     """
     cfg = _cfg(wd, boot_rain=False)
     cfg.state_dir = _state(wd, "test_report_bug_hunt_command")
-    app = ZimZillaApp(cfg)
+    app = KuroApp(cfg)
 
     async with app.run_test(size=(120, 40)) as pilot:
         app.pop_screen()  # the boot splash
@@ -3954,7 +3954,7 @@ async def test_stream_turn_watchdog() -> None:
     forward it on a tool call or at the end of the turn. The wave planner
     reasons for tens of seconds over the whole recon before it writes a word of
     roster, so without a bound on the wait the wave view has nothing to draw for
-    that entire time — the empty screen the planning feed exists to fill.
+    that entire time â€” the empty screen the planning feed exists to fill.
 
     What is asserted is only *when* prose is handed on: nothing is invented,
     reordered, or dropped, and the events still arrive in order.
@@ -4018,14 +4018,14 @@ async def test_stream_turn_watchdog() -> None:
     check("watchdog: the fast stream still yields both events",
           len(seen2) == 2, str(len(seen2)))
 
-    # A consumer that walks away — the hunt stopped mid-turn — must still close
+    # A consumer that walks away â€” the hunt stopped mid-turn â€” must still close
     # the underlying stream, or the agent's HTTP response is left open.
     #
     # The close is explicit because ``break`` does not finalise an async
     # generator: it stays suspended until the collector reaches it, which for a
     # turn holding an HTTP response is too late to rely on. So the caller closes
     # the generator, and this asserts that doing so reaches the agent's own
-    # ``finally`` — that is the whole point of ``_stream_turn`` wrapping it.
+    # ``finally`` â€” that is the whole point of ``_stream_turn`` wrapping it.
     closed3: list[bool] = []
     abandoned = _Slow([{"type": "text_delta", "text": "x"}] * 50,
                       gap=0.0, closed=closed3)
@@ -4046,12 +4046,12 @@ async def test_planner_feed_reaches_the_wave_view() -> None:
 
     ``_collect_text_live`` emits ``hunt_plan_text`` and ``hunt_plan_tool`` while
     the planner works. Those events have to reach ``WaveWeb`` or the planning
-    state draws an empty box — which is the whole complaint: the operator
+    state draws an empty box â€” which is the whole complaint: the operator
     watches a blank screen for the length of a model call with no way to tell
     planning from a hang.
     """
-    from zimzilla.theme import get_palette
-    from zimzilla.ui.web import WaveWeb
+    from kuro.theme import get_palette
+    from kuro.ui.web import WaveWeb
 
     web = WaveWeb("t.test", get_palette("green", None), wave=1, size=10)
     check("plan feed: a fresh wave is planning", web.planning is True)
@@ -4115,15 +4115,15 @@ async def test_wave_overlay_live(wd: Path) -> None:
 
     ``WaveWeb`` is deliberately free of Textual, so its own suite can only prove
     the geometry and the hit map. What that cannot prove is that the widget
-    routes an event to the right place — that a click's coordinates arrive as
+    routes an event to the right place â€” that a click's coordinates arrive as
     grid coordinates, that ``escape`` closes the drawer, that the wheel scrolls
     it. Those only exist once the overlay is mounted in a running app, which is
     what this drives.
     """
     from textual.events import Click, MouseMove
-    from zimzilla.ui.app import WaveOverlay
+    from kuro.ui.app import WaveOverlay
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     async with app.run_test(size=(118, 36)) as pilot:
         app.pop_screen()  # the boot splash
         await pilot.pause()
@@ -4133,8 +4133,8 @@ async def test_wave_overlay_live(wd: Path) -> None:
         await pilot.pause()
         check("wave overlay: it is the active screen", app.screen is overlay)
         # ``can_focus = False`` means the screen never wants the keyboard for
-        # itself. It does *not* mean the prompt underneath is usable — pushing a
-        # screen moves focus off the prompt, and this one paints over it — so
+        # itself. It does *not* mean the prompt underneath is usable â€” pushing a
+        # screen moves focus off the prompt, and this one paints over it â€” so
         # ``ctrl+c`` is asserted below as the way out rather than ``/stop-hunt``.
         check("wave overlay: it does not take focus itself",
               overlay.can_focus is False)
@@ -4187,7 +4187,7 @@ async def test_wave_overlay_live(wd: Path) -> None:
 
         # A click on the MED lane, delivered as a real Click event. The canvas
         # fills the screen at its origin, so the event's coordinates are the
-        # grid's — which is the assumption this proves.
+        # grid's â€” which is the assumption this proves.
         overlay.web.render(*overlay.size)
         lane = next(pos for pos, (kind, key) in overlay.web._hits.items()
                     if kind == "lane" and key == "medium")
@@ -4234,7 +4234,7 @@ async def test_wave_overlay_live(wd: Path) -> None:
         check("wave overlay: escape closes the agent drawer",
               overlay.web.detail.kind == "", str(overlay.web.detail.kind))
 
-        # The resize keys. Plain arrows move the rail, shift+arrows the drawer —
+        # The resize keys. Plain arrows move the rail, shift+arrows the drawer â€”
         # and the drawer only exists while it is open, so that half is checked
         # with a lane drawer open.
         before = overlay.web._layout.rail_w
@@ -4289,7 +4289,7 @@ async def test_wave_overlay_can_still_be_escaped(wd: Path) -> None:
 
     This is pinned because the obvious claim about it is wrong. ``can_focus =
     False`` is often read as "the prompt stays usable underneath", and that is
-    what the docstrings used to say — but pushing a screen moves focus off the
+    what the docstrings used to say â€” but pushing a screen moves focus off the
     prompt, and the wave view paints over it at 100% width and height, so
     ``/stop-hunt`` cannot be typed while it is up. That half is asserted below
     as a fact rather than a hope.
@@ -4299,17 +4299,17 @@ async def test_wave_overlay_can_still_be_escaped(wd: Path) -> None:
     the hunt's stop flag, so the wave does not unwind and the closing report may
     never be written. So the wave view now carries its own ``ctrl+x``, which
     routes through the same ``_cmd_stop_hunt`` the typed command uses. Both
-    halves are pinned here — the key that works and the keystrokes that do not —
+    halves are pinned here â€” the key that works and the keystrokes that do not â€”
     because a runaway campaign must always have a way out and it has to be known
     which one it is.
     """
-    from zimzilla.ui.widgets import PromptInput
+    from kuro.ui.widgets import PromptInput
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     # The wave is held open on purpose. A campaign is one wave per invocation
     # now, so a stub that ran to completion would finish the whole hunt before
     # the first ``pause()`` returned and there would be no wave view to press
-    # ``ctrl+x`` against — the test would be asserting on a screen that had
+    # ``ctrl+x`` against â€” the test would be asserting on a screen that had
     # already been popped.
     hold = asyncio.Event()
     app._team_agent_factory = _hunt_factory(
@@ -4342,7 +4342,7 @@ async def test_wave_overlay_can_still_be_escaped(wd: Path) -> None:
         check("escape hatch: and it is not yet claiming to be stopping",
               "stopping" not in canvas)
 
-        # The typed command does not arrive — this is the honest half.
+        # The typed command does not arrive â€” this is the honest half.
         await pilot.press(*"/stop-hunt")
         await pilot.pause()
         check("escape hatch: /stop-hunt cannot be typed behind the wave view",
@@ -4350,7 +4350,7 @@ async def test_wave_overlay_can_still_be_escaped(wd: Path) -> None:
         check("escape hatch: and so the stop flag is not set by typing",
               app._hunt_stop.is_set() is False)
 
-        # ctrl+x is the graceful path, and it must set the *stop flag* — not
+        # ctrl+x is the graceful path, and it must set the *stop flag* â€” not
         # merely cancel workers, which is what ctrl+c does. Asserted against the
         # app rather than the captured overlay on purpose: a hunt replaces its
         # wave view at every wave boundary, so by the time the key lands the
@@ -4374,7 +4374,7 @@ async def test_wave_overlay_stop_key_confirms_itself(wd: Path) -> None:
     The end-to-end path is covered above; this covers the part that a live hunt
     makes untestable, because a hunt swaps its wave view at every wave boundary
     and the screen under test can be replaced mid-keypress. So the campaign here
-    is stood up by hand — a pushed overlay and a non-``None`` run — which is
+    is stood up by hand â€” a pushed overlay and a non-``None`` run â€” which is
     exactly the precondition ``_cmd_stop_hunt`` checks before it will set the
     flag.
 
@@ -4383,9 +4383,9 @@ async def test_wave_overlay_stop_key_confirms_itself(wd: Path) -> None:
     footer changing, the key would look inert for as long as the wave takes to
     unwind.
     """
-    from zimzilla.ui.app import WaveOverlay
+    from kuro.ui.app import WaveOverlay
 
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
 
     async with app.run_test(size=(118, 36)) as pilot:
         app.pop_screen()
@@ -4413,7 +4413,7 @@ async def test_wave_overlay_stop_key_confirms_itself(wd: Path) -> None:
         check("stop key: the hint is replaced, not duplicated",
               "ctrl+x" not in after)
 
-        # Pressing it twice is harmless — the wave unwinds on its own schedule.
+        # Pressing it twice is harmless â€” the wave unwinds on its own schedule.
         await pilot.press("ctrl+x")
         await pilot.pause()
         check("stop key: a second press is a no-op",
@@ -4428,7 +4428,7 @@ async def test_wave_overlay_ctrl_c_still_interrupts(wd: Path) -> None:
     leaves ``_hunt_stop`` unset, so the wave does not unwind. It is the right
     key when the graceful path is not responding, and the wrong one to rely on.
     """
-    app = ZimZillaApp(_cfg(wd, boot_rain=False))
+    app = KuroApp(_cfg(wd, boot_rain=False))
     # Held open for the same reason as the graceful-path test above: one wave
     # per invocation means an unheld stub finishes the hunt before the screen
     # can be inspected.
@@ -4532,3 +4532,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+

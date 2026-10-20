@@ -1,10 +1,10 @@
-"""Regression suite for the boot screen's spinning logo.
+﻿"""Regression suite for the boot screen's spinning logo.
 
 Run:  ./.venv/bin/python tests/test_boot.py
 
 The operator asked:
 
-    "when the harness loads , the zimzilla logo should spin , so it will look
+    "when the harness loads , the kuro logo should spin , so it will look
      cool"
 
 Cosmetic on its face, but two of the properties below are load-bearing and
@@ -12,8 +12,8 @@ were both *broken* in the first cut of this feature, which is why they are
 pinned rather than left to the eye:
 
 1. **It must settle onto the static mark.** The mark the splash uses is
-   ``EMBLEM`` — a rounded block, ``▄███▄`` across the top. Scaling a flat cap
-   by ``|cos theta|`` gives ``▄▄▄▄▄`` at full width, so the animation used to
+   ``EMBLEM`` â€” a rounded block, ``â–„â–ˆâ–ˆâ–ˆâ–„`` across the top. Scaling a flat cap
+   by ``|cos theta|`` gives ``â–„â–„â–„â–„â–„`` at full width, so the animation used to
    end with a visible snap as the logo changed shape. Facing frames therefore
    return ``EMBLEM`` itself.
 
@@ -25,7 +25,7 @@ pinned rather than left to the eye:
    half-turn is the first read backwards.
 
 The clock is never read inside the animation. ``spin_frame_index(elapsed)``
-takes the time as a parameter — the ``spinner_at(now)`` idiom from ``web.py``.
+takes the time as a parameter â€” the ``spinner_at(now)`` idiom from ``web.py``.
 That is deliberate: the one flaky check in this suite is flaky precisely
 because the other animation reads ``time.monotonic()`` internally with no
 injectable ``now``, and this feature is not going to join it. The purity check
@@ -44,8 +44,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla.theme import get_palette  # noqa: E402
-from zimzilla.ui.banner import (  # noqa: E402
+from kuro.theme import get_palette  # noqa: E402
+from kuro.ui.banner import (  # noqa: E402
     EMBLEM,
     EMBLEM_WIDTH,
     SPIN_FRAMES,
@@ -55,7 +55,7 @@ from zimzilla.ui.banner import (  # noqa: E402
     spin_frame,
     spin_frame_index,
 )
-from zimzilla.ui.boot import TICKS_PER_FRAME, BootScreen  # noqa: E402
+from kuro.ui.boot import TICKS_PER_FRAME, BootScreen  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -66,12 +66,12 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 
 def _width(frame: list[str]) -> int:
-    """Visible width of a frame — its widest row, stripped."""
+    """Visible width of a frame â€” its widest row, stripped."""
     return max(len(r.strip()) for r in frame)
 
 
 # ---------------------------------------------------------------------------
-# 1 — it lands exactly on the static mark
+# 1 â€” it lands exactly on the static mark
 # ---------------------------------------------------------------------------
 
 def test_lands_on_static_mark() -> None:
@@ -88,12 +88,12 @@ def test_lands_on_static_mark() -> None:
     # The specific snap that was fixed: a flat cap at full width.
     full = spin_frame(0)
     check("the full-width frame keeps its rounded cap, not a flat one",
-          "▄███▄" in full[0] and "▀███▀" in full[-1],
+          "â–„â–ˆâ–ˆâ–ˆâ–„" in full[0] and "â–€â–ˆâ–ˆâ–ˆâ–€" in full[-1],
           f"top={full[0]!r}")
 
 
 # ---------------------------------------------------------------------------
-# 2 — every frame is the same shape, so the layout cannot jump
+# 2 â€” every frame is the same shape, so the layout cannot jump
 # ---------------------------------------------------------------------------
 
 def test_every_frame_is_four_by_seven() -> None:
@@ -110,7 +110,7 @@ def test_every_frame_is_four_by_seven() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3 — the spin is symmetric (the regression this feature actually had)
+# 3 â€” the spin is symmetric (the regression this feature actually had)
 # ---------------------------------------------------------------------------
 
 def test_spin_is_symmetric() -> None:
@@ -138,7 +138,7 @@ def test_spin_is_symmetric() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4 — it actually spins
+# 4 â€” it actually spins
 # ---------------------------------------------------------------------------
 
 def test_it_actually_spins() -> None:
@@ -152,7 +152,7 @@ def test_it_actually_spins() -> None:
     check("frame 0 is the full-width one, so it starts legible",
           widths[0] == EMBLEM_WIDTH, str(widths[0]))
 
-    # Distinct frames, not just distinct widths — the shading has to move too.
+    # Distinct frames, not just distinct widths â€” the shading has to move too.
     check("frames are not all the same renderable",
           len({tuple(spin_frame(i)) for i in range(SPIN_FRAMES)}) > 2,
           "")
@@ -161,14 +161,14 @@ def test_it_actually_spins() -> None:
 def test_shading_is_monotone() -> None:
     """The fill darkens as the mark turns away, and brightens coming back.
 
-    An earlier table (``█ █ ▓ ▒ ▓ ▓ █``) plateaued and then jumped, so the last
+    An earlier table (``â–ˆ â–ˆ â–“ â–’ â–“ â–“ â–ˆ``) plateaued and then jumped, so the last
     step read as a flash rather than a turn. What is asserted here is the shape
     of the sequence: it is a mirror of itself, and the darker glyphs belong to
     the narrower frames.
     """
-    from zimzilla.ui.banner import SPIN_SHADES
+    from kuro.ui.banner import SPIN_SHADES
 
-    order = "█▓▒░"  # lit -> dark
+    order = "â–ˆâ–“â–’â–‘"  # lit -> dark
     folds = [order.index(c) for c in SPIN_SHADES]
 
     check("shading is mirrored about edge-on",
@@ -184,11 +184,11 @@ def test_shading_is_monotone() -> None:
 
     full = [i for i in range(SPIN_FRAMES) if _width(spin_frame(i)) == EMBLEM_WIDTH]
     check("the lit glyph is reserved for the widest frames",
-          all(spin_frame(i)[1].strip()[0] == "█" for i in full), str(full))
+          all(spin_frame(i)[1].strip()[0] == "â–ˆ" for i in full), str(full))
 
 
 # ---------------------------------------------------------------------------
-# 5 — the frame index is total and cyclic
+# 5 â€” the frame index is total and cyclic
 # ---------------------------------------------------------------------------
 
 def test_frame_index_is_total_and_cyclic() -> None:
@@ -226,7 +226,7 @@ def test_angle_rounding_hits_each_frame_once() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 6 — the boot screen wiring
+# 6 â€” the boot screen wiring
 # ---------------------------------------------------------------------------
 
 class _Capture:
@@ -296,7 +296,7 @@ def test_wiring_spins_then_settles() -> None:
 
     # The spin must actually complete before it settles. The first cut of this
     # feature held each frame for a single tick, so all twelve went by in
-    # 0.54s — well before the wordmark finished revealing — and the logo sat
+    # 0.54s â€” well before the wordmark finished revealing â€” and the logo sat
     # static for most of the animation. The banner phase is ~32 ticks, so the
     # spin needs at least SPIN_FRAMES * TICKS_PER_FRAME of them to finish.
     #
@@ -327,7 +327,7 @@ def test_wiring_spins_then_settles() -> None:
 
 
 def test_wiring_styles_the_frame_as_a_unit() -> None:
-    """Every row of a spun frame shares one style — lit frames bright, edge-on dim.
+    """Every row of a spun frame shares one style â€” lit frames bright, edge-on dim.
 
     Styling row by row was the first cut: it lit the half-block caps and dimmed
     the fill *on the same frame*, which reads as a mistake rather than as a
@@ -414,7 +414,7 @@ def test_ticks_per_frame_keeps_the_turn_in_step() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7 — purity: no clock, no state, no flakiness
+# 7 â€” purity: no clock, no state, no flakiness
 # ---------------------------------------------------------------------------
 
 def test_the_animation_reads_no_clock() -> None:
@@ -433,7 +433,7 @@ def test_the_animation_reads_no_clock() -> None:
     # comments throughout this module, so a substring match would only be
     # measuring the docstrings.
     import ast
-    import zimzilla.ui.banner as B
+    import kuro.ui.banner as B
 
     tree = ast.parse(Path(B.__file__).read_text(encoding="utf-8"))
     imported = {
@@ -481,3 +481,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

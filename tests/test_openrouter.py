@@ -1,4 +1,4 @@
-"""Regression suite for the OpenRouter source.
+﻿"""Regression suite for the OpenRouter source.
 
 Run:  python tests/test_openrouter.py   (from an activated venv)
 
@@ -10,11 +10,11 @@ Protects what is particular about this provider:
   and it is asserted directly: a fetch with an empty token must succeed and must
   send no credential.
 * **The ``anthropic-version`` trap.** Sending that header flips ``/models`` into
-  the *Anthropic* Models API shape — 20 mangled ``anthropic/``-prefixed ids
+  the *Anthropic* Models API shape â€” 20 mangled ``anthropic/``-prefixed ids
   instead of the full catalog. Measured on this box, and the kind of thing that
   regresses silently the moment someone "tidies up" the headers. It gets its own
   test.
-* **Two free signals.** The ``:free`` suffix *and* a zero price — and the price
+* **Two free signals.** The ``:free`` suffix *and* a zero price â€” and the price
   arrives as a **string** (``"0"``), so a naive ``== 0`` comparison would find
   no free models at all. Both halves are asserted.
 * **Tool support is a filter, not decoration.** A free model that cannot call a
@@ -49,10 +49,10 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 # Shaped like the real response: an OpenAI-style `data` list, prices as STRINGS,
 # `supported_parameters` carrying "tools", and `name` as a display label. The
 # free set covers all four cases that matter:
-#   - `:free` suffix AND 0/0 price AND tools   → free and usable
-#   - `:free` suffix, tools, but a non-zero price listed → suffix wins
-#   - no suffix, 0/0 price (zeroed without a rename)  → price wins
-#   - `:free` suffix, no tools  → free but NOT usable
+#   - `:free` suffix AND 0/0 price AND tools   â†’ free and usable
+#   - `:free` suffix, tools, but a non-zero price listed â†’ suffix wins
+#   - no suffix, 0/0 price (zeroed without a rename)  â†’ price wins
+#   - `:free` suffix, no tools  â†’ free but NOT usable
 CATALOG = {
     "data": [
         {"id": "deepseek/deepseek-v4.1:free", "name": "DeepSeek V4.1 (free)",
@@ -119,7 +119,7 @@ def _stub_urlopen(payload: dict | None = None, error: Exception | None = None):
 
 def test_free_detection() -> None:
     """Free from the ``:free`` suffix, and from a zero price with no suffix."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     models = o._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -130,7 +130,7 @@ def test_free_detection() -> None:
     check("catalog: a second :free suffix is free",
           by_id["qwen/qwen4-72b:free"].free)
 
-    # The suffix wins even when the listing carries a small non-zero price —
+    # The suffix wins even when the listing carries a small non-zero price â€”
     # the model is named free, so it is free.
     check("catalog: the suffix beats a listed non-zero price",
           by_id["meta/llama-5-70b:free"].free)
@@ -160,7 +160,7 @@ def test_prices_arrive_as_strings() -> None:
     full of them. Parsing happens in ``_parse_models``, and this asserts the
     floats actually came out.
     """
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     models = o._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -191,7 +191,7 @@ def test_prices_arrive_as_strings() -> None:
 
 def test_tool_support() -> None:
     """`tools` is read from supported_parameters and filters the free list."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     models = o._parse_models(CATALOG)
     by_id = {m.id: m for m in models}
@@ -219,7 +219,7 @@ def test_tool_support() -> None:
 
 def test_catalog_needs_no_key() -> None:
     """The whole point of this provider: /models works before setup."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     o.clear_cache()
     seen = {}
@@ -253,12 +253,12 @@ def test_anthropic_version_header_is_not_sent() -> None:
     """Sending `anthropic-version` to /models mangles the catalog.
 
     Measured: with the header, ``/api/v1/models`` answers in the *Anthropic*
-    Models API shape — paginated at 20 entries with ``has_more``/``first_id``/
+    Models API shape â€” paginated at 20 entries with ``has_more``/``first_id``/
     ``last_id`` and every id prefixed ``anthropic/``. 20 ids instead of 463.
     The header belongs on ``/v1/messages``, not here. This test is the guard
     against a future tidy-up putting it back.
     """
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     o.clear_cache()
     seen = {}
@@ -279,7 +279,7 @@ def test_anthropic_version_header_is_not_sent() -> None:
 
 def test_fetch_is_total() -> None:
     """fetch_models returns errors; it never raises into the TUI."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     o.clear_cache()
     with mock.patch("urllib.request.urlopen",
@@ -297,7 +297,7 @@ def test_fetch_is_total() -> None:
     check("fetch: the rejection names the setup command",
           "openrouter-api-setup" in err, err)
 
-    # An empty catalog is [] and NOT an error — the caller can tell them apart.
+    # An empty catalog is [] and NOT an error â€” the caller can tell them apart.
     o.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen({"data": []})):
         models, err = o.fetch_models(use_cache=False)
@@ -309,7 +309,7 @@ def test_cache_expiry() -> None:
     """An expired catalog must not be served as if it were live.
 
     ``fetch_models`` has always refused to *reuse* an entry past ``CACHE_TTL``,
-    but ``cached_models`` read it back regardless — so a catalog fetched once
+    but ``cached_models`` read it back regardless â€” so a catalog fetched once
     was reported by ``/model`` for the rest of the session. OpenRouter's list
     turns over constantly, free tiers especially, so a stale one is exactly the
     wrong list this picker exists to avoid. Nothing sleeps: the entry's
@@ -317,7 +317,7 @@ def test_cache_expiry() -> None:
     """
     import time
 
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     o.clear_cache()
     check("expiry: a cold cache has no age", o.catalog_age() is None,
@@ -345,7 +345,7 @@ def test_cache_expiry() -> None:
 
 def test_cache_is_keyed_by_token() -> None:
     """A key change refetches rather than serving another account's list."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     o.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub_urlopen()):
@@ -374,7 +374,7 @@ def test_cache_is_keyed_by_token() -> None:
 
 def test_profile_roundtrip() -> None:
     """save_key writes mode 600, in a format the parser reads back."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     token = "sk-or-saved00000000000000000"
     path = o.save_key(token, "deepseek/deepseek-v4.1:free")
@@ -396,7 +396,7 @@ def test_profile_roundtrip() -> None:
 
 
 def test_looks_like_key() -> None:
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     check("key: a real-looking key passes",
           o.looks_like_key("sk-or-v1-0000000000000000000000000000000000"))
@@ -409,12 +409,12 @@ def test_looks_like_key() -> None:
 
 def test_active_key_recognises_host() -> None:
     """The hosted URL is matched by host, and the path is not confused."""
-    from zimzilla import sources as s
+    from kuro import sources as s
 
     check("sources: the OpenRouter host is the openrouter source",
           s.active_key("https://openrouter.ai/api") == "openrouter")
     # Recognition is by host, so a profile written before the base URL was
-    # corrected still resolves to this source — and that matters, because such a
+    # corrected still resolves to this source â€” and that matters, because such a
     # profile is exactly what is sitting in an operator's environment right now.
     check("sources: a pre-fix /api/v1 profile still resolves here",
           s.active_key("https://openrouter.ai/api/v1") == "openrouter")
@@ -438,7 +438,7 @@ def test_active_key_recognises_host() -> None:
 
 def test_credential_precedence(tmp: Path) -> None:
     """Environment beats the profile; the profile beats ~/claude-source."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     claude_source = tmp / "claude-source"
     claude_source.mkdir(parents=True, exist_ok=True)
@@ -464,7 +464,7 @@ def test_credential_precedence(tmp: Path) -> None:
             own.write_text('export ANTHROPIC_AUTH_TOKEN="sk-or-ownprofile0000000"\n')
             with mock.patch.object(o, "PROFILE", own):
                 creds = o.load_credentials()
-                check("creds: ZimZilla's own profile beats ~/claude-source",
+                check("creds: Kuro's own profile beats ~/claude-source",
                       creds is not None and creds[2] == str(own),
                       str(creds and creds[2]))
 
@@ -500,7 +500,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 def test_apply_and_guard() -> None:
     """apply_to aims a config; the guard keeps a stale choice from hijacking."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     class _Cfg:
         base_url = "http://localhost:4001"
@@ -538,7 +538,7 @@ def test_apply_and_guard() -> None:
 
 def test_selection_file_is_shared() -> None:
     """The selection file is the same one sources.py reads."""
-    from zimzilla import sources as s, openrouter as o
+    from kuro import sources as s, openrouter as o
 
     o.set_current("openrouter")
     check("selection: sources.py sees the openrouter choice",
@@ -548,7 +548,7 @@ def test_selection_file_is_shared() -> None:
 
 def test_no_key_is_echoed(tmp: Path) -> None:
     """The display value is a path, never the key itself."""
-    from zimzilla import openrouter as o
+    from kuro import openrouter as o
 
     own = tmp / "own2" / "source"
     own.parent.mkdir(parents=True, exist_ok=True)
@@ -560,12 +560,12 @@ def test_no_key_is_echoed(tmp: Path) -> None:
 
 
 def test_the_composed_message_url_is_right() -> None:
-    """The URL the SDK actually builds — not the constant it is built from.
+    """The URL the SDK actually builds â€” not the constant it is built from.
 
     This is the test that was missing, and its absence is why a total failure
     shipped: every turn 404'd while the suite stayed green. The old assertions
     checked ``DEFAULT_BASE_URL == "https://openrouter.ai/api/v1"``, which was
-    *true* and also *wrong* — the SDK appends ``/v1/messages`` to whatever prefix
+    *true* and also *wrong* â€” the SDK appends ``/v1/messages`` to whatever prefix
     it is handed, so that constant composed to ``/api/v1/v1/messages``. Asserting
     a constant can only ever restate the bug; asserting the composed URL is the
     only thing that can catch it.
@@ -583,9 +583,9 @@ def test_the_composed_message_url_is_right() -> None:
     import anthropic
     from anthropic._models import FinalRequestOptions
 
-    from zimzilla import openrouter as o
-    from zimzilla.agent import Agent
-    from zimzilla.config import Config
+    from kuro import openrouter as o
+    from kuro.agent import Agent
+    from kuro.config import Config
 
     cfg = Config(base_url=o.DEFAULT_BASE_URL, auth_token="sk-or-x0000000000000000")
     agent = Agent(cfg)
@@ -602,7 +602,7 @@ def test_the_composed_message_url_is_right() -> None:
     check("url: the base is the prefix BEFORE /v1, not the API root",
           o.DEFAULT_BASE_URL == "https://openrouter.ai/api", o.DEFAULT_BASE_URL)
 
-    # The catalog must still resolve, and to the same place it always did — the
+    # The catalog must still resolve, and to the same place it always did â€” the
     # fix moved the base, so this is the half that could have been broken by it.
     seen = {}
 
@@ -620,9 +620,9 @@ def test_the_composed_message_url_is_right() -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-or-test-"))
     # Pin the module's paths to the temp tree before anything imports it.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     test_free_detection()
@@ -645,7 +645,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -654,3 +654,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

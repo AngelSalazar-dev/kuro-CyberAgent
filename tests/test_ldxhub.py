@@ -1,4 +1,4 @@
-"""Regression suite for the LDXHub document gateway.
+﻿"""Regression suite for the LDXHub document gateway.
 
 Run:  python tests/test_ldxhub.py   (from an activated venv)
 
@@ -13,15 +13,15 @@ Protects what is particular about this provider:
 * **Two catalog kinds.** Model services (structflow / analyzedoc /
   refineloop) live at ``/{service}/models``; engine services (renderocr /
   castdoc / extractdoc) at ``/{service}/engines``. The wrong kind 404s, so the
-  service→kind map is asserted directly rather than trusted.
-* **``example_output`` must be a native JSON object.** A string — even a
-  JSON-encoded object — is rejected by the gateway with ``malformed_json``.
+  serviceâ†’kind map is asserted directly rather than trusted.
+* **``example_output`` must be a native JSON object.** A string â€” even a
+  JSON-encoded object â€” is rejected by the gateway with ``malformed_json``.
   The coercion is defensive and the refusal is tested.
 * **``inputs`` XOR ``file_id``.** StructFlow requires exactly one; both
   together 400s. The handler picks one, and the test asserts the other key is
   absent rather than merely falsy.
 * **The key gates the tools.** Six ``ldxhub_*`` schemas are withheld entirely
-  when ``has_key()`` is false — not advertised-and-erroring, which would waste
+  when ``has_key()`` is false â€” not advertised-and-erroring, which would waste
   a turn on every attempt. Both halves are asserted.
 * **Nothing here echoes a key.** The profile is mode 600, the token never
   leaves ``load_credentials``, and the TUI confirmation shows the last four
@@ -57,11 +57,11 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 # rows with ``id`` / ``display_name`` / ``provider`` / ``description`` and
 # optional ``supported_conversions`` / ``supported_languages``. The fixture
 # covers the cases that matter:
-#   - a row with a provider, conversions and languages  → full summary
-#   - a bare row (id only)                              → label falls back to id
-#   - a row with more than four conversions             → the summary elides
-#   - a row with a blank id                             → skipped
-#   - a non-dict row                                    → skipped
+#   - a row with a provider, conversions and languages  â†’ full summary
+#   - a bare row (id only)                              â†’ label falls back to id
+#   - a row with more than four conversions             â†’ the summary elides
+#   - a row with a blank id                             â†’ skipped
+#   - a non-dict row                                    â†’ skipped
 CATALOG = {
     "data": [
         {
@@ -104,7 +104,7 @@ TOOL_NAMES = (
 )
 
 #: The five that run a paid job, and so need a key. ``ldxhub_list`` is not
-#: one of them — the catalogs are public.
+#: one of them â€” the catalogs are public.
 JOB_TOOLS = TOOL_NAMES[:5]
 
 
@@ -162,14 +162,14 @@ class _clean_env:
 
 
 def _cfg(tmp: Path, **kw):
-    from zimzilla.config import Config
+    from kuro.config import Config
 
     return Config.from_env(workdir=tmp, api_key="x",
                            base_url="http://localhost:4001", **kw)
 
 
 def _entry(entry_id: str = "sf-alpha", **kw):
-    from zimzilla.ldxhub import Entry
+    from kuro.ldxhub import Entry
 
     kw.setdefault("label", entry_id)
     return Entry(id=entry_id, **kw)
@@ -181,7 +181,7 @@ def _capture_job():
     ``_ldx_job`` is resolved as a module global inside every handler, so
     patching it here intercepts the payload without any network.
     """
-    from zimzilla import tools as t
+    from kuro import tools as t
 
     box: dict = {}
 
@@ -197,7 +197,7 @@ def _capture_job():
 
 
 def _run(name: str, args: dict, cfg):
-    from zimzilla import tools as t
+    from kuro import tools as t
 
     return t.execute(name, args, cfg)
 
@@ -205,8 +205,8 @@ def _run(name: str, args: dict, cfg):
 # ---------------------------------------------------------------------------
 
 def test_looks_like_key() -> None:
-    """``zpka_…`` passes — the underscore openrouter's regex would reject."""
-    from zimzilla import ldxhub as ldx
+    """``zpka_â€¦`` passes â€” the underscore openrouter's regex would reject."""
+    from kuro import ldxhub as ldx
 
     check("key: a zpka_ key is accepted",
           ldx.looks_like_key("zpka_" + "a" * 32))
@@ -222,7 +222,7 @@ def test_looks_like_key() -> None:
 
 def test_profile_roundtrip(tmp: Path) -> None:
     """save_key writes mode 600; load_credentials reads it back as 'profile'."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     own = tmp / "profile" / "ldxhub" / "source"
     with _clean_env(), mock.patch.object(ldx, "PROFILE", own):
@@ -264,8 +264,8 @@ def test_profile_roundtrip(tmp: Path) -> None:
 
 
 def test_read_exports_is_total(tmp: Path) -> None:
-    """A missing profile is not an error — it is an empty mapping."""
-    from zimzilla import ldxhub as ldx
+    """A missing profile is not an error â€” it is an empty mapping."""
+    from kuro import ldxhub as ldx
 
     missing = tmp / "nope" / "source"
     check("exports: a missing file is {}", ldx._read_exports(missing) == {})
@@ -286,7 +286,7 @@ def test_read_exports_is_total(tmp: Path) -> None:
 
 def test_credential_precedence(tmp: Path) -> None:
     """The environment wins over the profile, and reports origin 'env'."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     own = tmp / "prec" / "ldxhub" / "source"
     with _clean_env(), mock.patch.object(ldx, "PROFILE", own):
@@ -309,7 +309,7 @@ def test_credential_precedence(tmp: Path) -> None:
 
 def test_no_key_is_echoed(tmp: Path) -> None:
     """With no env and no profile there is no credential at all."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     with _clean_env(), mock.patch.object(ldx, "PROFILE", tmp / "absent" / "source"):
         check("creds: no key reads as None", ldx.load_credentials() is None)
@@ -318,7 +318,7 @@ def test_no_key_is_echoed(tmp: Path) -> None:
               ldx.save_default("structflow", "sf-alpha") is None)
 
         # A token that was never given back is never printed either.
-        src = (ROOT / "zimzilla" / "ldxhub.py").read_text(encoding="utf-8")
+        src = (ROOT / "kuro" / "ldxhub.py").read_text(encoding="utf-8")
         check("creds: the module prints no token",
               "print(" not in src and "logging" not in src)
 
@@ -327,11 +327,11 @@ def test_keyless_catalog_browsing(tmp: Path) -> None:
     """The catalogs are public: browsing works before any key exists.
 
     This is the state a new user is in, and the one the docs promise. The
-    request must go out with NO Authorization header at all — a literal
+    request must go out with NO Authorization header at all â€” a literal
     ``Bearer `` with an empty token is a different request, and the gateway
     answers the two differently.
     """
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     ldx.clear_cache()
     with _clean_env(), mock.patch.object(ldx, "PROFILE", tmp / "absent" / "source"):
@@ -346,7 +346,7 @@ def test_keyless_catalog_browsing(tmp: Path) -> None:
         check("keyless: the request still carries no data",
               seen["data"] is None)
 
-        # Every service, not just the first — the whole point is browsing.
+        # Every service, not just the first â€” the whole point is browsing.
         for svc in ldx.SERVICES:
             e, err = ldx.fetch_catalog(svc, use_cache=False)
             check(f"keyless: {svc} lists without a key",
@@ -358,7 +358,7 @@ def test_keyless_catalog_browsing(tmp: Path) -> None:
         check("keyless: catalog_age is a number",
               isinstance(ldx.catalog_age("structflow"), float))
 
-        # A key, once stored, is used — the anonymous path is a fallback,
+        # A key, once stored, is used â€” the anonymous path is a fallback,
         # not a replacement.
         ldx.save_key("zpka_" + "z" * 30)
         ldx.clear_cache()
@@ -373,8 +373,8 @@ def test_keyless_catalog_browsing(tmp: Path) -> None:
 
 
 def test_json_is_total() -> None:
-    """``_json`` never raises — every failure becomes an error string."""
-    from zimzilla import ldxhub as ldx
+    """``_json`` never raises â€” every failure becomes an error string."""
+    from kuro import ldxhub as ldx
 
     with mock.patch("urllib.request.urlopen",
                     _stub(error=urllib.error.HTTPError("u", 401, "unauth", {}, None))):
@@ -404,7 +404,7 @@ def test_json_is_total() -> None:
 
 def test_json_sends_a_bearer_and_a_body() -> None:
     """The credential goes in the Authorization header; JSON bodies set the type."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     seen, opener = _capture()
     with mock.patch("urllib.request.urlopen", opener):
@@ -430,7 +430,7 @@ def test_json_sends_a_bearer_and_a_body() -> None:
 
 def test_parse_entries() -> None:
     """Rows parse into Entries; junk rows are skipped rather than crashing."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     entries = ldx._parse_entries(CATALOG)
     check("catalog: three good rows parse", len(entries) == 3, str(len(entries)))
@@ -460,20 +460,20 @@ def test_parse_entries() -> None:
 
 def test_entry_summary() -> None:
     """The one-line summary carries the id, the label and the shape hints."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     alpha = ldx._parse_entries(CATALOG)[0]
     s = alpha.summary
     check("summary: starts with the id", s.startswith("sf-alpha"))
     check("summary: names the label", "StructFlow Alpha" in s)
     check("summary: counts languages", "[2 languages]" in s)
-    check("summary: shows a conversion", "pdf→docx" in s)
+    check("summary: shows a conversion", "pdfâ†’docx" in s)
 
     gamma = {e.id: e for e in ldx._parse_entries(CATALOG)}["sf-gamma"]
-    check("summary: more than four conversions elide", "…" in gamma.summary,
+    check("summary: more than four conversions elide", "â€¦" in gamma.summary,
           gamma.summary)
     check("summary: only four pairs are shown",
-          gamma.summary.count("→") == 4, gamma.summary)
+          gamma.summary.count("â†’") == 4, gamma.summary)
 
     bare = ldx.Entry(id="sf-beta", label="sf-beta")
     check("summary: a bare entry is just the id", bare.summary == "sf-beta")
@@ -486,7 +486,7 @@ def test_entry_summary() -> None:
 
 def test_fetch_catalog() -> None:
     """A live fetch hits the right kind path and caches the result."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     ldx.clear_cache()
     seen, opener = _capture()
@@ -531,7 +531,7 @@ def test_fetch_catalog() -> None:
 
 def test_cache_is_keyed_and_expires() -> None:
     """The cache is per-token, and an expired entry reads as absent."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     ldx.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub()):
@@ -563,7 +563,7 @@ def test_cache_is_keyed_and_expires() -> None:
         ldx.clear_cache()
         check("cache: clear_cache empties it", ldx._CACHE == {})
 
-    # Keyless, the cache keys on "" — the public catalogs are browsable
+    # Keyless, the cache keys on "" â€” the public catalogs are browsable
     # before any key exists, so a cold keyless read is a miss, not an error.
     with _clean_env(), mock.patch.object(ldx, "PROFILE", Path("/nonexistent/x")):
         check("cache: a cold keyless read is None",
@@ -580,8 +580,8 @@ def test_cache_is_keyed_and_expires() -> None:
 
 
 def test_resolve_entry() -> None:
-    """explicit → profile default → first live entry, with honest errors."""
-    from zimzilla import ldxhub as ldx
+    """explicit â†’ profile default â†’ first live entry, with honest errors."""
+    from kuro import ldxhub as ldx
 
     ldx.clear_cache()
     with mock.patch("urllib.request.urlopen", _stub()):
@@ -622,7 +622,7 @@ def test_resolve_entry() -> None:
 
 def test_run_job() -> None:
     """Polling walks to a terminal status; sleep is injected so nothing waits."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     statuses = iter(["queued", "processing", "completed"])
     polls = {"n": 0}
@@ -667,7 +667,7 @@ def test_run_job() -> None:
 
 def test_create_and_upload_errors(tmp: Path) -> None:
     """create_job and upload_file turn every failure into an error string."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     with mock.patch("urllib.request.urlopen", _stub({"detail": "nope"})):
         jid, err = ldx.create_job("structflow", {"model": "x"}, "tok")
@@ -713,7 +713,7 @@ def test_create_and_upload_errors(tmp: Path) -> None:
 
 def test_download_file(tmp: Path) -> None:
     """A result file is written to disk; every failure is an error string."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     dest = tmp / "out" / "result.docx"
     seen, opener = _capture()
@@ -750,7 +750,7 @@ def test_download_file(tmp: Path) -> None:
 
 def test_job_output() -> None:
     """Every terminal job shape renders to the right (inline, file, error)."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     inline, fid, err = ldx.job_output({"status": "failed", "error": "bad model"})
     check("output: a failed job reports its problem",
@@ -786,7 +786,7 @@ def test_job_output() -> None:
 
 def test_service_help() -> None:
     """The help text names every service the module will accept."""
-    from zimzilla import ldxhub as ldx
+    from kuro import ldxhub as ldx
 
     text = ldx.service_help()
     lines = [ln for ln in text.splitlines() if ln.strip()]
@@ -802,13 +802,13 @@ def test_service_help() -> None:
 
 def test_tool_gating(tmp: Path) -> None:
     """The six tools are registered, ungated by permission, and key-gated."""
-    from zimzilla import agent as agent_mod
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import agent as agent_mod
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     check("tools: LDXHUB_TOOLS is exactly the five job tools",
           t.LDXHUB_TOOLS == set(JOB_TOOLS), str(sorted(t.LDXHUB_TOOLS)))
-    check("tools: ldxhub_list is NOT key-gated — the catalogs are public",
+    check("tools: ldxhub_list is NOT key-gated â€” the catalogs are public",
           "ldxhub_list" not in t.LDXHUB_TOOLS)
 
     schema_names = {s["name"] for s in t.TOOL_SCHEMAS}
@@ -850,7 +850,7 @@ def test_tool_gating(tmp: Path) -> None:
 
     # A mode that denies a normal tool must not accidentally deny these, and
     # the six must survive the mode policy untouched.
-    from zimzilla.config import MODES
+    from kuro.config import MODES
 
     for mode, policy in MODES.items():
         hit = set(policy.get("deny", set())) & set(TOOL_NAMES)
@@ -858,9 +858,9 @@ def test_tool_gating(tmp: Path) -> None:
 
 
 def test_structflow_inputs_xor_file(tmp: Path) -> None:
-    """StructFlow takes a prompt or a file — never both, and never neither."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    """StructFlow takes a prompt or a file â€” never both, and never neither."""
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
     box, patch = _capture_job()
@@ -914,8 +914,8 @@ def test_structflow_inputs_xor_file(tmp: Path) -> None:
 
 def test_structflow_model_selection(tmp: Path) -> None:
     """The explicit model reaches resolve_entry; a failure surfaces cleanly."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
     seen: dict = {}
@@ -943,8 +943,8 @@ def test_structflow_model_selection(tmp: Path) -> None:
 
 def test_analyze_extract_refine(tmp: Path) -> None:
     """The three file-in handlers each build the payload the gateway requires."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
     box, patch = _capture_job()
@@ -999,8 +999,8 @@ def test_analyze_extract_refine(tmp: Path) -> None:
 
 def test_convert_modes(tmp: Path) -> None:
     """Convert picks renderocr or castdoc, and normalises the OCR languages."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
     box, patch = _capture_job()
@@ -1060,8 +1060,8 @@ def test_convert_modes(tmp: Path) -> None:
 
 def test_list_handler(tmp: Path) -> None:
     """The list tool reads the live catalogs and marks the pinned default."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
     creds = ("tok", {"structflow": "sf-beta"}, "env")
@@ -1097,7 +1097,7 @@ def test_list_handler(tmp: Path) -> None:
         check("list: a catalog error is reported, not raised",
               not out.is_error and "boom" in out.output, out.output)
 
-    # The catalogs are public, so listing must work before a key exists —
+    # The catalogs are public, so listing must work before a key exists â€”
     # only the *tools that run jobs* need one.
     with _clean_env(), mock.patch.object(ldx, "PROFILE", tmp / "none" / "source"):
         ldx.clear_cache()
@@ -1122,8 +1122,8 @@ def test_list_handler(tmp: Path) -> None:
 
 def test_deliver(tmp: Path) -> None:
     """``_ldx_deliver`` saves a file, reads one back, or explains the miss."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
 
@@ -1210,8 +1210,8 @@ def test_deliver(tmp: Path) -> None:
 
 def test_upload_is_jailed(tmp: Path) -> None:
     """An upload path goes through the sandbox, like every other file tool."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import tools as t
+    from kuro import ldxhub as ldx
+    from kuro import tools as t
 
     cfg = _cfg(tmp)
     loose = _cfg(tmp, unsafe=True)
@@ -1241,12 +1241,12 @@ def test_upload_is_jailed(tmp: Path) -> None:
               not out.is_error, out.output)
 
         # With --unsafe the jail is lifted, so an outside path that exists is
-        # permitted — asserted so the flag keeps working for uploads too.
+        # permitted â€” asserted so the flag keeps working for uploads too.
         out = _run("ldxhub_extract", {"file_path": "../../etc/hostname"}, loose)
         check("jail: --unsafe permits an outside path that exists",
               not out.is_error, out.output)
 
-        # The jail is lifted but existence is still required — must_exist is
+        # The jail is lifted but existence is still required â€” must_exist is
         # enforced by resolve_in_jail before the flag is consulted.
         out = _run("ldxhub_extract", {"file_path": "../../etc/definitely-absent"}, loose)
         check("jail: --unsafe still requires the file to exist",
@@ -1254,9 +1254,9 @@ def test_upload_is_jailed(tmp: Path) -> None:
 
 
 def test_not_a_source() -> None:
-    """LDXHub is a tool surface, not an upstream — and the tests hold that."""
-    from zimzilla import ldxhub as ldx
-    from zimzilla import sources
+    """LDXHub is a tool surface, not an upstream â€” and the tests hold that."""
+    from kuro import ldxhub as ldx
+    from kuro import sources
 
     check("source: there is no apply_to", not hasattr(ldx, "apply_to"))
     check("source: there is no active_endpoint", not hasattr(ldx, "active_endpoint"))
@@ -1264,7 +1264,7 @@ def test_not_a_source() -> None:
     check("source: there is no DEFAULT_BASE_URL to switch to",
           not hasattr(ldx, "DEFAULT_BASE_URL"))
 
-    src = (ROOT / "zimzilla" / "sources.py").read_text(encoding="utf-8")
+    src = (ROOT / "kuro" / "sources.py").read_text(encoding="utf-8")
     check("source: sources.py never mentions ldxhub", "ldxhub" not in src.lower())
     check("source: LDXHub is not a builtin key",
           "ldxhub" not in sources.BUILTIN_KEYS)
@@ -1272,7 +1272,7 @@ def test_not_a_source() -> None:
           sources.active_key("https://gw.ldxhub.io") is None)
 
     # The module carries no Claude fallback (openrouter has one; this must not).
-    body = (ROOT / "zimzilla" / "ldxhub.py").read_text(encoding="utf-8")
+    body = (ROOT / "kuro" / "ldxhub.py").read_text(encoding="utf-8")
     check("source: ldxhub.py has no claude fallback",
           "claude" not in body.lower())
     check("source: it documents that it is not a chat source",
@@ -1281,8 +1281,8 @@ def test_not_a_source() -> None:
 
 def test_tui_surfaces() -> None:
     """The two commands are wired into every surface the TUI has."""
-    app = (ROOT / "zimzilla" / "ui" / "app.py").read_text(encoding="utf-8")
-    comp = (ROOT / "zimzilla" / "ui" / "complete.py").read_text(encoding="utf-8")
+    app = (ROOT / "kuro" / "ui" / "app.py").read_text(encoding="utf-8")
+    comp = (ROOT / "kuro" / "ui" / "complete.py").read_text(encoding="utf-8")
 
     check("tui: app.py imports the module", "from .. import ldxhub as ldx_mod" in app)
     check("tui: the setup command is dispatched",
@@ -1296,18 +1296,18 @@ def test_tui_surfaces() -> None:
     check("tui: /help lists the models command",
           '("/ldxhub-models [service]"' in app)
     check("tui: the status pane shows the keyless hint, and says browsing is free",
-          "no key — /ldxhub-api-setup (jobs; /ldxhub-models " in app
+          "no key â€” /ldxhub-api-setup (jobs; /ldxhub-models " in app
           and "browses free)" in app)
     check("tui: the fetch runs off the UI thread",
           "@work(exclusive=True, thread=True)" in app
           and "def _fetch_ldxhub_models(self, service: str) -> None:" in app)
     check("tui: the key is never echoed back",
-          "…{key[-4:]}" in app or "key[-4:]" in app)
+          "â€¦{key[-4:]}" in app or "key[-4:]" in app)
 
     check("tui: completion offers the setup command",
           '("/ldxhub-api-setup", "store your LDXHub API key (document jobs)")' in comp)
     check("tui: completion offers the models command",
-          '("/ldxhub-models", "LDXHub models/engines — pick the default per service")' in comp)
+          '("/ldxhub-models", "LDXHub models/engines â€” pick the default per service")' in comp)
 
     # The catalogs command must not pretend to be a chat-model list.
     check("tui: /ldxhub-models is not advertised as a chat model list",
@@ -1317,10 +1317,10 @@ def test_tui_surfaces() -> None:
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zim-ldx-test-"))
     # Pin the module's paths to the temp tree before anything imports it:
-    # ZIMZILLA_HOME is read at import time.
-    os.environ["ZIMZILLA_HOME"] = str(tmp / ".zimzilla")
-    os.environ["ZIMZILLA_CLAUDE_SOURCE"] = str(tmp / "claude-source")
-    for mod in [m for m in list(sys.modules) if m.startswith("zimzilla")]:
+    # KURO_HOME is read at import time.
+    os.environ["KURO_HOME"] = str(tmp / ".kuro")
+    os.environ["KURO_CLAUDE_SOURCE"] = str(tmp / "claude-source")
+    for mod in [m for m in list(sys.modules) if m.startswith("kuro")]:
         del sys.modules[mod]
 
     saved = {v: os.environ.pop(v, None) for v in LDXHUB_VARS}
@@ -1363,7 +1363,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -1372,3 +1372,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -1,4 +1,4 @@
-"""Pane messaging: mailbox semantics, tool gating, and the generated tmux config.
+﻿"""Pane messaging: mailbox semantics, tool gating, and the generated tmux config.
 
 Run:  python tests/test_panes.py   (from an activated venv)
 """
@@ -18,10 +18,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from zimzilla import panes, tools  # noqa: E402
-from zimzilla import __main__ as main_mod  # noqa: E402
-from zimzilla.agent import Agent  # noqa: E402
-from zimzilla.config import Config  # noqa: E402
+from kuro import panes, tools  # noqa: E402
+from kuro import __main__ as main_mod  # noqa: E402
+from kuro.agent import Agent  # noqa: E402
+from kuro.config import Config  # noqa: E402
 
 FAILS: list[str] = []
 
@@ -38,7 +38,7 @@ def has_bind(keys: str, key: str, command: str) -> bool:
     A plain substring test is not enough: tmux's stock prefix table carries one
     enormous ``display-menu`` binding whose *arguments* contain ``h { split-window
     -h }``, so searching for "h" and "split-window -h" matches a server that has
-    no ``h`` binding at all — which is precisely the state being tested for.
+    no ``h`` binding at all â€” which is precisely the state being tested for.
     Anchoring on ``bind-key -T prefix <key>`` only matches a real binding.
     """
     pat = re.compile(rf"^\s*bind-key\s+-T prefix\s+{re.escape(key)}\s+{re.escape(command)}")
@@ -47,7 +47,7 @@ def has_bind(keys: str, key: str, command: str) -> bool:
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="zz-panes-"))
-    root = panes.mailbox_root(tmp, "zimzilla")
+    root = panes.mailbox_root(tmp, "kuro")
 
     # --- mailbox ----------------------------------------------------------
     panes.register(root, "1")
@@ -95,10 +95,10 @@ def main() -> int:
     check("peer tool outside pane reports error", r.is_error and "tmux pane" in r.output, r.output)
 
     # --- inside a simulated pane -----------------------------------------
-    os.environ[panes.ENV_SESSION] = "zimzilla"
+    os.environ[panes.ENV_SESSION] = "kuro"
     os.environ["TMUX_PANE"] = "%7"
     cfg2 = Config.from_env(workdir=tmp, state_dir=tmp / "state")
-    panes.register(panes.mailbox_root(cfg2.state_dir, "zimzilla"), "2")
+    panes.register(panes.mailbox_root(cfg2.state_dir, "kuro"), "2")
     r = tools.execute("agent_send", {"to": "2", "body": "ping"}, cfg2)
     check("agent_send succeeds in pane", not r.is_error, r.output)
     r = tools.execute("agent_peers", {}, cfg2)
@@ -107,13 +107,13 @@ def main() -> int:
     # the receiving pane gets it through the agent's peer_inbox hook
     os.environ["TMUX_PANE"] = "%2"
     cfg3 = Config.from_env(workdir=tmp, state_dir=tmp / "state")
-    text = panes.format_messages(panes.drain(panes.mailbox_root(cfg3.state_dir, "zimzilla"), "2"))
+    text = panes.format_messages(panes.drain(panes.mailbox_root(cfg3.state_dir, "kuro"), "2"))
     check("receiver sees message", "ping" in text and "from 7" in text, text)
 
     # --- /panes: the relaunch request -------------------------------------
     # `transcript_of` is what makes "your session continues there" true: it
     # flattens the wire-format history into the (role, text) pairs the boot
-    # replay draws. Tool traffic is dropped — the panels are live progress, and
+    # replay draws. Tool traffic is dropped â€” the panels are live progress, and
     # a wall of them for finished work would bury the conversation.
     check("Relaunch carries the resume path",
           panes.Relaunch(resume="/x/y.json").resume == "/x/y.json")
@@ -163,18 +163,18 @@ def main() -> int:
     # exits with a Relaunch request and __main__ performs it. These drive the
     # command with the app unmounted, stubbing the two things that need a
     # mounted DOM.
-    from zimzilla.ui.app import ZimZillaApp  # noqa: E402
-    from zimzilla import session as session_mod  # noqa: E402
+    from kuro.ui.app import KuroApp  # noqa: E402
+    from kuro import session as session_mod  # noqa: E402
 
     acfg = Config.from_env(workdir=tmp / "appwd", state_dir=tmp / "appstate")
-    app = ZimZillaApp(acfg)
+    app = KuroApp(acfg)
     said: list[str] = []
     app._sys_line = lambda msg, **k: said.append(msg)
     exited: dict = {}
     app.exit = lambda result=None, **k: exited.update(result=result)
 
     # Inside a pane already: nothing to do, and it must not exit.
-    os.environ[panes.ENV_SESSION] = "zimzilla"
+    os.environ[panes.ENV_SESSION] = "kuro"
     os.environ["TMUX_PANE"] = "%1"
     app._cmd_panes()
     check("/panes inside a pane does not exit", "result" not in exited, str(exited))
@@ -193,7 +193,7 @@ def main() -> int:
     check("/panes announces the relaunch",
           any("relaunching under tmux" in s for s in said), str(said))
 
-    # No tmux: refuse, and do not exit — exiting would leave no session at all.
+    # No tmux: refuse, and do not exit â€” exiting would leave no session at all.
     said.clear(); exited.clear()
     with mock.patch.object(panes, "tmux_available", lambda: False):
         app._cmd_panes()
@@ -201,7 +201,7 @@ def main() -> int:
     check("/panes without tmux says how to fix it",
           any("tmux is not installed" in s for s in said), str(said))
 
-    # A failed save must not cost the operator the relaunch — panes still work
+    # A failed save must not cost the operator the relaunch â€” panes still work
     # without history, so the command carries on with resume=None.
     said.clear(); exited.clear()
     with mock.patch.object(session_mod, "save", side_effect=OSError("read-only")):
@@ -213,16 +213,16 @@ def main() -> int:
           and any("could not save" in s for s in said), f"{r} {said}")
 
     # --- tmux config ------------------------------------------------------
-    conf = panes.tmux_conf("/usr/bin/zimzilla --workdir '/tmp/x y'")
+    conf = panes.tmux_conf("/usr/bin/kuro --workdir '/tmp/x y'")
     check("prefix is ctrl+b", "set -g prefix C-b" in conf)
     check("bind h is horizontal split", "bind h split-window -h" in conf)
     check("bind v is vertical split", "bind v split-window -v" in conf)
     check("standalone hint needs one prefix", "ctrl+b ctrl+b" not in conf)
 
     # Nested inside another tmux the outer server eats the prefix, so the
-    # binding needs it pressed twice — and the hint has to say so, or the
+    # binding needs it pressed twice â€” and the hint has to say so, or the
     # feature looks broken. `send-prefix` is what makes the second one arrive.
-    nconf = panes.tmux_conf("/usr/bin/zimzilla", nested=True)
+    nconf = panes.tmux_conf("/usr/bin/kuro", nested=True)
     check("nested hint says ctrl+b twice", "ctrl+b ctrl+b h" in nconf, nconf)
     check("send-prefix bound for forwarding", "bind C-b send-prefix" in nconf)
     check("bindings still present when nested",
@@ -237,9 +237,9 @@ def main() -> int:
         os.environ["TMUX"] = old_tmux
 
     # write_tmux_conf derives `nested` from the environment unless told otherwise
-    wconf = panes.write_tmux_conf(tmp / "nested-state", "/usr/bin/zimzilla", nested=True)
+    wconf = panes.write_tmux_conf(tmp / "nested-state", "/usr/bin/kuro", nested=True)
     check("write_tmux_conf honours nested=True", "ctrl+b ctrl+b h" in wconf.read_text())
-    wconf2 = panes.write_tmux_conf(tmp / "plain-state", "/usr/bin/zimzilla", nested=False)
+    wconf2 = panes.write_tmux_conf(tmp / "plain-state", "/usr/bin/kuro", nested=False)
     check("write_tmux_conf honours nested=False", "ctrl+b ctrl+b" not in wconf2.read_text())
 
     if shutil.which("tmux"):
@@ -261,13 +261,13 @@ def main() -> int:
             check("prefix v bound to split-window -v", has_bind(keys, "v", "split-window -v"), keys)
             ss = subprocess.run(["tmux", "-L", sock, "show-environment", "-g", panes.ENV_SESSION],
                                 env=env, capture_output=True, text=True).stdout
-            check("global session env set", "ZIMZILLA_PANE_SESSION=zimzilla" in ss, ss)
+            check("global session env set", "KURO_PANE_SESSION=kuro" in ss, ss)
         finally:
             subprocess.run(["tmux", "-L", sock, "kill-server"], env=env, capture_output=True)
 
         # --- a pre-existing server must still get the bindings -------------
         # `tmux -f` is read only when a server starts. If one is already up on
-        # our socket, `new-session -A` attaches and the config is never read —
+        # our socket, `new-session -A` attaches and the config is never read â€”
         # leaving tmux's stock prefix table, in which `ctrl+b h` does nothing
         # at all. This is the exact bug that made the prefix keys "not work".
         sock2 = f"zz-test-stale-{os.getpid()}"
@@ -302,3 +302,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

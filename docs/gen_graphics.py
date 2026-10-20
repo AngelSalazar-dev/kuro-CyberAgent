@@ -1,23 +1,23 @@
-"""Regenerate the animated README graphics (docs/hero.svg, docs/terminal.svg).
+﻿"""Regenerate the animated README graphics (docs/hero.svg, docs/terminal.svg).
 
 Run:  python docs/gen_graphics.py   (from an activated venv)
 
-Both files are plain, self-contained SVG — no external assets, no JS. GitHub
+Both files are plain, self-contained SVG â€” no external assets, no JS. GitHub
 renders the CSS animations in place. Every animation is layered ON TOP of a
 fully-visible base state, so a renderer that samples the first frame (or
 ignores animation entirely) still shows the complete graphic.
 """
 import random, sys
 from pathlib import Path
-sys.path.insert(0, "/home/zim/Projects/ZimZilla")
-from zimzilla.ui.banner import FONT, FONT_HEIGHT
+sys.path.insert(0, "/home/zim/Projects/Kuro")
+from kuro.ui.banner import FONT, FONT_HEIGHT
 
 OUT = Path(__file__).resolve().parent
 BG, GRID, GREEN, DIM, ACCENT, AMBER = (
     "#040704", "#0a1a0d", "#00ff41", "#0c5a22", "#7dffb0", "#ffb000")
 
 W, H = 1280, 420
-word, GW, SP, cell = "ZIMZILLA", 6, 1, 19
+word, GW, SP, cell = "KURO", 6, 1, 19
 total_cells = len(word) * GW + (len(word) - 1) * SP
 x0 = (W - total_cells * cell) / 2
 y0 = 126
@@ -29,16 +29,16 @@ for gi, ch in enumerate(word):
     for r in range(FONT_HEIGHT):
         row, c = FONT[ch][r], 0
         while c < len(row):
-            if row[c] == "█":
+            if row[c] == "â–ˆ":
                 run = 0
-                while c + run < len(row) and row[c + run] == "█":
+                while c + run < len(row) and row[c + run] == "â–ˆ":
                     run += 1
                 rects.append(f'<rect x="{gx + c*cell:.0f}" y="{y0 + r*cell}" '
                              f'width="{run*cell}" height="{cell}"/>')
                 c += run
             else:
                 c += 1
-    # base opacity is 1 — the animation only adds a glitch flicker on top.
+    # base opacity is 1 â€” the animation only adds a glitch flicker on top.
     glyphs.append(f'<g class="gl" style="animation-delay:{gi*0.11:.2f}s">'
                   + "".join(rects) + "</g>")
 banner = "\n      ".join(glyphs)
@@ -52,7 +52,7 @@ rain = "\n      ".join(
     for i in range(34))
 
 sub_y = 288
-(OUT / "hero.svg").write_text(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="ZIMZILLA">
+(OUT / "hero.svg").write_text(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="KURO">
   <defs>
     <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
       <feGaussianBlur stdDeviation="7" result="b"/>
@@ -130,7 +130,7 @@ sub_y = 288
     <text class="tag" x="{W/2:.0f}" y="{sub_y}" text-anchor="middle">net.shell // autonomous coding agent</text>
     <rect class="cur" x="{W/2 + 232:.0f}" y="{sub_y-15}" width="10" height="18" fill="{ACCENT}"/>
 
-    <text class="meta" x="{W/2:.0f}" y="332" text-anchor="middle">terminal-native · streaming · tool-using · scope-aware</text>
+    <text class="meta" x="{W/2:.0f}" y="332" text-anchor="middle">terminal-native Â· streaming Â· tool-using Â· scope-aware</text>
     <text class="meta" x="{W/2:.0f}" y="360" text-anchor="middle" opacity="0.8">by Mr-Destroyer / ZIM</text>
 
     <rect x="0.5" y="0.5" width="{W-1}" height="{H-1}" rx="10" fill="none" stroke="{DIM}" stroke-opacity="0.55"/>
@@ -142,12 +142,12 @@ sub_y = 288
 # ------------------------------------------------------------ terminal ------
 LINES = [
     ("prompt",  "recon the target and map the attack surface"),
-    ("dim",     "· enumerating · decrypting · probing"),
+    ("dim",     "Â· enumerating Â· decrypting Â· probing"),
     ("tool",    "bash  nmap -sV -p- target.example.com"),
-    ("ok",      "✓ 9 hosts up · 412 open ports · 0 blocked"),
+    ("ok",      "âœ“ 9 hosts up Â· 412 open ports Â· 0 blocked"),
     ("tool",    "write_file  findings/attack-surface.md"),
-    ("ok",      "✓ diff applied  +84 −0"),
-    ("info",    "turn 3 · iter 7 · $0.0142 · 18.4k tok"),
+    ("ok",      "âœ“ diff applied  +84 âˆ’0"),
+    ("info",    "turn 3 Â· iter 7 Â· $0.0142 Â· 18.4k tok"),
 ]
 
 def terminal() -> str:
@@ -158,7 +158,7 @@ def terminal() -> str:
         delay = 0.55 + i * 0.62
         color = {"prompt": GREEN, "dim": DIM, "tool": ACCENT,
                  "ok": GREEN, "info": AMBER}[kind]
-        prefix = "› " if kind == "prompt" else ("  " if kind in ("ok", "dim") else "$ ")
+        prefix = "â€º " if kind == "prompt" else ("  " if kind in ("ok", "dim") else "$ ")
         esc = (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
         rows.append(
             f'<text class="ln" x="{pad}" y="{top + i*lh}" fill="{color}" '
@@ -168,7 +168,7 @@ def terminal() -> str:
     last_y = top + (len(LINES) - 1) * lh
     cur_delay = 0.55 + len(LINES) * 0.62
 
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="ZIMZILLA session">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="KURO session">
   <defs>
     <clipPath id="tframe"><rect x="0" y="0" width="{W}" height="{H}" rx="12"/></clipPath>
     <filter id="tglow" x="-20%" y="-20%" width="140%" height="140%">
@@ -200,11 +200,11 @@ def terminal() -> str:
     <circle cx="28" cy="23" r="6.5" fill="#ff5f57"/>
     <circle cx="50" cy="23" r="6.5" fill="#febc2e"/>
     <circle cx="72" cy="23" r="6.5" fill="#28c840"/>
-    <text class="title" x="{W/2:.0f}" y="28" text-anchor="middle">zimzilla — net.shell</text>
+    <text class="title" x="{W/2:.0f}" y="28" text-anchor="middle">kuro â€” net.shell</text>
     <line x1="0" y1="46" x2="{W}" y2="46" stroke="{DIM}" stroke-opacity="0.6"/>
 
     <text x="{pad}" y="76" fill="{DIM}" style="font:13px ui-monospace,Menlo,monospace;letter-spacing:1.4px">
-      ◆ ZIMZILLA   ◆ AUTO   ◆ deepseek-v4.1-flash   ▸ /home/zim   ◈ scope off   ⛨ sandbox on
+      â—† KURO   â—† AUTO   â—† deepseek-v4.1-flash   â–¸ /home/zim   â—ˆ scope off   â›¨ sandbox on
     </text>
 
       {body}
@@ -213,7 +213,7 @@ def terminal() -> str:
 
     <line x1="0" y1="{H-42}" x2="{W}" y2="{H-42}" stroke="{DIM}" stroke-opacity="0.6"/>
     <text x="{pad}" y="{H-17}" fill="{DIM}" style="font:13px ui-monospace,Menlo,monospace">
-      ● deepseek-v4.1-flash   |   tok ↑18.4k ↓612   |   $ 0.0142   |   turn 3   |   ● idle
+      â— deepseek-v4.1-flash   |   tok â†‘18.4k â†“612   |   $ 0.0142   |   turn 3   |   â— idle
     </text>
     <rect x="0.5" y="0.5" width="{W-1}" height="{H-1}" rx="12" fill="none" stroke="{DIM}" stroke-opacity="0.55"/>
   </g>
@@ -223,3 +223,4 @@ def terminal() -> str:
 
 (OUT / "terminal.svg").write_text(terminal())
 print("wrote docs/hero.svg and docs/terminal.svg")
+

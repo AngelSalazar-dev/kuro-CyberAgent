@@ -1,9 +1,9 @@
-"""Regression suite for the markdown renderer.
+﻿"""Regression suite for the markdown renderer.
 
 Run:  python tests/test_markdown.py   (from an activated venv)
 
 The operator's complaint was that a model's answer arrived with its own markup
-still on it — ``**Asset:**`` where they wanted a bold Asset, ``- item`` down a
+still on it â€” ``**Asset:**`` where they wanted a bold Asset, ``- item`` down a
 column of dashes, a fenced block as a wall of text. ``agent_text`` handled
 inline backticks and nothing else.
 
@@ -11,9 +11,9 @@ The load-bearing rule is that the parse is CommonMark's and not a regex of
 ours, and two checks here exist specifically to hold that line, because a
 regex version of this got both wrong:
 
-* ``26*26**5*100`` — mask syntax, which a pentest answer is full of. A regex
+* ``26*26**5*100`` â€” mask syntax, which a pentest answer is full of. A regex
   that pairs ``**`` eats the asterisks. Nothing may be *dropped*.
-* ``**/*.py`` inside backticks — a glob, which must stay a glob.
+* ``**/*.py`` inside backticks â€” a glob, which must stay a glob.
 
 No test here touches the network or an app: every renderable is built straight
 and printed through a throwaway Console, which is the same idiom
@@ -34,9 +34,9 @@ from rich.syntax import Syntax  # noqa: E402
 from rich.table import Table  # noqa: E402
 from rich.text import Text  # noqa: E402
 
-from zimzilla.theme import PALETTES  # noqa: E402
-from zimzilla.ui import markdown as M  # noqa: E402
-from zimzilla.ui import renderers as R  # noqa: E402
+from kuro.theme import PALETTES  # noqa: E402
+from kuro.ui import markdown as M  # noqa: E402
+from kuro.ui import renderers as R  # noqa: E402
 
 RESULTS: list[tuple[str, bool, str]] = []
 P = PALETTES["green"]
@@ -53,7 +53,7 @@ def flat(text: str) -> str:
 
 
 def shown(text: str, width: int = 100) -> str:
-    """The transcript form, rendered — so a Table and a Syntax are visible."""
+    """The transcript form, rendered â€” so a Table and a Syntax are visible."""
     buf = io.StringIO()
     Console(file=buf, width=width, color_system=None,
             legacy_windows=False).print(M.markdown_renderable(text, P))
@@ -68,7 +68,7 @@ def test_mask_syntax_loses_nothing() -> None:
 
     The operator writes about hashcat masks, so this is not a hypothetical.
     A hand-rolled renderer that pairs the first ``**`` it finds turns this
-    into ``26265100`` — the asterisks consumed as delimiters, the digits run
+    into ``26265100`` â€” the asterisks consumed as delimiters, the digits run
     together into a different number. CommonMark resolves emphasis by flanking
     rules and, where it does pair them, consumes only the delimiters.
 
@@ -99,7 +99,7 @@ def test_a_glob_inside_backticks_stays_a_glob() -> None:
     check("glob: the sentence around it survives",
           "Searched" in out and "for the sink." in out, repr(out))
 
-    # Unbackticked, CommonMark reads the same asterisks as emphasis — that is
+    # Unbackticked, CommonMark reads the same asterisks as emphasis â€” that is
     # the parser's call, not ours, and the check is only that nothing vanishes.
     out = flat("glob **/*.py untouched")
     check("glob: an unbackticked glob loses no letters",
@@ -159,7 +159,7 @@ def test_headings_are_sized_and_lose_their_hashes() -> None:
     h1 = flat("# Findings")
     check("heading: h1 text is present", "FINDINGS" in h1, repr(h1))
     check("heading: h1 loses its hash", not h1.startswith("#"), repr(h1))
-    check("heading: h1 carries a rule", "─" in h1, repr(h1))
+    check("heading: h1 carries a rule", "â”€" in h1, repr(h1))
 
     h2 = flat("## Evidence")
     check("heading: h2 text is present", "Evidence" in h2, repr(h2))
@@ -173,7 +173,7 @@ def test_headings_are_sized_and_lose_their_hashes() -> None:
 
 def test_lists_become_bullets_and_numbers() -> None:
     out = flat("- one\n- two\n- three")
-    check("list: bullets are drawn", out.count("•") == 3, repr(out))
+    check("list: bullets are drawn", out.count("â€¢") == 3, repr(out))
     check("list: the dashes are gone", "- one" not in out, repr(out))
     check("list: every item is present",
           all(w in out for w in ("one", "two", "three")), repr(out))
@@ -209,13 +209,13 @@ def test_a_blockquote_is_bared() -> None:
     out = flat("> the nonce is read but never compared")
     check("quote: the text is present",
           "never compared" in out, repr(out))
-    check("quote: it is marked with a bar", "▌" in out, repr(out))
+    check("quote: it is marked with a bar", "â–Œ" in out, repr(out))
     check("quote: the > marker is gone", not out.lstrip().startswith(">"), repr(out))
 
 
 def test_a_rule_is_drawn() -> None:
     out = flat("above\n\n---\n\nbelow")
-    check("rule: a horizontal rule is drawn", "─" in out, repr(out))
+    check("rule: a horizontal rule is drawn", "â”€" in out, repr(out))
     check("rule: the dashes are gone", "---" not in out, repr(out))
     check("rule: both sides survive",
           "above" in out and "below" in out, repr(out))
@@ -304,7 +304,7 @@ def test_a_multi_block_answer_is_a_group() -> None:
 
 
 def test_the_streaming_form_is_always_flat_text() -> None:
-    """The live line must be a ``Text`` — it is what ``Static.update`` takes."""
+    """The live line must be a ``Text`` â€” it is what ``Static.update`` takes."""
     src = "# Head\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```python\nx = 1\n```\n"
     r = M.markdown_text(src, P)
     check("stream: the flat form is a Text", isinstance(r, Text),
@@ -385,14 +385,14 @@ def test_a_line_of_underscores_is_not_emphasis() -> None:
 # The wiring: the six call sites
 # ---------------------------------------------------------------------------
 def test_agent_text_delegates_to_markdown() -> None:
-    """``agent_text`` keeps its contract — six call sites depend on it."""
+    """``agent_text`` keeps its contract â€” six call sites depend on it."""
     t = R.agent_text("a **bold** claim", P)
     check("wiring: agent_text still returns a Text", isinstance(t, Text),
           type(t).__name__)
     check("wiring: agent_text resolves markdown", "**" not in str(t), repr(str(t)))
     check("wiring: the words survive", "bold" in str(t) and "claim" in str(t),
           repr(str(t)))
-    # Empty in, empty out — the streaming path calls it before anything arrives.
+    # Empty in, empty out â€” the streaming path calls it before anything arrives.
     check("wiring: agent_text of an empty buffer is empty",
           str(R.agent_text("", P)) == "", repr(str(R.agent_text("", P))))
 
@@ -427,7 +427,7 @@ def test_markdown_renderable_is_re_rendered_safely() -> None:
     """The transcript keeps renderables and replays them on every resize.
 
     ``RainRichLog`` re-renders its stored blocks at the new width, so the
-    renderable this returns must be printable more than once — which is the
+    renderable this returns must be printable more than once â€” which is the
     property ``rich.markdown.Markdown`` was rejected for.
     """
     src = "# Head\n\nprose\n\n```python\nx = 1\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"
@@ -478,7 +478,7 @@ def main() -> int:
     failed = [n for n, ok, _ in RESULTS if not ok]
     print()
     if failed:
-        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed — FAILED: "
+        print(f"{len(RESULTS) - len(failed)}/{len(RESULTS)} passed â€” FAILED: "
               + ", ".join(failed))
         return 1
     print(f"{len(RESULTS)}/{len(RESULTS)} passed")
@@ -487,3 +487,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

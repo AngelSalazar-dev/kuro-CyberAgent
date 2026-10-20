@@ -1,4 +1,4 @@
-"""`/zim-opencode`: the proxy pool, the rotation, and the launch decision.
+﻿"""`/zim-opencode`: the proxy pool, the rotation, and the launch decision.
 
 Run:  python tests/test_opencode.py   (from an activated venv)
 
@@ -7,14 +7,14 @@ the command's happy path:
 
 * **Rotation must survive a restart.** ``cursor`` is persisted, not held in
   memory. An in-memory counter would reset on every launch and hand the operator
-  the same exit IP twice in a row — which is the one thing the command exists to
+  the same exit IP twice in a row â€” which is the one thing the command exists to
   prevent. Both the wraparound and the persistence are asserted.
 * **A pool entry is only worth keeping if it carries traffic.** The probe is a
   real HTTPS fetch through the proxy, not a TCP connect: the common failure in
   these lists is a port that accepts a connection and then refuses to forward.
   A connect-only check would keep every one of them.
 * **``classify`` is the whole retry policy, and it is pure.** Three verdicts,
-  and the order matters — a retired model id can arrive wrapped in text that
+  and the order matters â€” a retired model id can arrive wrapped in text that
   also mentions a connection, so "model" has to win. Getting this backwards
   turns one fast, actionable error into six slow, misleading ones.
 * **``child_env`` sets both spellings and always bypasses localhost.** opencode's
@@ -46,15 +46,15 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# A throwaway ZIMZILLA_HOME for the whole suite. ``opencode.state_dir()`` reads
-# it on every call, so the checks that build a Pool and save it — the
-# persistence ones, which do not pass an explicit path — were rewriting the
-# operator's live ``~/.zimzilla/opencode/pool.json`` with test proxies.
+# A throwaway KURO_HOME for the whole suite. ``opencode.state_dir()`` reads
+# it on every call, so the checks that build a Pool and save it â€” the
+# persistence ones, which do not pass an explicit path â€” were rewriting the
+# operator's live ``~/.kuro/opencode/pool.json`` with test proxies.
 _TEST_HOME = Path(tempfile.mkdtemp(prefix="zim-test-home-"))
-os.environ["ZIMZILLA_HOME"] = str(_TEST_HOME)
+os.environ["KURO_HOME"] = str(_TEST_HOME)
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
-from zimzilla import opencode as oc  # noqa: E402
+from kuro import opencode as oc  # noqa: E402
 
 FAILS: list[str] = []
 
@@ -223,7 +223,7 @@ def test_progress_callback():
 # ---------------------------------------------------------------------------
 
 def test_classify():
-    # The refusal opencode returns for a Tor exit — the failure that started
+    # The refusal opencode returns for a Tor exit â€” the failure that started
     # this whole design.
     check("free-tier refusal is retryable",
           oc.classify("OpenCode's free tier can only be used from within OpenCode") == "retry")
@@ -233,13 +233,13 @@ def test_classify():
           oc.classify("Unable to connect. Is the computer able to access the url?") == "retry")
     check("retired model is a model error",
           oc.classify("Model is unavailable") == "model")
-    check("a clean transcript is ok", oc.classify("> build · deepseek ·\nok") == "ok")
+    check("a clean transcript is ok", oc.classify("> build Â· deepseek Â·\nok") == "ok")
     check("empty transcript is ok", oc.classify("") == "ok")
     check("None transcript is ok", oc.classify(None) == "ok")
     # Order matters: this text mentions a connection AND a model error, and the
     # model error is the one that another proxy cannot fix.
     check("model error wins over connection noise",
-          oc.classify("model not found — connection closed") == "model")
+          oc.classify("model not found â€” connection closed") == "model")
 
 
 def test_probe_launch_verdicts():
@@ -263,7 +263,7 @@ def test_probe_launch_verdicts():
     with mock.patch("subprocess.run", side_effect=oc.subprocess.TimeoutExpired("x", 1)):
         check("timeout reported as retry", oc.probe_launch(proxy, binary) == "retry")
 
-    # rc=0 with a refusal in the output is still a refusal — exit status alone
+    # rc=0 with a refusal in the output is still a refusal â€” exit status alone
     # is not the signal.
     with mock.patch("subprocess.run") as sr:
         sr.return_value = mock.Mock(returncode=0, stdout="",
@@ -332,7 +332,7 @@ def test_every_launch_is_a_different_proxy():
           len(seen) == len(set(seen)), str(seen))
 
     # Once every proven proxy has been handed out, the cursor must take over
-    # rather than the command failing — a small pool has to cycle.
+    # rather than the command failing â€” a small pool has to cycle.
     with mock.patch.object(oc, "save_pool"):
         with mock.patch.object(oc, "probe_launch", return_value="ok"):
             more = [oc.find_working_proxy("/usr/bin/opencode", attempts=4,
@@ -345,7 +345,7 @@ def test_a_dead_proxy_stops_being_trusted():
     """A failure is newer evidence than a proof, so it cancels it.
 
     Without this, a proxy that worked yesterday and died overnight keeps its
-    place at the head of the queue and is retried — and timed out, ~40s — on
+    place at the head of the queue and is retried â€” and timed out, ~40s â€” on
     every launch before the pool moves on.
     """
     now = time.time()
@@ -415,7 +415,7 @@ def test_used_at_survives_a_save():
 def test_known_good_is_tried_first(tmp: Path):
     """The pool's memory is the point: a proxy that worked once is better
     evidence than any liveness measurement, so it must be tried before the
-    rest — and remembered after."""
+    rest â€” and remembered after."""
     stale = [oc.Proxy("10.0.0.%d" % i, 80) for i in range(4)]
     proven = oc.Proxy("10.9.9.9", 8080, proven_at=time.time() - 60)
     pool = oc.Pool(proxies=stale + [proven])
@@ -522,14 +522,14 @@ def test_child_env():
                  "ALL_PROXY", "all_proxy"):
         check(f"{name} set", env.get(name) == "http://1.2.3.4:8080", str(env.get(name)))
     # Without the bypass opencode's own local server is proxied and the TUI
-    # breaks — its docs call this required.
+    # breaks â€” its docs call this required.
     for name in ("NO_PROXY", "no_proxy"):
         check(f"{name} bypasses localhost",
               env.get(name) == "localhost,127.0.0.1,::1", str(env.get(name)))
     check("base environment preserved", env.get("PATH") == "/usr/bin")
 
     # Nothing global: building a child env must not touch this process's own
-    # environment, which is what keeps the proxy inside ZimZilla.
+    # environment, which is what keeps the proxy inside Kuro.
     before = dict(os.environ)
     oc.child_env(proxy)
     check("os.environ not polluted", dict(os.environ) == before)
@@ -543,7 +543,7 @@ def test_build_argv():
     check("passthrough args reach the TUI",
           oc.build_argv(b, args=["--auto"], model="m") == [b, "-m", "m", "--auto"])
     # One-shot form: `run` and the prompt, with the default model when none
-    # was named — a `run` with no -m would not be the free model.
+    # was named â€” a `run` with no -m would not be the free model.
     check("one-shot form uses run -m <model> <prompt>",
           oc.build_argv(b, prompt="hi") == [b, "run", "-m", oc.DEFAULT_MODEL, "hi"],
           str(oc.build_argv(b, prompt="hi")))
@@ -560,7 +560,7 @@ def test_run_env_and_status():
     check("child ran in the given cwd", kw["cwd"] == "/tmp")
     check("argv is the TUI form", argv == ["/usr/bin/opencode", "--auto"], str(argv))
 
-    # No proxy means inherit the environment untouched — the honest fallback,
+    # No proxy means inherit the environment untouched â€” the honest fallback,
     # which the caller is required to have announced first.
     with mock.patch("subprocess.call", return_value=0) as sc:
         oc.run(None, "/usr/bin/opencode")
@@ -576,7 +576,7 @@ def test_run_env_and_status():
 
 def test_alias(tmp: Path):
     bin_dir = tmp / "bin"
-    with mock.patch.dict(os.environ, {"ZIMZILLA_BIN_DIR": str(bin_dir)}):
+    with mock.patch.dict(os.environ, {"KURO_BIN_DIR": str(bin_dir)}):
         check("alias path honours the override",
               oc.alias_path() == bin_dir / oc.ALIAS, str(oc.alias_path()))
         check("alias reports not installed before install", not oc.alias_installed())
@@ -590,8 +590,8 @@ def test_alias(tmp: Path):
 
         body = oc.alias_path().read_text(encoding="utf-8")
         check("alias is a bash shim", body.startswith("#!/usr/bin/env bash"), body[:40])
-        check("alias does not reimplement rotation", "exec " in body and "zimzilla.opencode" in body)
-        # The shim must name the interpreter that has zimzilla importable, not
+        check("alias does not reimplement rotation", "exec " in body and "kuro.opencode" in body)
+        # The shim must name the interpreter that has kuro importable, not
         # a bare `python3` that may be a different one.
         check("alias pins the interpreter", sys.executable in body, body)
 
@@ -603,7 +603,7 @@ def test_alias(tmp: Path):
               "/other/python" in oc.alias_path().read_text(encoding="utf-8"))
         check("reinstall reports success", ok2)
 
-    os.environ.pop("ZIMZILLA_BIN_DIR", None)
+    os.environ.pop("KURO_BIN_DIR", None)
     check("alias defaults to ~/.local/bin",
           oc.alias_path() == Path.home() / ".local" / "bin" / oc.ALIAS,
           str(oc.alias_path()))
@@ -648,8 +648,8 @@ def test_binary_lookup(tmp: Path):
 
 
 def test_state_paths(tmp: Path):
-    with mock.patch.dict(os.environ, {"ZIMZILLA_HOME": str(tmp / "state")}):
-        check("state dir honours ZIMZILLA_HOME",
+    with mock.patch.dict(os.environ, {"KURO_HOME": str(tmp / "state")}):
+        check("state dir honours KURO_HOME",
               oc.state_dir() == tmp / "state" / "opencode", str(oc.state_dir()))
         check("pool file lives in the state dir",
               oc.pool_file() == tmp / "state" / "opencode" / "pool.json",
@@ -662,8 +662,8 @@ def test_state_paths(tmp: Path):
 # ---------------------------------------------------------------------------
 
 def test_ui_wiring():
-    from zimzilla.ui import app as app_mod
-    from zimzilla.ui import complete as complete_mod
+    from kuro.ui import app as app_mod
+    from kuro.ui import complete as complete_mod
 
     src = Path(app_mod.__file__).read_text(encoding="utf-8")
     check("dispatch has the command", '"zim-opencode":' in src)
@@ -683,7 +683,7 @@ def test_ui_wiring():
           "refresh: bool = False" in src and "get_pool(refresh=refresh" in src)
 
     # These proxies are flaky per-request, so the launch can succeed and the
-    # courtesy exit-IP lookup still fail. That must not render "(exit None)" —
+    # courtesy exit-IP lookup still fail. That must not render "(exit None)" â€”
     # it reads as a failure at the exact moment the route proved itself. The
     # parenthetical is built only when the IP is known.
     check("exit IP is guarded, never '(exit None)'",
@@ -693,8 +693,8 @@ def test_ui_wiring():
 def test_hunt_spinner():
     """The waiting screen: the exact wording asked for, no counts, and an
     animation driven by the UI thread rather than by the worker."""
-    from zimzilla.ui import app as app_mod
-    from zimzilla.ui.widgets import ChatPane
+    from kuro.ui import app as app_mod
+    from kuro.ui.widgets import ChatPane
 
     check("the hunting message is the one asked for",
           app_mod._HUNTING == "ZIM IS MAKING IT UNLIMITED - FINDING THE BEST PROXIES ...",
@@ -770,3 +770,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
