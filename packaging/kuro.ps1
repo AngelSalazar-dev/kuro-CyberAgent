@@ -50,7 +50,8 @@ if (Test-Path -Path $venv_py -PathType Leaf) {
   $PY = ''
 }
 
-$env:KURO_HOME = $env:KURO_HOME -or (Join-Path $env:USERPROFILE '.kuro')
+$env:KURO_HOME = $env:KURO_HOME
+if (-not $env:KURO_HOME) { $env:KURO_HOME = Join-Path $env:USERPROFILE '.kuro' }
 
 # Which upstream to use.
 $env_override   = $env:LITELLM_ENV_FILE
