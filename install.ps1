@@ -196,14 +196,14 @@ $path_env = $env:PATH
 if ($path_env -split ';' -contains $BIN_DIR) {
   ok "$BIN_DIR is on PATH"
 } else {
-  warn "$BIN_DIR is not on your PATH — add it, then open a new shell:"
+  warn "$BIN_DIR is not on your PATH - add it, then open a new shell:"
   note "[Environment]::SetEnvironmentVariable('PATH', '$BIN_DIR;' + [Environment]::GetEnvironmentVariable('PATH', 'User'), 'User')"
 }
 
 # --- 4. the credential -------------------------------------------------------
 
 if ($env:KURO_SKIP_SETUP -eq '1') {
-  warn "KURO_SKIP_SETUP=1 — not configuring the route"
+  warn "KURO_SKIP_SETUP=1 - not configuring the route"
 } elseif (Test-Path -Path $PROFILE -PathType Leaf) {
   step "Route already configured"
   ok "$PROFILE exists"
@@ -213,18 +213,18 @@ if ($env:KURO_SKIP_SETUP -eq '1') {
     & "$INSTALL_DIR\setup.ps1" 2>$null
     ok "route configured"
   } catch {
-    warn "setup did not finish — run $INSTALL_DIR\setup.ps1 to retry"
+    warn "setup did not finish - run $INSTALL_DIR\setup.ps1 to retry"
   }
 }
 
 # --- done --------------------------------------------------------------------
 
 Write-Host ""
-bold "+--------------------------------------------------------------+"
-bold "|  installed.                                                  |"
-bold "+--------------------------------------------------------------+"
-Write-Host ""
-Write-Host "    kuro                 # launch, from anywhere"
+Write-Host "+--------------------------------------------------------------+"
+Write-Host '|  installed.                                                  |'
+Write-Host "+--------------------------------------------------------------+"
+Write-Host "+--------------------------------------------------------------+"
+Write-Host "    kuro                 - launch, from anywhere"
 Write-Host "    kuro -C C:\proj      # run against another directory"
 Write-Host "    kuro --mode zim      # full auto, follows AGENTS.md"
 Write-Host ""
