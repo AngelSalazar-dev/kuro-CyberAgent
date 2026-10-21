@@ -1,4 +1,4 @@
-# install.ps1 - one-line installer for Kuro on Windows.
+# install.ps1 — one-line installer for Kuro on Windows.
 #
 # Clones Kuro into %LOCALAPPDATA%\kuro, builds a virtualenv there and
 # installs the dependencies into it, then drops a `kuro` launcher into
@@ -8,7 +8,7 @@
 #
 #   powershell -ExecutionPolicy Bypass -File install.ps1
 #
-# The venv is built here, on this machine, rather than shipped - a venv is not
+# The venv is built here, on this machine, rather than shipped — a venv is not
 # portable (its interpreter symlink, the console-script shebangs and pyvenv.cfg
 # all bake in absolute paths and one exact base interpreter), so the only way
 # to hand someone a working one is to build it where it will run. That is what
@@ -66,7 +66,7 @@ function py_run {
 step "Checking prerequisites"
 $gitCmd = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitCmd) {
-  die "git is required."git  required.
+  die "git is required."
 }
 
 $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
@@ -74,7 +74,7 @@ if (-not $pythonCmd) {
   $pythonCmd = Get-Command python3 -ErrorAction SilentlyContinue
 }
 if (-not $pythonCmd) {
-  die "python not found - install Python 3.11 or newer."
+  die "python not found — install Python 3.11 or newer."
 }
 $PY = $pythonCmd.Source
 
@@ -94,25 +94,17 @@ ok "git and $py_version"
 step "Fetching Kuro"
 $git_dir = Join-Path $INSTALL_DIR '.git'
 if (Test-Path -Path $git_dir -PathType Container) {
-  # An existing install. Fast-forward only - never merge, never touch local
+  # An existing install. Fast-forward only — never merge, never touch local
   # edits; a failed pull is a warning, not a stop, because the launcher's own
   # update check will report the same thing at run time.
   try {
     git -C $INSTALL_DIR pull --ff-only --quiet 2>$null
-    ok "
-$git_dir = Join-Path $INSTALL_DIR '.git'
-if (Test-Path -Path $git_dir -PathType Container) {
-  # An existing install. Fast-forward only - never merge, never touch local
-  # edits; a failed pull  a warning, not a stop, because the launcher's own
-  # update check will report the same thing at run time.
-  try {
-    git -C $INSTALL_DIR pull --ff-only --quiet 2>$null
-    ok updated $INSTALL_DIR"
+    ok "updated $INSTALL_DIR"
   } catch {
-    warn "could not update $INSTALL_DIR (local changes or offline) - using what is there"could not update $INSTALL_DIR (local changes or offline) - using what  there
+    warn "could not update $INSTALL_DIR (local changes or offline) — using what is there"
   }
 } elseif (Test-Path -Path $INSTALL_DIR -PathType Container) {
-  die "$INSTALL_DIR exists but is not a git checkout - move it aside and re-run."$INSTALL_DIR exists but  not a git checkout - move it aside and re-run.
+  die "$INSTALL_DIR exists but is not a git checkout — move it aside and re-run."
 } else {
   $parent = Split-Path -Parent $INSTALL_DIR
   if (-not (Test-Path -Path $parent -PathType Container)) {
@@ -129,7 +121,7 @@ if (Test-Path -Path $git_dir -PathType Container) {
 $VENV_PY = Join-Path $INSTALL_DIR '.venv\Scripts\python.exe'
 
 if ($env:KURO_SKIP_DEPS -eq '1') {
-  warn "KURO_SKIP_DEPS=1 - skipping the venv (the launcher will not run yet)"
+  warn "KURO_SKIP_DEPS=1 — skipping the venv (the launcher will not run yet)"
 } else {
   step "Building the virtualenv"
   if (Test-Path -Path $VENV_PY -PathType Leaf) {
@@ -168,7 +160,7 @@ if ($env:KURO_SKIP_DEPS -eq '1') {
     }
     ok "kuro installed"
   } catch {
-    die "could not install the dependencies - see the pip output above."
+    die "could not install the dependencies — see the pip output above."
   }
   Remove-Item -Path $deps_file -ErrorAction SilentlyContinue
 
@@ -188,26 +180,11 @@ if (-not (Test-Path -Path $BIN_DIR -PathType Container)) {
 # so the real launcher (which lives in packaging/) finds the venv and the
 # profile no matter where `kuro` is invoked from. Written fresh each run so
 # a moved install re-points itself.
-$shim = @'
+$shim = @"
 #!/usr/bin/env pwsh
-# kuro - installed launcher (written by install.ps1).
-# Pins the checkout and hands every argument to the real launcher.
-$env:KURO_ROOT = "
-if (-not (Test-Path -Path $BIN_DIR -PathType Container)) {
-  New-Item -ItemType Directory -Path $BIN_DIR -Force | Out-Null
-}
-# A tiny shim, not the launcher itself: it pins KURO_ROOT to the checkout
-# so the real launcher (which lives in packaging/) finds the venv and the
-# profile no matter where `kuro`  invoked from. Written fresh each run so
-# a moved install re-points itself.
-$shim = @'
-#!/usr/bin/env pwsh
-# kuro - installed launcher (written by install.ps1).
-# Pins the checkout and hands every argument to the real launcher.
-$env:KURO_ROOT = __INSTALL_DIR__"
-& "__INSTALL_DIR__\packaging\kuro.ps1" @args
-'@
-$shim = $shim -replace '__INSTALL_DIR__', $INSTALL_DIR
+`$env:KURO_ROOT = '$INSTALL_DIR'
+& '$INSTALL_DIR\packaging\kuro.ps1' @args
+"@
 Set-Content -Path (Join-Path $BIN_DIR 'kuro.ps1') -Value $shim -Encoding UTF8
 
 # Also create a plain `kuro` shim (without .ps1) for convenience.
@@ -217,16 +194,16 @@ ok "$BIN_DIR\kuro"
 
 $path_env = $env:PATH
 if ($path_env -split ';' -contains $BIN_DIR) {
-  ok "$BIN_DIR is on PATH"$BIN_DIR  on PATH
+  ok "$BIN_DIR is on PATH"
 } else {
-  warn "$BIN_DIR is not on your PATH - add it, then open a new shell:"$BIN_DIR  not on your PATH - add it, then open a new shell:
+  warn "$BIN_DIR is not on your PATH — add it, then open a new shell:"
   note "[Environment]::SetEnvironmentVariable('PATH', '$BIN_DIR;' + [Environment]::GetEnvironmentVariable('PATH', 'User'), 'User')"
 }
 
 # --- 4. the credential -------------------------------------------------------
 
 if ($env:KURO_SKIP_SETUP -eq '1') {
-  warn "KURO_SKIP_SETUP=1 - not configuring the route"
+  warn "KURO_SKIP_SETUP=1 — not configuring the route"
 } elseif (Test-Path -Path $PROFILE -PathType Leaf) {
   step "Route already configured"
   ok "$PROFILE exists"
@@ -236,7 +213,7 @@ if ($env:KURO_SKIP_SETUP -eq '1') {
     & "$INSTALL_DIR\setup.ps1" 2>$null
     ok "route configured"
   } catch {
-    warn "setup did not finish - run $INSTALL_DIR\setup.ps1 to retry"
+    warn "setup did not finish — run $INSTALL_DIR\setup.ps1 to retry"
   }
 }
 
