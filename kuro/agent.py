@@ -216,6 +216,8 @@ something is missing:
 
 - State directory: {state}. (Override with KURO_HOME.) Sessions, recon
   cases, hunt campaigns and archived reports live under it.
+- Shell: your bash tool runs {shell}. Write commands in that syntax —
+  the tool's name is historical, not a promise that bash parses them.
 - Credentials are mode-600 `source` profiles in that directory â€” one file per
   provider, each a single `export VAR="â€¦"` line the harness reads by itself.
   Never ask the operator to export a key or install a CLI for a capability the
@@ -628,6 +630,7 @@ class Agent:
             state=state,
             profiles="\n".join(profiles),
             shodan=shodan_note,
+            shell=tools_mod.SHELL_SYNTAX,
         )
 
     def _shodan_note(self, state: Path) -> str:

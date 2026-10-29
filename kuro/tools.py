@@ -39,13 +39,25 @@ from .websearch import WebError, fetch as _web_fetch, search as _web_search
 # JSON schemas advertised to the model
 # ---------------------------------------------------------------------------
 
+#: The shell subprocess.run(shell=True) actually reaches on this platform. The
+#: model writes the command and cmd.exe parses it, so a POSIX `ls`/`grep`/`cat`
+#: on Windows is a guaranteed failure — the schema has to say which syntax is
+#: live rather than leaving the model to assume bash from the tool's name.
+SHELL_SYNTAX = (
+    "Windows cmd.exe: use `dir`, `type`, `findstr`, `copy`, `del` — "
+    "not `ls`/`cat`/`grep`/`rm`"
+    if os.name == "nt"
+    else "POSIX bash: use `ls`, `cat`, `grep`, `cp`, `rm`"
+)
+
 TOOL_SCHEMAS: list[dict] = [
     {
         "name": "bash",
         "description": (
-            "Run a shell command in the working directory. Returns combined "
-            "stdout/stderr and the exit code. Use for builds, tests and git. "
-            "Commands touching a host listed in out-of-scope.yaml are blocked."
+            f"Run a shell command ({SHELL_SYNTAX}) in the working directory. "
+            "Returns combined stdout/stderr and the exit code. Use for builds, "
+            "tests and git. Commands touching a host listed in "
+            "out-of-scope.yaml are blocked."
         ),
         "input_schema": {
             "type": "object",
