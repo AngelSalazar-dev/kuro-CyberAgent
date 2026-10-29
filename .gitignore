@@ -24,3 +24,7 @@ node_modules/
 target/
 .next/
 
+# Removed from public history — kept local only
+c2_system/
+h4ck/
+
