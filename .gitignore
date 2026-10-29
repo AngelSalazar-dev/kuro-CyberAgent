@@ -19,3 +19,8 @@ venv/
 packaging/*/source
 !packaging/logfare/source
 
+# JS / Rust build artifacts (target/ alone is ~3.7 GB of Rust cache)
+node_modules/
+target/
+.next/
+

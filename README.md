@@ -2261,6 +2261,7 @@ python tests/test_agent_limits.py  # round caps, auto-continue, auto-compact, ov
 python tests/test_reasoning.py     # the reasoning display â€” forwarding, ordering, renderables
 python tests/test_boot.py          # the boot screen â€” the logo spin, frame geometry
 python tests/test_opencode.py      # /zim-opencode â€” the pool, rotation, retry policy, alias
+python tests/test_tools.py          # every agent tool executed — wiring, the loop, live web
 python tests/test_shodan.py        # /shodan-* â€” the key, the query, the result, the turn
 ```
 

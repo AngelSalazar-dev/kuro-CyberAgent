@@ -225,11 +225,15 @@ if ($skip_profile -ne 1 -and (Test-Path -Path $env:LITELLM_ENV_FILE -PathType Le
       $key = $matches[1]
       $val = $matches[2]
       Set-Item -Path "env:$key" -Value $val
-    } elseif ($trimmed -match "^export\s+([A-Za-z_][A-Za-z0-9_]*)='(.*)'$") {
-      $key = $matches[1]
-      $val = $matches[2]
-      Set-Item -Path "env:$key" -Value $val
-    }
+      } elseif ($trimmed -match "^export\s+([A-Za-z_][A-Za-z0-9_]*)='(.*)'$") {
+        $key = $matches[1]
+        $val = $matches[2]
+        Set-Item -Path "env:$key" -Value $val
+      } elseif ($trimmed -match '^export\s+([A-Za-z_][A-Za-z0-9_]*)=(\S*)$') {
+        $key = $matches[1]
+        $val = $matches[2]
+        Set-Item -Path "env:$key" -Value $val
+      }
   }
   if ($prev_base_url -and $prev_base_url -ne $env:ANTHROPIC_BASE_URL) {
     warn "overriding inherited ANTHROPIC_BASE_URL=$prev_base_url -> $env:ANTHROPIC_BASE_URL"

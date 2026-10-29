@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV Web Player - Películas, Series y Canales</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="[https://vjs.zencdn.net/8.10.0/video-js.css](https://vjs.zencdn.net/8.10.0/video-js.css)" rel="stylesheet" />
+</head>
+<body>
+    <header>
+        <h1>IPTV Streaming Hub</h1>
+        <input type="text" id="searchBox" placeholder="Buscar canales o contenido...">
+    </header>
+    <main>
+        <section id="player-section">
+            <div class="video-container">
+                <video-js id="my-player" class="vjs-default-skin" controls preload="auto" width="640" height="264">
+                    <p class="vjs-no-js">
+                        Para ver este vídeo, por favor habilita JavaScript y considera actualizar a un navegador que
+                        <a href="[https://videojs.com/html5-video-support/](https://videojs.com/html5-video-support/)" target="_blank">soporte vídeo HTML5</a>
+                    </p>
+                </video-js>
+            </div>
+            <h2 id="current-channel-title">Selecciona un canal</h2>
+        </section>
+        <section id="channels-section">
+            <h2>Canales Disponibles (España / Streaming)</h2>
+            <div id="channel-list">
+                <p>Cargando lista de canales...</p>
+            </div>
+        </section>
+    </main>
+    <script src="[https://vjs.zencdn.net/8.10.0/video.min.js](https://vjs.zencdn.net/8.10.0/video.min.js)"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/hls.js@latest](https://cdn.jsdelivr.net/npm/hls.js@latest)"></script>
+    <script src="app.js"></script>
+</body>
+</html>

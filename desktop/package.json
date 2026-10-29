@@ -6,7 +6,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "tauri dev",
+    "dev:frontend": "vite",
     "build": "tauri build",
+    "build:frontend": "vite build",
     "tauri": "tauri"
   },
   "dependencies": {

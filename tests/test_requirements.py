@@ -30,7 +30,10 @@ def check(name: str, ok: bool, extra: str = "") -> None:
 
 def requirements() -> list[str]:
     """The requirement lines, comments and blanks stripped."""
-    text = (ROOT / "requirements.txt").read_text()
+    # encoding="utf-8" rather than the locale default: requirements.txt is
+    # UTF-8, and on a Windows box the default is cp1252, which raises on the
+    # first em dash and takes the whole suite down with it.
+    text = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     return [ln.strip() for ln in text.splitlines()
             if ln.strip() and not ln.strip().startswith("#")]
 
@@ -68,7 +71,7 @@ def main() -> int:
     # startup, not a test failure.
     check("requirements: declares markdown-it-py, which ui/markdown.py imports",
           "markdown-it-py" in names, str(names))
-    md_mod = (ROOT / "kuro" / "ui" / "markdown.py").read_text()
+    md_mod = (ROOT / "kuro" / "ui" / "markdown.py").read_text(encoding="utf-8")
     check("requirements: and ui/markdown.py really does import it",
           "from markdown_it import" in md_mod,
           "no 'from markdown_it import' in ui/markdown.py")
@@ -76,7 +79,7 @@ def main() -> int:
     # Cross-check: the interpreter check setup.sh runs before it wires up a
     # proxy must test the HARNESS's deps, not the proxy's â€” `import litellm`
     # there would fail on every correctly-installed machine.
-    setup = (ROOT / "setup.sh").read_text()
+    setup = (ROOT / "setup.sh").read_text(encoding="utf-8")
     dep_check = [ln for ln in setup.splitlines() if "import anthropic" in ln]
     check("setup.sh: the harness dependency check exists",
           bool(dep_check), "no 'import anthropic' line found")
